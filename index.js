@@ -9,7 +9,8 @@ const app = express();
 const port = 3000;
 
 // Serve static files from the 'public' folder
-app.use(express.static('public'));
+app.use(bodyParser.json())
+app.use(express.static(__dirname + '/public'))
 
 // Supabase config
 const supabaseUrl = process.env.SUPABASE_URL;
