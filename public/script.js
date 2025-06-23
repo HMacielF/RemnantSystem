@@ -7,15 +7,28 @@ async function fetchRemnants() {
     const data = await res.json();
     allRemnants = data;
     populateMaterialCheckboxes();
-    applyFilters(); // auto-render first page
+    initializeFormFromURL();
+    applyFilters();
 }
 
 function populateMaterialCheckboxes() {
     const materials = Array.from(new Set(allRemnants.map(r => r.material_type).filter(Boolean)));
     const container = document.getElementById("material-checkboxes");
-    container.innerHTML = materials.map(mat =>
-        `<label><input type="checkbox" value="${mat}" /> ${mat}</label><br>`
-    ).join('');
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const selectedMaterials = urlParams.getAll("material");
+
+    container.innerHTML = materials.map(mat => {
+        const checked = selectedMaterials.includes(mat) ? "checked" : "";
+        return `<label><input type="checkbox" name="material" value="${mat}" ${checked}/> ${mat}</label>`;
+    }).join('');
+}
+
+function initializeFormFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    document.getElementById("stone-filter").value = params.get("stone") || "";
+    document.getElementById("min-width").value = params.get("min-width") || "";
+    document.getElementById("min-height").value = params.get("min-height") || "";
 }
 
 function getCheckedMaterials() {
