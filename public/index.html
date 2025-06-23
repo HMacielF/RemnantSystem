@@ -5,26 +5,46 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Remnants</title>
     <link rel="stylesheet" href="styling.css" />
+    <script src="script.js" defer></script>
   </head>
   <body>
     <h1>Available Remnants</h1>
 
-    <div id="filters">
-      <div id="material-filter-container">
-        <strong>Material Types:</strong>
-        <div id="material-checkboxes"></div>
+    <form id="filter-form" method="GET">
+      <div id="filters">
+        <div id="material-filter-container">
+          <strong>Material Types:</strong>
+          <div id="material-checkboxes">
+            <!-- Checkboxes will be populated by script.js -->
+          </div>
+        </div>
+
+        <input
+          type="text"
+          name="stone"
+          id="stone-filter"
+          placeholder="Search by Stone Name"
+        />
+        <input
+          type="number"
+          name="min-width"
+          id="min-width"
+          placeholder="Min Width"
+        />
+        <input
+          type="number"
+          name="min-height"
+          id="min-height"
+          placeholder="Min Height"
+        />
+        <button type="submit">Apply Filters</button>
       </div>
-      <input type="text" id="stone-filter" placeholder="Search by Stone Name" />
-      <input type="number" id="min-width" placeholder="Min Width" />
-      <input type="number" id="min-height" placeholder="Min Height" />
-      <button onclick="applyFilters()">Apply Filters</button>
-    </div>
+    </form>
 
     <div id="remnants-container">Loading...</div>
+
     <div style="text-align: center; margin-top: 20px">
       <button id="load-more" style="display: none">Load More</button>
     </div>
-
-    <script src="script.js"></script>
   </body>
 </html>
