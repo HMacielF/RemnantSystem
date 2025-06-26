@@ -15,7 +15,6 @@ app.use(express.static(__dirname + '/public'));
 app.use('/api', require('./api/remnants'));
 app.use('/api', require('./api/update'));
 app.use('/api', require('./api/delete'));
-app.use('/api', require('./api/add')); // optional
 
 // Start server
 app.listen(port, () => {
