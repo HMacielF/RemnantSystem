@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Panel</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 30px;
+      background: #f6f6f6;
+    }
+    .hidden { display: none; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      background: white;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+    }
+    th {
+      background: #eee;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 6px;
+    }
+    button {
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+    #login-form {
+      max-width: 300px;
+      margin: 100px auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+  <div id="login-form">
+    <h2>Admin Login</h2>
+    <input type="password" id="password" placeholder="Enter password" />
+    <button onclick="login()">Login</button>
+    <p id="login-error" style="color:red;"></p>
+  </div>
+
+  <div id="admin-panel" class="hidden">
+    <h2>Remnant Manager</h2>
+    <table id="remnants-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Material</th>
+          <th>Stone</th>
+          <th>Status</th>
+          <th>Location</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    const CORRECT_PASSWORD = "quickadmin123"; // TODO: move to server validation later
+
+    function login() {
+      const input = document.getElementById("password").value;
+      if (input === CORRECT_PASSWORD) {
+        document.getElementById("login-form").classList.add("hidden");
+        document.getElementById("admin-panel").classList.remove("hidden");
+        loadRemnants();
+      } else {
+        document.getElementById("login-error").textContent = "Incorrect password.";
+      }
+    }
+
+    async function loadRemnants() {
+      const res = await fetch("/api/remnants");
+      const data = await res.json();
+      const tbody = document.querySelector("#remnants-table tbody");
+      tbody.innerHTML = "";
+      data.forEach(r => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${r.id}</td>
+          <td><input value="${r.material_type || ''}" /></td>
+          <td><input value="${r.stone_name || ''}" /></td>
+          <td><input value="${r.status_id || ''}" /></td>
+          <td><input value="${r.location || ''}" /></td>
+          <td>
+            <button onclick="updateRemnant(${r.id}, this)">💾</button>
+            <button onclick="deleteRemnant(${r.id})">🗑️</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function updateRemnant(id, btn) {
+      const row = btn.closest("tr");
+      const [material, stone, status, location] = row.querySelectorAll("input");
+
+      await fetch("/api/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          material_type: material.value,
+          stone_name: stone.value,
+          status_id: status.value,
+          location: location.value
+        })
+      });
+      alert("Updated!");
+    }
+
+    async function deleteRemnant(id) {
+      if (!confirm("Delete this remnant?")) return;
+      await fetch("/api/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id })
+      });
+      loadRemnants();
+    }
+  </script>
+</body>
+</html>
