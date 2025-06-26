@@ -65,10 +65,11 @@ h1 {
 #remnants-container {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 24px;
+  gap: 16px;
   max-width: 1200px;
   margin: 0 auto;
 }
+
 
 .remnant {
   background: white;
@@ -92,10 +93,10 @@ h1 {
 }
 
 .remnant-info {
-  padding: 14px 16px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   color: #222;
 }
 
