@@ -9,7 +9,7 @@ const app = express();
 const port = 3000;
 
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(__dirname + '/public'));
 
 // Mount all API routes
 app.use('/api', require('./api/remnants'));
