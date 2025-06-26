@@ -14,8 +14,9 @@ async function fetchRemnants() {
 }
 
 // Build material checkboxes from dataset
-function populateMaterialCheckboxes() {
-    const materials = Array.from(new Set(allRemnants.map(r => r.material_type).filter(Boolean)));
+async function populateMaterialCheckboxes() {
+    const res = await fetch('/api/materials');
+    const materials = await res.json();
     const container = document.getElementById("material-checkboxes");
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -26,6 +27,7 @@ function populateMaterialCheckboxes() {
         return `<label><input type="checkbox" name="material" value="${mat}" ${checked}/> ${mat}</label>`;
     }).join('');
 }
+
 
 // Set input fields (stone name, size filters) based on URL
 function initializeFormFromURL() {

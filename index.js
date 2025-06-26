@@ -56,6 +56,20 @@ app.get('/api/remnants', async (req, res) => {
     }
 });
 
+// API: GET materials
+app.get('/api/materials', async (req, res) => {
+    const { data, error } = await supabase
+        .from('remnants')
+        .select('material_type')
+        .neq('material_type', null);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    const unique = [...new Set(data.map(d => d.material_type))];
+    res.json(unique);
+});
+
+
 // Start server
 app.listen(port, () => {
     console.log(`✅ Server running at http://localhost:${port}`);
