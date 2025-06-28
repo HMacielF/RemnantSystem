@@ -15,9 +15,9 @@ app.use('/api', require('./api/remnants'));
 app.use('/api', require('./api/update'));
 app.use('/api', require('./api/delete'));
 app.use('/api', require('./api/hold_requests'));
-app.use('/api', require("./api/routes/me"));
+app.use('/api', require("./api/me"));
 app.use('/api', require("./api/login"));
-app.use("/api", require("./api/routes/hold_actions"));
+app.use("/api", require("./api/hold_actions"));
 app.use("/api", require("./api/admin_remnants"));
 
 

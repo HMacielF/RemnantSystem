@@ -1,7 +1,7 @@
 // me.js (Express route for /api/me)
 const express = require("express");
 const router = express.Router();
-const supabase = require('../../supabaseClient');
+const supabase = require('../supabaseClient');
 
 router.get("/me", async (req, res) => {
     const token = req.cookies["sb-access-token"];

@@ -2,7 +2,7 @@
 
 const express = require("express");
 const router = express.Router();
-const supabase = require('../../supabaseClient');
+const supabase = require('../supabaseClient');
 
 // POST /api/hold_requests/:id/approve
 router.post("/hold_requests/:id/approve", async (req, res) => {
