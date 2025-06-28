@@ -2,37 +2,37 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../supabaseClient');
 
+// GET /remnants — default owner is "Quick"
 router.get('/remnants', async (req, res) => {
-  const { material, stone, 'min-width': minWidth, 'min-height': minHeight } = req.query;
-
-  try {
-    let query = supabase.from('remnants').select('*');
-
-    if (material) {
-      const materials = Array.isArray(material) ? material : [material];
-      query = query.in('material_type', materials);
-    }
-
-    if (stone) {
-      query = query.ilike('stone_name', `%${stone}%`);
-    }
-
-    if (minWidth) {
-      query = query.gte('width', parseFloat(minWidth));
-    }
-
-    if (minHeight) {
-      query = query.gte('height', parseFloat(minHeight));
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    res.json(data);
-  } catch (err) {
-    console.error('Error fetching remnants:', err.message);
-    res.status(500).json({ error: 'Failed to fetch filtered remnants' });
-  }
+    await handleRemnantFilter(req, res, "Quick");
 });
+
+// GET /remnants/:owner — custom owner
+router.get('/remnants/:owner', async (req, res) => {
+    await handleRemnantFilter(req, res, req.params.owner);
+});
+
+// Shared handler
+async function handleRemnantFilter(req, res, owner) {
+    const { material, stone, 'min-width': minWidth, 'min-height': minHeight, color } = req.query;
+
+    try {
+        const { data, error } = await supabase.rpc('filter_remnants', {
+            materials: material ? (Array.isArray(material) ? material : [material]) : null,
+            stone: stone || null,
+            min_w: minWidth ? parseFloat(minWidth) : null,
+            min_h: minHeight ? parseFloat(minHeight) : null,
+            color: color || null,
+            owner_filter: owner || null
+        });
+
+        if (error) throw error;
+
+        res.json(data);
+    } catch (err) {
+        console.error('Error filtering remnants:', err.message);
+        res.status(500).json({ error: 'Failed to filter remnants' });
+    }
+}
 
 module.exports = router;

@@ -1,135 +1,151 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin Panel</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      padding: 30px;
-      background: #f6f6f6;
-    }
-    .hidden { display: none; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
-      background: white;
-    }
-    th, td {
-      border: 1px solid #ccc;
-      padding: 8px;
-    }
-    th {
-      background: #eee;
-    }
-    input[type="text"] {
-      width: 100%;
-      padding: 6px;
-    }
-    button {
-      padding: 6px 12px;
-      cursor: pointer;
-    }
-    #login-form {
-      max-width: 300px;
-      margin: 100px auto;
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 0 8px rgba(0,0,0,0.1);
-    }
-  </style>
-</head>
-<body>
-  <div id="login-form">
-    <h2>Admin Login</h2>
-    <input type="password" id="password" placeholder="Enter password" />
-    <button onclick="login()">Login</button>
-    <p id="login-error" style="color:red;"></p>
-  </div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Panel</title>
 
-  <div id="admin-panel" class="hidden">
-    <h2>Remnant Manager</h2>
-    <table id="remnants-table">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Material</th>
-          <th>Stone</th>
-          <th>Status</th>
-          <th>Location</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
 
-  <script>
-    const CORRECT_PASSWORD = "quickadmin123"; // TODO: move to server validation later
+    <!-- Fonts -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
 
-    function login() {
-      const input = document.getElementById("password").value;
-      if (input === CORRECT_PASSWORD) {
-        document.getElementById("login-form").classList.add("hidden");
-        document.getElementById("admin-panel").classList.remove("hidden");
-        loadRemnants();
-      } else {
-        document.getElementById("login-error").textContent = "Incorrect password.";
-      }
-    }
+    <!-- Tailwind Config -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+              heading: ["Poppins", "sans-serif"],
+            },
+          },
+        },
+      };
+    </script>
 
-    async function loadRemnants() {
-      const res = await fetch("/api/remnants");
-      const data = await res.json();
-      const tbody = document.querySelector("#remnants-table tbody");
-      tbody.innerHTML = "";
-      data.forEach(r => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${r.id}</td>
-          <td><input value="${r.material_type || ''}" /></td>
-          <td><input value="${r.stone_name || ''}" /></td>
-          <td><input value="${r.status_id || ''}" /></td>
-          <td><input value="${r.location || ''}" /></td>
-          <td>
-            <button onclick="updateRemnant(${r.id}, this)">💾</button>
-            <button onclick="deleteRemnant(${r.id})">🗑️</button>
-          </td>
-        `;
-        tbody.appendChild(tr);
+    <script src="admin.js" defer></script>
+  </head>
+
+  <body class="bg-gray-100 text-gray-800 font-sans">
+    <div class="container mx-auto px-4 py-6">
+      <!-- Header -->
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-heading font-semibold">Admin Panel</h1>
+        <div id="user-role" class="text-sm text-gray-600 text-right">
+          Loading...
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex border-b mb-4 space-x-4 text-sm font-medium">
+        <button class="tab-btn px-3 py-2 border-b-2" data-tab="view">
+          🧱 View
+        </button>
+        <button class="tab-btn px-3 py-2 border-b-2" data-tab="holds">
+          📋 Holds
+        </button>
+        <button class="tab-btn px-3 py-2 border-b-2" data-tab="upload">
+          📤 Upload
+        </button>
+      </div>
+
+      <!-- View Tab -->
+      <div id="tab-view" class="tab-section hidden">
+        <div class="overflow-x-auto bg-white rounded shadow">
+          <table class="min-w-full text-sm">
+            <thead
+              class="bg-gray-100 text-left uppercase text-xs text-gray-600"
+            >
+              <tr>
+                <th class="px-4 py-3">ID</th>
+                <th class="px-4 py-3">Material</th>
+                <th class="px-4 py-3">Stone</th>
+                <th class="px-4 py-3">Status</th>
+                <th class="px-4 py-3">Location</th>
+                <th class="px-4 py-3">Owner</th>
+                <th class="px-4 py-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="remnants-table-body" class="divide-y divide-gray-200">
+              <!-- JS will populate -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Holds Tab -->
+      <div id="tab-holds" class="tab-section hidden">
+        <div class="overflow-x-auto bg-white rounded shadow">
+          <table class="min-w-full text-sm">
+            <thead
+              class="bg-gray-100 text-left uppercase text-xs text-gray-600"
+            >
+              <tr>
+                <th class="px-4 py-3">Remnant</th>
+                <th class="px-4 py-3">Client</th>
+                <th class="px-4 py-3">Status</th>
+                <th class="px-4 py-3">Requested At</th>
+                <th class="px-4 py-3">Owner</th>
+                <th class="px-4 py-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="holds-table-body" class="divide-y divide-gray-200">
+              <!-- JS will populate -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Upload Tab -->
+      <div id="tab-upload" class="tab-section hidden">
+        <h2 class="text-lg font-heading font-semibold mb-2">
+          Upload New Remnants
+        </h2>
+        <form id="upload-form" class="flex items-center gap-4">
+          <input
+            type="file"
+            name="csv"
+            accept=".csv"
+            class="border rounded p-2"
+          />
+          <button
+            type="submit"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+          >
+            Upload
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      // Simple tab switch logic
+      document.querySelectorAll(".tab-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const tab = btn.getAttribute("data-tab");
+          document
+            .querySelectorAll(".tab-section")
+            .forEach((s) => s.classList.add("hidden"));
+          document.querySelector(`#tab-${tab}`).classList.remove("hidden");
+
+          document
+            .querySelectorAll(".tab-btn")
+            .forEach((b) =>
+              b.classList.remove("border-blue-600", "text-blue-600")
+            );
+          btn.classList.add("border-blue-600", "text-blue-600");
+        });
       });
-    }
 
-    async function updateRemnant(id, btn) {
-      const row = btn.closest("tr");
-      const [material, stone, status, location] = row.querySelectorAll("input");
-
-      await fetch("/api/update", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id,
-          material_type: material.value,
-          stone_name: stone.value,
-          status_id: status.value,
-          location: location.value
-        })
+      // Default tab
+      window.addEventListener("DOMContentLoaded", () => {
+        document.querySelector('[data-tab="view"]').click();
       });
-      alert("Updated!");
-    }
-
-    async function deleteRemnant(id) {
-      if (!confirm("Delete this remnant?")) return;
-      await fetch("/api/delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id })
-      });
-      loadRemnants();
-    }
-  </script>
-</body>
+    </script>
+  </body>
 </html>

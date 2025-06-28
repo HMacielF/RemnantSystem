@@ -4,47 +4,130 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Remnants</title>
-    <link rel="stylesheet" href="styling.css" />
-    <script src="script.js" defer></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="main.js" defer></script>
   </head>
-  <body>
-    <h1>Available Remnants</h1>
+  <body
+    class="bg-[#F1F1F1] text-[#232323] font-[Inter] font-medium text-[15px] px-4 py-6"
+  >
+    <!-- Main heading -->
+    <div class="flex justify-center mb-6">
+      <img
+        src="/assets/Quick_Logo.png"
+        alt="Quick Countertop Logo"
+        class="h-14 md:h-20 w-auto"
+      />
+    </div>
 
-    <form id="filter-form" method="GET">
-      <div id="filters">
-        <div id="material-filter-container">
-          <strong>Material Types:</strong>
-          <div id="material-checkboxes">
-            <!-- Checkboxes will be populated by script.js -->
-          </div>
+    <!-- Filter form -->
+    <form
+      id="filter-form"
+      method="GET"
+      class="max-w-7xl mx-auto bg-white p-6 rounded-lg shadow-md mb-6"
+    >
+      <!-- Top Row: Material Types + Colors -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start mb-4">
+        <!-- Material Types -->
+        <div>
+          <label class="block font-semibold text-sm text-[#232323] mb-1"
+            >Material Types:</label
+          >
+          <div
+            id="material-checkboxes"
+            class="flex flex-wrap gap-x-4 gap-y-2 text-sm text-[#232323]"
+          ></div>
         </div>
 
+        <!-- Colors -->
+        <div>
+          <label class="block font-semibold text-sm text-[#232323] mb-1"
+            >Colors:</label
+          >
+          <div
+            id="color-swatches"
+            class="flex flex-wrap gap-2 items-center"
+          ></div>
+        </div>
+      </div>
+
+      <!-- Bottom Row: Inputs + Button -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
         <input
           type="text"
           name="stone"
           id="stone-filter"
           placeholder="Search by Stone Name"
+          class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full placeholder-gray-400"
         />
         <input
           type="number"
           name="min-width"
           id="min-width"
           placeholder="Min Width"
+          class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full placeholder-gray-400"
         />
         <input
           type="number"
           name="min-height"
           id="min-height"
           placeholder="Min Height"
+          class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full placeholder-gray-400"
         />
-        <button type="submit">Apply Filters</button>
+        <button
+          type="submit"
+          class="bg-[#E78B4B] text-white px-5 py-2 text-sm rounded hover:bg-[#cf7335] transition-all w-full"
+        >
+          Apply Filters
+        </button>
       </div>
     </form>
 
-    <div id="remnants-container">Loading...</div>
+    <!-- Hold Request Modal -->
+    <div
+      id="hold-modal"
+      class="fixed inset-0 z-50 hidden bg-black bg-opacity-50 flex items-center justify-center"
+    >
+      <div class="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full space-y-4">
+        <h2 class="text-lg font-semibold text-gray-800">Request Hold</h2>
+        <input
+          type="text"
+          id="client-name"
+          placeholder="Client Name"
+          class="w-full border p-2 rounded"
+        />
+        <input
+          type="text"
+          id="client-contact"
+          placeholder="Contact Info (email or phone)"
+          class="w-full border p-2 rounded"
+        />
+        <div class="flex justify-end gap-2">
+          <button
+            onclick="closeHoldModal()"
+            class="px-4 py-2 text-sm bg-gray-300 rounded"
+          >
+            Cancel
+          </button>
+          <button
+            id="submit-hold"
+            class="px-4 py-2 text-sm bg-orange-500 text-white rounded"
+          >
+            Submit
+          </button>
+        </div>
+      </div>
+    </div>
 
-    <div style="text-align: center; margin-top: 20px">
-      <button id="load-more" style="display: none">Load More</button>
+    <!-- Remnants container -->
+    <div
+      id="remnants-container"
+      class="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 max-w-7xl mx-auto"
+    >
+      Loading...
     </div>
   </body>
 </html>

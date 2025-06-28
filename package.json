@@ -2,6 +2,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.50.0",
     "body-parser": "^2.2.0",
+    "cookie-parser": "^1.4.7",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "nodemon": "^3.1.10"
@@ -9,7 +10,6 @@
   "name": "remnantsystem",
   "version": "1.0.0",
   "main": "index.js",
-  "devDependencies": {},
   "scripts": {
     "start": "nodemon -e *",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -24,5 +24,5 @@
     "url": "https://github.com/HugoMaciel/RemnantSystem/issues"
   },
   "homepage": "https://github.com/HugoMaciel/RemnantSystem#readme",
-  "description": ""
+  "description": "Web app for filtering and viewing countertop remnants with Supabase backend."
 }
