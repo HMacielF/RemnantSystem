@@ -14,7 +14,7 @@ router.get('/remnants/:owner', async (req, res) => {
 
     try {
         if (owner === 'ALL') {
-            const { data, error } = await supabase.rpc('get_all_remants', {
+            const { data, error } = await supabase.rpc('get_all', {
                 materials: material ? (Array.isArray(material) ? material : [material]) : null,
                 stone: stone || null,
                 min_w: minWidth ? parseFloat(minWidth) : null,
