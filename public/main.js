@@ -11,7 +11,8 @@ async function loadRemnants() {
 
         // Get /FRV, /Prime, etc. from the path
         const path = window.location.pathname.split('/');
-        const owner = path[1] || "Quick"; // default to Quick
+        const owner = path[1].toUpperCase || "QUICK"; // default to Quick
+        
 
         const res = await fetch(`/api/remnants/${owner}?${params.toString()}`);
 
