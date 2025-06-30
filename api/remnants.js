@@ -9,7 +9,7 @@ router.get('/remnants', async (req, res) => {
 
 // GET /remnants/:owner — custom owner
 router.get('/remnants/:owner', async (req, res) => {
-    await handleRemnantFilter(req, res, req.params.owner);
+    await handleRemnantFilter(req, res, req.params.owner.toUpperCase());
 });
 
 // Shared handler
