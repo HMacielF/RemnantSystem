@@ -1,7 +1,7 @@
 // === Globals and Constants ===
 let allRemnants = [];
 let visibleCount = 0;
-const PAGE_SIZE = 20;
+const PAGE_SIZE = Infinity;
 
 
 // === Load remnants based on URL filters using /api/remnants ===
