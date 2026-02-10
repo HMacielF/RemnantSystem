@@ -1,0 +1,43 @@
+name: Remnants Sync (Cron)
+
+on:
+  schedule:
+    # Every 30 minutes, Mon–Fri, 8am–6pm ET (13–23 UTC)
+    - cron: "*/30 13-23 * * 1-5"
+
+  # Allows manual runs from GitHub UI
+  workflow_dispatch: {}
+
+concurrency:
+  group: remnants-sync
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Set up Chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Run scraper
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          START_URL: ${{ secrets.START_URL }}
+        run: |
+          python sync_remnants.py
