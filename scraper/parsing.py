@@ -8,7 +8,8 @@ def parse_line(description: str):
       "#49 | 42x60+18x24 | On Hold"
       "#50 | 42x60"
     """
-    parts = [p.strip() for p in description.split("|")]
+    # Moraware descriptions may use "|" or "/" as separators.
+    parts = [p.strip() for p in re.split(r"\s*[|/]\s*", description) if p.strip()]
 
     remnant_id = int(parts[0].strip("#").strip())
     sizes = parts[1].replace(" ", "").lower().split("+")

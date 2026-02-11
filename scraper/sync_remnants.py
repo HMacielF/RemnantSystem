@@ -1,7 +1,9 @@
 import logging
+import json
 import re
 import sys
 import time
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -47,9 +49,20 @@ def main():
     total_photo_skipped_same_hash = 0
     total_photo_uploaded = 0
     total_errors = 0
+    issues = []
 
     run_started_at = datetime.now(timezone.utc).isoformat()
     crawl_completed_successfully = False
+
+    def record_issue(kind: str, job_url: str | None = None, remnant_id: int | None = None, details: str = ""):
+        issues.append(
+            {
+                "kind": kind,
+                "job_url": job_url,
+                "remnant_id": remnant_id,
+                "details": details,
+            }
+        )
 
     try:
         logging.info("Starting Moraware -> Supabase sync")
@@ -72,6 +85,7 @@ def main():
         # ---- Collect job URLs ----
         job_urls = []
         page_num = 1
+        collect_started = time.monotonic()
 
         while True:
             WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "Jobs_1Body")))
@@ -108,7 +122,8 @@ def main():
                     )
                 )
                 page_num += 1
-                time.sleep(0.5)
+                if settings.page_delay_sec > 0:
+                    time.sleep(settings.page_delay_sec)
             except Exception:
                 break
 
@@ -117,6 +132,7 @@ def main():
         job_urls = [url for url in job_urls if not (url in seen or seen.add(url))]
 
         logging.info(f"Collected {len(job_urls)} total job pages")
+        logging.info(f"Job URL collection took {time.monotonic() - collect_started:.1f}s")
 
         # ---- Process each job page ----
         for job_i, job_url in enumerate(job_urls, start=1):
@@ -130,6 +146,7 @@ def main():
                 )
             except Exception:
                 logging.warning("No files table found (FilesScroll1Body). Skipping job page.")
+                record_issue("missing_files_table", job_url=job_url)
                 continue
 
             sess = requests_session_from_selenium(driver)
@@ -168,6 +185,12 @@ def main():
                         logging.warning(
                             f"Remnant #{m_id.group(1)}: could not parse size from '{description}'"
                         )
+                        record_issue(
+                            "parse_size_failed",
+                            job_url=job_url,
+                            remnant_id=int(m_id.group(1)),
+                            details=description,
+                        )
                         continue
 
                     remnant_id, width, height, l_shape, l_width, l_height, remnant_status = size_parsed
@@ -176,11 +199,13 @@ def main():
                     download_links = tds[1].find_elements(By.TAG_NAME, "a")
                     if not download_links:
                         logging.warning(f"Remnant #{remnant_id}: no download link found")
+                        record_issue("missing_download_link", job_url=job_url, remnant_id=remnant_id)
                         continue
 
                     download_href = download_links[0].get_attribute("href")
                     if not download_href:
                         logging.warning(f"Remnant #{remnant_id}: download href was empty")
+                        record_issue("empty_download_href", job_url=job_url, remnant_id=remnant_id)
                         continue
 
                     full_url = (
@@ -284,6 +309,11 @@ def main():
                 except Exception as exc:
                     total_errors += 1
                     logging.error(f"Error processing row {idx} on job page: {exc}", exc_info=True)
+                    record_issue(
+                        "row_exception",
+                        job_url=job_url,
+                        details=f"row={idx} error={exc}",
+                    )
                     continue
 
         logging.info("Sync complete")
@@ -295,6 +325,13 @@ def main():
         logging.info(f"Photos skipped (same hash): {total_photo_skipped_same_hash}")
         logging.info(f"Photos uploaded: {total_photo_uploaded}")
         logging.info(f"Errors: {total_errors}")
+        if issues:
+            kind_counts = Counter(i["kind"] for i in issues)
+            logging.info("Issue summary by type:")
+            for kind, count in kind_counts.most_common():
+                logging.info(f"  - {kind}: {count}")
+        else:
+            logging.info("Issue summary: no issues recorded.")
         crawl_completed_successfully = True
 
     except Exception:
@@ -304,6 +341,24 @@ def main():
     finally:
         driver.quit()
         logging.info("Browser closed")
+
+    report_path = Path(__file__).resolve().parent / "last_sync_issues.json"
+    try:
+        report_path.write_text(
+            json.dumps(
+                {
+                    "run_started_at": run_started_at,
+                    "crawl_completed_successfully": crawl_completed_successfully,
+                    "total_errors": total_errors,
+                    "issue_count": len(issues),
+                    "issues": issues,
+                },
+                indent=2,
+            )
+        )
+        logging.info(f"Wrote issue report: {report_path}")
+    except Exception as exc:
+        logging.warning(f"Could not write issue report: {exc}")
 
     if crawl_completed_successfully:
         res = supabase.rpc("reconcile_deletions", {"p_run_started_at": run_started_at}).execute()
