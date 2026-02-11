@@ -76,5 +76,6 @@ def get_page_material_and_name(title: str):
         name = right.split("-")[0].strip()
     elif title.split(" ")[0].strip() == "Quick":
         material = "Quick Quartz"
+        name = title.split(" ")[1]
 
     return material, name
