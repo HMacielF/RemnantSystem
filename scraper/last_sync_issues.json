@@ -1,0 +1,50 @@
+{
+  "run_started_at": "2026-02-11T22:54:22.534404+00:00",
+  "crawl_completed_successfully": true,
+  "total_errors": 4,
+  "issue_count": 7,
+  "issues": [
+    {
+      "kind": "parse_size_failed",
+      "job_url": "https://quickcountertop.moraware.net/sys/job/4382",
+      "remnant_id": 45,
+      "details": "#45 | 41 x l38"
+    },
+    {
+      "kind": "missing_files_table",
+      "job_url": "https://quickcountertop.moraware.net/sys/job/4191",
+      "remnant_id": null,
+      "details": ""
+    },
+    {
+      "kind": "missing_files_table",
+      "job_url": "https://quickcountertop.moraware.net/sys/job/1134",
+      "remnant_id": null,
+      "details": ""
+    },
+    {
+      "kind": "row_exception",
+      "job_url": "https://quickcountertop.moraware.net/sys/job/1129",
+      "remnant_id": null,
+      "details": "row=1 error=invalid literal for int() with base 10: '12.jpg'"
+    },
+    {
+      "kind": "row_exception",
+      "job_url": "https://quickcountertop.moraware.net/sys/job/1129",
+      "remnant_id": null,
+      "details": "row=3 error=invalid literal for int() with base 10: '606 (POSTE K)'"
+    },
+    {
+      "kind": "row_exception",
+      "job_url": "https://quickcountertop.moraware.net/sys/job/1129",
+      "remnant_id": null,
+      "details": "row=4 error=invalid literal for int() with base 10: '763 (POSTE F)'"
+    },
+    {
+      "kind": "row_exception",
+      "job_url": "https://quickcountertop.moraware.net/sys/job/4051",
+      "remnant_id": null,
+      "details": "row=2 error=invalid literal for int() with base 10: '948 Emerstone Arctic Gold - Custo $15.25'"
+    }
+  ]
+}
