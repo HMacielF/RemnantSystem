@@ -36,8 +36,11 @@ jobs:
 
       - name: Run scraper
         env:
+          MORAWARE_URL: ${{ secrets.MORAWARE_URL }}
+          MORAWARE_USER: ${{ secrets.MORAWARE_USER }}
+          MORAWARE_PASS: ${{ secrets.MORAWARE_PASS }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          START_URL: ${{ secrets.START_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
         run: |
-          python sync_remnants.py
+          python -m scraper

@@ -1,7 +1,9 @@
 import logging
 import re
+import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -9,6 +11,10 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from supabase import create_client
+
+if __package__ is None or __package__ == "":
+    # Allow running as: python scraper/sync_remnants.py
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from scraper.config import load_settings
 from scraper.parsing import get_page_material_and_name, parse_line, parse_thickness

@@ -53,6 +53,22 @@ A custom web interface for displaying and managing countertop remnants from Quic
 4. Import remnant data from `original2.csv` or your own source
 5. Deploy (Netlify, Vercel, GitHub Pages, etc.)
 
+## ⏱ Scraper Cron
+
+The Moraware sync scraper runs with GitHub Actions cron at `.github/workflows/remnants-cron.yml`.
+
+Required GitHub repository secrets:
+- `MORAWARE_URL`
+- `MORAWARE_USER`
+- `MORAWARE_PASS`
+- `SUPABASE_URL`
+- `SUPABASE_KEY` (or `SUPABASE_SERVICE_ROLE_KEY`)
+- `SUPABASE_BUCKET` (optional)
+
+Manual run locally:
+- `pip install -r requirements.txt`
+- `python -m scraper`
+
 ## ✅ Status
 
 - ✔️ Initial remnant viewer working
