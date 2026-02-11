@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Remnants</title>
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
     <script src="https://cdn.tailwindcss.com"></script>
@@ -14,7 +14,6 @@
   <body
     class="bg-[#F1F1F1] text-[#232323] font-[Inter] font-medium text-[15px] px-4 py-6"
   >
-    <!-- Main heading -->
     <div class="flex justify-center mb-6">
       <img
         src="/assets/Quick_Logo.png"
@@ -23,67 +22,64 @@
       />
     </div>
 
-    <!-- Filter form -->
     <form
       id="filter-form"
       method="GET"
       class="max-w-7xl mx-auto bg-white p-6 rounded-lg shadow-md mb-6"
     >
-      <!-- Top Row: Material Types -->
-      <div class="grid grid-cols-1 gap-6 items-start mb-4">
-        <!-- Material Types -->
-        <div>
-          <label class="block font-semibold text-sm text-[#232323] mb-1"
-            >Material Types:</label
-          >
-          <div
-            id="material-checkboxes"
-            class="flex flex-wrap gap-x-4 gap-y-2 text-sm text-[#232323]"
-          ></div>
-        </div>
-
+      <div class="mb-4">
+        <label class="block font-semibold text-sm text-[#232323] mb-1"
+          >Material Types:</label
+        >
+        <div
+          id="material-checkboxes"
+          class="flex flex-wrap gap-x-4 gap-y-2 text-sm text-[#232323]"
+        ></div>
       </div>
 
-      <!-- Bottom Row: Inputs + Button -->
-      <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+      <div class="flex flex-wrap items-end justify-start gap-4">
         <input
           type="text"
           name="stone"
           id="stone-filter"
           placeholder="Search by Stone Name"
-          class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full placeholder-gray-400"
+          class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full md:w-64 placeholder-gray-400"
         />
         <input
           type="number"
           name="min-width"
           id="min-width"
           placeholder="Min Width"
-          class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full placeholder-gray-400"
+          class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full md:w-36 placeholder-gray-400"
         />
         <input
           type="number"
           name="min-height"
           id="min-height"
           placeholder="Min Height"
-          class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full placeholder-gray-400"
+          class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full md:w-36 placeholder-gray-400"
         />
-        <input
-          type="text"
+        <select
           name="status"
           id="status-filter"
-          placeholder="Status (Available, Hold, Sold)"
-          class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full placeholder-gray-400"
-        />
+          class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full md:w-48 bg-white"
+        >
+          <option value="">All Statuses</option>
+          <option value="Available">Available</option>
+          <option value="Hold">Hold</option>
+          <option value="On Hold">On Hold</option>
+          <option value="Pending">Pending</option>
+          <option value="Sold">Sold</option>
+        </select>
         <button
           type="submit"
-          class="bg-[#E78B4B] text-white px-5 py-2 text-sm rounded hover:bg-[#cf7335] transition-all w-full"
+          class="bg-[#E78B4B] text-white px-5 py-2 text-sm rounded hover:bg-[#cf7335] transition-all w-full md:w-auto"
         >
           Apply Filters
         </button>
       </div>
     </form>
 
-    <!-- Hold Request Modal -->
     <div
       id="hold-modal"
       class="fixed inset-0 z-50 hidden bg-black bg-opacity-50 flex items-center justify-center"
@@ -119,7 +115,6 @@
       </div>
     </div>
 
-    <!-- Remnants container -->
     <div
       id="remnants-container"
       class="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 max-w-7xl mx-auto"

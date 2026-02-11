@@ -1,37 +1,28 @@
 const MATERIALS = ["Quartz", "Granite", "Marble", "Quartzite", "Porcelain"];
+const LIVE_SEARCH_DELAY_MS = 300;
 
 let allRemnants = [];
 let currentHoldInfo = {};
+let debounceTimer = null;
+let activeAbortController = null;
 
-function getSearchParams() {
+function currentParams() {
     return new URLSearchParams(window.location.search);
 }
 
-function normalizeStatus(status) {
-    return (status || "Available").trim();
+function normalizeStatus(value) {
+    return (value || "Available").trim();
 }
 
-function statusClass(status) {
+function statusBadgeClass(status) {
     const lc = status.toLowerCase();
     if (lc.includes("sold")) return "bg-red-100 text-red-700";
     if (lc.includes("hold") || lc.includes("pending")) return "bg-yellow-100 text-yellow-800";
     return "bg-green-100 text-green-700";
 }
 
-function buildSizeText(remnant) {
-    if (remnant.l_shape && remnant.l_width && remnant.l_height) {
-        return `${remnant.width} x ${remnant.height} + ${remnant.l_width} x ${remnant.l_height}`;
-    }
-    return `${remnant.width} x ${remnant.height}`;
-}
-
-function buildImageSrc(remnant) {
-    return remnant.image || remnant.source_image_url || "";
-}
-
 function renderMaterialCheckboxes() {
-    const params = getSearchParams();
-    const selected = params.getAll("material");
+    const selected = currentParams().getAll("material");
     const container = document.getElementById("material-checkboxes");
 
     container.innerHTML = MATERIALS.map((material) => `
@@ -42,9 +33,8 @@ function renderMaterialCheckboxes() {
     `).join("");
 }
 
-function initializeFormFromURL() {
-    const params = getSearchParams();
-
+function initFormFromURL() {
+    const params = currentParams();
     const stone = document.getElementById("stone-filter");
     const minWidth = document.getElementById("min-width");
     const minHeight = document.getElementById("min-height");
@@ -69,22 +59,35 @@ function buildQueryFromForm(form) {
     return query;
 }
 
+function sizeText(remnant) {
+    if (remnant.l_shape && remnant.l_width && remnant.l_height) {
+        return `${remnant.width} x ${remnant.height} + ${remnant.l_width} x ${remnant.l_height}`;
+    }
+    return `${remnant.width} x ${remnant.height}`;
+}
+
+function imageSrc(remnant) {
+    return remnant.image || remnant.source_image_url || "";
+}
+
 function renderRemnants() {
     const container = document.getElementById("remnants-container");
+
     if (!Array.isArray(allRemnants) || allRemnants.length === 0) {
         container.innerHTML = `<div class="col-span-full text-center text-gray-600">No remnants found.</div>`;
         return;
     }
 
     container.innerHTML = "";
+
     allRemnants.forEach((remnant) => {
-        const imageSrc = buildImageSrc(remnant);
         const status = normalizeStatus(remnant.status);
         const card = document.createElement("div");
+        card.className =
+            "group relative bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden";
 
-        card.className = "group relative bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden";
         card.innerHTML = `
-            <img src="${imageSrc}" loading="lazy" alt="Remnant Image"
+            <img src="${imageSrc(remnant)}" loading="lazy" alt="Remnant Image"
                 class="h-48 object-cover w-full transition-transform duration-300 hover:scale-105"
                 onerror="this.src=''; this.classList.add('bg-gray-100');">
 
@@ -100,9 +103,9 @@ function renderRemnants() {
                 <p><strong>ID:</strong> ${remnant.id}</p>
                 <p><strong>Material:</strong> ${remnant.material || "Unknown"}</p>
                 <p><strong>Stone:</strong> ${remnant.name || "Unknown"}</p>
-                <p><strong>Size:</strong> ${buildSizeText(remnant)}</p>
+                <p><strong>Size:</strong> ${sizeText(remnant)}</p>
                 <p><strong>Status:</strong>
-                    <span class="inline-block text-xs px-2 py-1 rounded-full font-medium ${statusClass(status)}">
+                    <span class="inline-block text-xs px-2 py-1 rounded-full font-medium ${statusBadgeClass(status)}">
                         ${status}
                     </span>
                 </p>
@@ -117,25 +120,44 @@ async function loadRemnants() {
     const container = document.getElementById("remnants-container");
     container.innerHTML = "Loading...";
 
+    if (activeAbortController) activeAbortController.abort();
+    activeAbortController = new AbortController();
+
     try {
-        const query = getSearchParams().toString();
-        const res = await fetch(`/api/remnants?${query}`);
+        const query = currentParams().toString();
+        const res = await fetch(`/api/remnants?${query}`, {
+            signal: activeAbortController.signal,
+        });
+
         if (!res.ok) {
             const errorText = await res.text();
             throw new Error(`Backend error (${res.status}): ${errorText}`);
         }
 
         const data = await res.json();
-        if (!Array.isArray(data)) {
-            throw new TypeError("Expected array from /api/remnants");
-        }
+        if (!Array.isArray(data)) throw new TypeError("Expected array from /api/remnants");
 
         allRemnants = data;
         renderRemnants();
     } catch (err) {
+        if (err.name === "AbortError") return;
         console.error("Failed to load remnants:", err);
-        container.innerHTML = `<div class="col-span-full text-center text-red-600 font-semibold">Failed to load remnants. Please try again later.</div>`;
+        container.innerHTML =
+            `<div class="col-span-full text-center text-red-600 font-semibold">Failed to load remnants. Please try again later.</div>`;
     }
+}
+
+function applyFiltersFromForm() {
+    const form = document.getElementById("filter-form");
+    const query = buildQueryFromForm(form);
+    const nextUrl = `${window.location.pathname}?${query.toString()}`;
+    window.history.replaceState({}, "", nextUrl);
+    loadRemnants();
+}
+
+function queueLiveApply() {
+    window.clearTimeout(debounceTimer);
+    debounceTimer = window.setTimeout(applyFiltersFromForm, LIVE_SEARCH_DELAY_MS);
 }
 
 function requestHold(id, stoneName, material) {
@@ -191,15 +213,25 @@ async function submitHoldRequest() {
 
 document.addEventListener("DOMContentLoaded", () => {
     renderMaterialCheckboxes();
-    initializeFormFromURL();
+    initFormFromURL();
 
     const form = document.getElementById("filter-form");
     form.addEventListener("submit", (event) => {
         event.preventDefault();
-        const query = buildQueryFromForm(form);
-        const target = `${window.location.pathname}?${query.toString()}`;
-        window.history.replaceState({}, "", target);
-        loadRemnants();
+        applyFiltersFromForm();
+    });
+
+    const textInputs = ["stone-filter", "min-width", "min-height"];
+    textInputs.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("input", queueLiveApply);
+    });
+
+    const status = document.getElementById("status-filter");
+    if (status) status.addEventListener("change", queueLiveApply);
+
+    document.querySelectorAll('input[name="material"]').forEach((checkbox) => {
+        checkbox.addEventListener("change", queueLiveApply);
     });
 
     const submitHoldButton = document.getElementById("submit-hold");
