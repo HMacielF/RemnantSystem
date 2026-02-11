@@ -29,8 +29,8 @@
       method="GET"
       class="max-w-7xl mx-auto bg-white p-6 rounded-lg shadow-md mb-6"
     >
-      <!-- Top Row: Material Types + Colors -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start mb-4">
+      <!-- Top Row: Material Types -->
+      <div class="grid grid-cols-1 gap-6 items-start mb-4">
         <!-- Material Types -->
         <div>
           <label class="block font-semibold text-sm text-[#232323] mb-1"
@@ -42,20 +42,10 @@
           ></div>
         </div>
 
-        <!-- Colors -->
-        <div>
-          <label class="block font-semibold text-sm text-[#232323] mb-1"
-            >Colors:</label
-          >
-          <div
-            id="color-swatches"
-            class="flex flex-wrap gap-2 items-center"
-          ></div>
-        </div>
       </div>
 
       <!-- Bottom Row: Inputs + Button -->
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
         <input
           type="text"
           name="stone"
@@ -75,6 +65,13 @@
           name="min-height"
           id="min-height"
           placeholder="Min Height"
+          class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full placeholder-gray-400"
+        />
+        <input
+          type="text"
+          name="status"
+          id="status-filter"
+          placeholder="Status (Available, Hold, Sold)"
           class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full placeholder-gray-400"
         />
         <button

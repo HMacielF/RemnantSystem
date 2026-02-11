@@ -1,63 +1,88 @@
-# Quick Countertop Remnant Inventory Web App
+# Remnant System
 
-A custom web interface for displaying and managing countertop remnants from Quick Countertop. Designed for internal use, external clients, and sales teams.
+Single-page web app and scraper pipeline for Quick Countertop remnants.
 
-## 🧩 Features
+## Current Architecture
 
-- 🔍 **Filtering**
-  - Filter remnants by:
-    - ✅ Material type (checkboxes)
-    - 🎨 Stone name (text search)
-    - 📐 Size (including L-shape handling)
-- 🧱 **Remnant Display**
-  - Shows ID, stone name, size, status, and location
-  - Dynamic grid with styled "remnant cards"
-- 🖼 **Image Modal**
-  - Zoom with pan control
-  - Escape key or 'X' button to close
-  - Click-to-close disabled (intentional)
-- 🌈 **UI & Branding**
-  - Clean layout with 3D/glass-like visual effects
-  - Colors follow Quick Countertop branding: **orange, black, and white**
-- 🔐 **Authentication (planned)**
-  - Supabase Auth for partner logins (e.g. FRV, MAS, Torunier)
-  - Each partner has access only to their own remnants
+- Frontend page: `public/index.html`
+- Frontend logic: `public/main.js`
+- Main API endpoint: `GET /api/remnants`
+- API implementation: `api/remnants.js`
+- Scraper package:
+  - `scraper/sync_remnants.py` (main flow)
+  - `scraper/config.py` (env/config)
+  - `scraper/parsing.py` (line/title parsing)
+  - `scraper/utils.py` (hashing, extension inference, sessions)
+  - `scraper/selenium_utils.py` (backward-compatible entrypoint)
 
-## 🛠 Tech Stack
+## Frontend Filters
 
-- **Frontend**: HTML, CSS, Vanilla JS (no React)
-- **Backend**: Supabase (PostgreSQL + Auth + Storage)
-- **Images**: Pulled from Supabase Storage or linked files
-- **Data Source**: Moraware scraping → CSV → Supabase import
+The single page filters using query params sent to `/api/remnants`:
 
-## 🧾 Database Schema
+- `material` (repeatable)
+- `stone`
+- `min-width`
+- `min-height`
+- `status`
 
-| Field        | Description                       |
-| ------------ | --------------------------------- |
-| `id`         | Unique remnant ID (from Moraware) |
-| `stone_name` | Name of the material              |
-| `material`   | Material type (Granite, Quartz)   |
-| `dimensions` | Size (single or L-shape)          |
-| `thickness`  | Slab thickness                    |
-| `status`     | Available, Sold, On Hold, etc.    |
-| `location`   | Physical remnant location         |
-| `color`      | Visual color tag                  |
-| `image_url`  | Link to preview image             |
-| `pricing`    | Price per piece or sqft           |
+## Remnants API Behavior
 
-## 🚀 Setup & Deployment
+`GET /api/remnants` returns rows from `public.remnants` with:
 
-1. Clone this repo
-2. Link your Supabase project
-3. Update API keys in the frontend config
-4. Import remnant data from `original2.csv` or your own source
-5. Deploy (Netlify, Vercel, GitHub Pages, etc.)
+- `is_active = true`
+- `deleted_at is null`
+- ordered by `id desc`
 
-## ⏱ Scraper Cron
+The API applies optional filters for material, stone (`name`), width, height, and status.
 
-The Moraware sync scraper runs with GitHub Actions cron at `.github/workflows/remnants-cron.yml`.
+## Local Development
+
+### Node app
+
+```bash
+npm install
+npm start
+```
+
+### Scraper
+
+```bash
+pip install -r requirements.txt
+python -m scraper
+```
+
+Also supported:
+
+```bash
+python scraper/sync_remnants.py
+python scraper/selenium_utils.py
+```
+
+## Required Environment Variables
+
+### App/API
+
+- `SUPABASE_URL`
+- `SUPABASE_KEY`
+
+### Scraper
+
+- `MORAWARE_URL`
+- `MORAWARE_USER`
+- `MORAWARE_PASS`
+- `SUPABASE_URL`
+- `SUPABASE_KEY`
+- `SUPABASE_BUCKET` (optional, default `remnant-images`)
+- `MORAWARE_PAGE_DELAY_SEC` (optional, default `0.15`)
+
+## GitHub Cron (Scraper)
+
+Cron workflow file:
+
+- `.github/workflows/remnants-cron.yml`
 
 Required GitHub repository secrets:
+
 - `MORAWARE_URL`
 - `MORAWARE_USER`
 - `MORAWARE_PASS`
@@ -65,25 +90,16 @@ Required GitHub repository secrets:
 - `SUPABASE_KEY` (or `SUPABASE_SERVICE_ROLE_KEY`)
 - `SUPABASE_BUCKET` (optional)
 
-Manual run locally:
-- `pip install -r requirements.txt`
-- `python -m scraper`
+## Required Supabase RPC Functions
 
-## ✅ Status
+The scraper expects these SQL functions to exist:
 
-- ✔️ Initial remnant viewer working
-- ✔️ Modal zoom and pan complete
-- ✔️ CSV ingestion and image linking live
-- 🔜 Admin auth + filtering by client (via Supabase)
-- 🔜 Mobile responsiveness and image optimization
+- `sync_remnant(...)`
+- `reconcile_deletions(p_run_started_at timestamptz)`
 
-## 🤝 Collaborators
+`sync_remnant` must use the current table column names (`l_width`, `l_height`, etc.).
 
-- **Lead Dev**: Hugo Fraga
-- **Company**: Quick Countertop
+## Notes
 
-## 📬 Contact
-
-For bug reports, enhancements, or access requests, contact [Hugo Fraga] or your Quick admin.
-
----
+- Last scraper issues report is written to `scraper/last_sync_issues.json`.
+- The scraper currently performs soft-delete reconciliation via `is_active` and `deleted_at`.

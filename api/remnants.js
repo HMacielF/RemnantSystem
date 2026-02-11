@@ -1,65 +1,55 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const supabase = require('../supabaseClient');
+const supabase = require("../supabaseClient");
 
-// GET /remnants — default owner is "Quick"
-router.get('/remnants', async (req, res) => {
-    await handleRemnantFilter(req, res, "Quick");
-});
+function asNumber(value) {
+    if (value === undefined || value === null || value === "") return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
 
-// GET /remnants/:owner — custom owner
-router.get('/remnants/:owner', async (req, res) => {
-    const owner = req.params.owner.toUpperCase();
-    const { material, stone, minWidth, minHeight, color } = req.query;
-
-    try {
-        if (owner === 'ALL') {
-            const { data, error } = await supabase.rpc('get_all', {
-                materials: material ? (Array.isArray(material) ? material : [material]) : null,
-                stone: stone || null,
-                min_w: minWidth ? parseFloat(minWidth) : null,
-                min_h: minHeight ? parseFloat(minHeight) : null,
-                color: color || null
-            });
-
-            if (error) {
-                return res.status(500).json({ error: error.message });
-            }
-
-            return res.status(200).json(data);
-        }
-
-        // Fallback if owner is not 'ALL'
-        await handleRemnantFilter(req, res, owner);
-
-    } catch (err) {
-        console.error('Error handling remnants:', err);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-
-// Shared handler
-async function handleRemnantFilter(req, res, owner) {
-    const { material, stone, 'min-width': minWidth, 'min-height': minHeight, color } = req.query;
+async function handleRemnantFilter(req, res) {
+    const materialsRaw = req.query.material;
+    const materials = Array.isArray(materialsRaw)
+        ? materialsRaw
+        : materialsRaw
+            ? [materialsRaw]
+            : [];
+    const stone = (req.query.stone || "").trim();
+    const status = (req.query.status || "").trim();
+    const minWidth = asNumber(req.query["min-width"] ?? req.query.minWidth);
+    const minHeight = asNumber(req.query["min-height"] ?? req.query.minHeight);
 
     try {
-        const { data, error } = await supabase.rpc('filter_remnants', {
-            materials: material ? (Array.isArray(material) ? material : [material]) : null,
-            stone: stone || null,
-            min_w: minWidth ? parseFloat(minWidth) : null,
-            min_h: minHeight ? parseFloat(minHeight) : null,
-            color: color || null,
-            owner_filter: owner || null
-        });
+        let query = supabase
+            .from("remnants")
+            .select(
+                "id,name,material,width,height,thickness,l_shape,l_width,l_height,status,image,image_path,source_image_url,is_active,deleted_at,last_seen_at,updated_at"
+            )
+            .eq("is_active", true)
+            .is("deleted_at", null)
+            .order("id", { ascending: false });
 
+        if (materials.length > 0) query = query.in("material", materials);
+        if (stone) query = query.ilike("name", `%${stone}%`);
+        if (status) query = query.ilike("status", `%${status}%`);
+        if (minWidth !== null) query = query.gte("width", minWidth);
+        if (minHeight !== null) query = query.gte("height", minHeight);
+
+        const { data, error } = await query;
         if (error) throw error;
 
-        res.json(data);
+        res.status(200).json(data || []);
     } catch (err) {
-        console.error('Error filtering remnants:', err.message);
-        res.status(500).json({ error: 'Failed to filter remnants' });
+        console.error("Error filtering remnants:", err);
+        res.status(500).json({ error: "Failed to filter remnants" });
     }
 }
+
+// Main endpoint used by the single page.
+router.get("/remnants", handleRemnantFilter);
+
+// Backward-compatible alias: ignore owner and return same filtered list.
+router.get("/remnants/:owner", handleRemnantFilter);
 
 module.exports = router;
