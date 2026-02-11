@@ -2,7 +2,6 @@ const MATERIALS = ["Quartz", "Granite", "Marble", "Quartzite", "Porcelain"];
 const LIVE_SEARCH_DELAY_MS = 300;
 
 let allRemnants = [];
-let currentHoldInfo = {};
 let debounceTimer = null;
 let activeAbortController = null;
 
@@ -91,14 +90,6 @@ function renderRemnants() {
                 class="h-48 object-cover w-full transition-transform duration-300 hover:scale-105"
                 onerror="this.src=''; this.classList.add('bg-gray-100');">
 
-            <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                    onclick="requestHold('${remnant.id}', '${(remnant.name || "").replace(/'/g, "\\'")}', '${(remnant.material || "").replace(/'/g, "\\'")}')"
-                    class="w-10 h-10 rounded-full border-2 border-[#E78B4B] text-[#E78B4B] font-bold bg-white hover:bg-[#E78B4B] hover:text-white flex items-center justify-center shadow-md transition-all duration-300"
-                    title="Request Hold"
-                >+</button>
-            </div>
-
             <div class="p-4 space-y-1 text-sm text-[#232323]">
                 <p><strong>ID:</strong> ${remnant.id}</p>
                 <p><strong>Material:</strong> ${remnant.material || "Unknown"}</p>
@@ -160,57 +151,6 @@ function queueLiveApply() {
     debounceTimer = window.setTimeout(applyFiltersFromForm, LIVE_SEARCH_DELAY_MS);
 }
 
-function requestHold(id, stoneName, material) {
-    currentHoldInfo = { id, stoneName, material };
-    const modal = document.getElementById("hold-modal");
-    if (!modal) return;
-    document.getElementById("client-name").value = "";
-    document.getElementById("client-contact").value = "";
-    modal.classList.remove("hidden");
-}
-
-function closeHoldModal() {
-    const modal = document.getElementById("hold-modal");
-    if (modal) modal.classList.add("hidden");
-}
-
-async function submitHoldRequest() {
-    const submitBtn = document.getElementById("submit-hold");
-    const clientName = document.getElementById("client-name").value.trim();
-    const clientContact = document.getElementById("client-contact").value.trim();
-
-    if (!clientName || !clientContact) {
-        alert("Please enter both name and contact.");
-        return;
-    }
-
-    submitBtn.disabled = true;
-    try {
-        const res = await fetch("/api/hold_requests", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                remnant_id: currentHoldInfo.id,
-                client_name: clientName,
-                client_contact: clientContact,
-            }),
-        });
-
-        if (!res.ok) {
-            const errorText = await res.text();
-            throw new Error(`Server responded with ${res.status}: ${errorText}`);
-        }
-
-        alert("Hold request submitted.");
-        closeHoldModal();
-    } catch (err) {
-        console.error("Failed to submit hold request:", err);
-        alert("Failed to submit request. Please try again.");
-    } finally {
-        submitBtn.disabled = false;
-    }
-}
-
 document.addEventListener("DOMContentLoaded", () => {
     renderMaterialCheckboxes();
     initFormFromURL();
@@ -234,13 +174,5 @@ document.addEventListener("DOMContentLoaded", () => {
         checkbox.addEventListener("change", queueLiveApply);
     });
 
-    const submitHoldButton = document.getElementById("submit-hold");
-    if (submitHoldButton) {
-        submitHoldButton.addEventListener("click", submitHoldRequest);
-    }
-
     loadRemnants();
 });
-
-window.requestHold = requestHold;
-window.closeHoldModal = closeHoldModal;

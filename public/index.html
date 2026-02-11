@@ -81,41 +81,6 @@
     </form>
 
     <div
-      id="hold-modal"
-      class="fixed inset-0 z-50 hidden bg-black bg-opacity-50 flex items-center justify-center"
-    >
-      <div class="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full space-y-4">
-        <h2 class="text-lg font-semibold text-gray-800">Request Hold</h2>
-        <input
-          type="text"
-          id="client-name"
-          placeholder="Client Name"
-          class="w-full border p-2 rounded"
-        />
-        <input
-          type="text"
-          id="client-contact"
-          placeholder="Contact Info (email or phone)"
-          class="w-full border p-2 rounded"
-        />
-        <div class="flex justify-end gap-2">
-          <button
-            onclick="closeHoldModal()"
-            class="px-4 py-2 text-sm bg-gray-300 rounded"
-          >
-            Cancel
-          </button>
-          <button
-            id="submit-hold"
-            class="px-4 py-2 text-sm bg-orange-500 text-white rounded"
-          >
-            Submit
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div
       id="remnants-container"
       class="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 max-w-7xl mx-auto"
     >

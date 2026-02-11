@@ -1,24 +1,14 @@
 const express = require('express');
-const bodyParser = require('body-parser');
 const path = require('path');
-const cookieParser = require('cookie-parser');
 
 const app = express();
 const port = 3000;
 
-app.use(cookieParser());
-app.use(bodyParser.json());
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Mount all API routes
+// Single API route
 app.use('/api', require('./api/remnants'));
-app.use('/api', require('./api/update'));
-app.use('/api', require('./api/delete'));
-app.use('/api', require('./api/hold_requests'));
-app.use('/api', require("./api/me"));
-app.use('/api', require("./api/login"));
-app.use("/api", require("./api/hold_actions"));
-app.use("/api", require("./api/admin_remnants"));
 
 
 // Frontend route handling
