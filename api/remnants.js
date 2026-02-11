@@ -24,10 +24,8 @@ async function handleRemnantFilter(req, res) {
         let query = supabase
             .from("remnants")
             .select(
-                "id,name,material,width,height,thickness,l_shape,l_width,l_height,status,image,image_path,source_image_url,is_active,deleted_at,last_seen_at,updated_at"
+                "id,name,material,width,height,thickness,l_shape,l_width,l_height,status,image,source_image_url"
             )
-            .eq("is_active", true)
-            .is("deleted_at", null)
             .order("id", { ascending: false });
 
         if (materials.length > 0) query = query.in("material", materials);
@@ -42,7 +40,10 @@ async function handleRemnantFilter(req, res) {
         res.status(200).json(data || []);
     } catch (err) {
         console.error("Error filtering remnants:", err);
-        res.status(500).json({ error: "Failed to filter remnants" });
+        res.status(500).json({
+            error: "Failed to filter remnants",
+            details: err?.message || String(err),
+        });
     }
 }
 
