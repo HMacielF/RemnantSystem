@@ -1,26 +1,14 @@
 {
-  "run_started_at": "2026-02-11T22:54:22.534404+00:00",
+  "run_started_at": "2026-02-12T02:30:58.277034+00:00",
   "crawl_completed_successfully": true,
   "total_errors": 4,
-  "issue_count": 7,
+  "issue_count": 5,
   "issues": [
     {
       "kind": "parse_size_failed",
       "job_url": "https://quickcountertop.moraware.net/sys/job/4382",
       "remnant_id": 45,
       "details": "#45 | 41 x l38"
-    },
-    {
-      "kind": "missing_files_table",
-      "job_url": "https://quickcountertop.moraware.net/sys/job/4191",
-      "remnant_id": null,
-      "details": ""
-    },
-    {
-      "kind": "missing_files_table",
-      "job_url": "https://quickcountertop.moraware.net/sys/job/1134",
-      "remnant_id": null,
-      "details": ""
     },
     {
       "kind": "row_exception",
