@@ -2,6 +2,7 @@ import logging
 import json
 import re
 import os
+import shutil
 import sys
 import time
 from collections import Counter
@@ -9,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from selenium import webdriver
+from selenium.common.exceptions import SessionNotCreatedException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -34,22 +36,36 @@ def main():
     settings = load_settings()
     supabase = create_client(settings.supabase_url, settings.supabase_key)
 
-    options = Options()
     running_in_ci = os.getenv("CI", "").lower() == "true" or os.getenv("GITHUB_ACTIONS") == "true"
-    if running_in_ci:
-        # GitHub Actions: run headless and add common stability flags.
-        options.add_argument("--headless")
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-gpu")
-        options.add_argument("--remote-debugging-port=9222")
-        options.add_argument("--window-size=1920,1080")
 
-        chrome_path = os.getenv("CHROME_PATH") or os.getenv("CHROME_BIN")
-        if chrome_path:
-            options.binary_location = chrome_path
+    def build_options(headless_arg: str) -> Options:
+        opts = Options()
+        if running_in_ci:
+            opts.add_argument(headless_arg)
+            opts.add_argument("--no-sandbox")
+            opts.add_argument("--disable-dev-shm-usage")
+            opts.add_argument("--disable-gpu")
+            opts.add_argument("--disable-software-rasterizer")
+            opts.add_argument("--remote-debugging-port=9222")
+            opts.add_argument("--window-size=1920,1080")
+            opts.add_argument("--user-data-dir=/tmp/chrome-user-data")
 
-    driver = webdriver.Chrome(options=options)
+            chrome_path = (
+                os.getenv("CHROME_PATH")
+                or os.getenv("CHROME_BIN")
+                or shutil.which("google-chrome")
+                or shutil.which("chrome")
+                or shutil.which("chromium-browser")
+            )
+            if chrome_path:
+                opts.binary_location = chrome_path
+        return opts
+
+    try:
+        driver = webdriver.Chrome(options=build_options("--headless=new"))
+    except SessionNotCreatedException:
+        logging.warning("Chrome failed with --headless=new. Retrying with --headless fallback.")
+        driver = webdriver.Chrome(options=build_options("--headless"))
 
     total_rows_seen = 0
     total_with_id = 0

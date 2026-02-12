@@ -43,4 +43,10 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
         run: |
+          echo "CI=$CI GITHUB_ACTIONS=$GITHUB_ACTIONS"
+          echo "google-chrome path: $(which google-chrome || true)"
+          echo "chromedriver path: $(which chromedriver || true)"
+          google-chrome --version || true
+          chromedriver --version || true
+          export CHROME_PATH="$(which google-chrome || true)"
           python -m scraper
