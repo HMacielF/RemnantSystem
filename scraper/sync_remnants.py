@@ -1,6 +1,7 @@
 import logging
 import json
 import re
+import os
 import sys
 import time
 from collections import Counter
@@ -34,10 +35,10 @@ def main():
     supabase = create_client(settings.supabase_url, settings.supabase_key)
 
     options = Options()
-    # Uncomment for headless environments (GitHub Actions, etc.)
-    # options.add_argument("--headless=new")
-    # options.add_argument("--no-sandbox")
-    # options.add_argument("--disable-dev-shm-usage")
+    if os.getenv("CI") == "true":
+        options.add_argument("--headless=new")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
 
     driver = webdriver.Chrome(options=options)
 
