@@ -32,16 +32,161 @@ logging.basicConfig(
 )
 
 
+def update_job_desc_with_remnant_ids(driver, wait, remnant_ids: list[int]) -> bool:
+    """Update Moraware job notes with one `ID #<n>` line per remnant in this job."""
+    if not remnant_ids:
+        return False
+
+    try:
+        unique_ids = list(dict.fromkeys(remnant_ids))
+        id_lines = [f"ID #{remnant_id}" for remnant_id in unique_ids]
+
+        edit_btn = wait.until(EC.element_to_be_clickable((By.ID, "btnEditJobHeader")))
+        driver.execute_script("arguments[0].click();", edit_btn)
+
+        job_desc = wait.until(EC.visibility_of_element_located((By.NAME, "jobDesc")))
+        current_desc = job_desc.get_attribute("value") or ""
+
+        kept_lines = []
+        for line in current_desc.splitlines():
+            if re.match(r"^\s*ID\s*#\d+\s*$", line):
+                continue
+            kept_lines.append(line)
+
+        while kept_lines and not kept_lines[-1].strip():
+            kept_lines.pop()
+
+        if kept_lines:
+            new_desc = "\n".join(kept_lines + [""] + id_lines)
+        else:
+            new_desc = "\n".join(id_lines)
+
+        if new_desc == current_desc:
+            logging.info("Job notes already contain current remnant ID list")
+            return False
+
+        driver.execute_script(
+            """
+            const el = arguments[0];
+            const value = arguments[1];
+            el.value = value;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            """,
+            job_desc,
+            new_desc,
+        )
+
+        saved_via_function = driver.execute_script(
+            """
+            const saveFns = [
+                'SubmitEditJobHeader',
+                'submitEditJobHeader',
+                'SaveEditJobHeader',
+                'saveEditJobHeader',
+                'SaveJobHeader',
+                'saveJobHeader'
+            ];
+            for (const fnName of saveFns) {
+                if (typeof window[fnName] === 'function') {
+                    window[fnName]();
+                    return true;
+                }
+                if (window.parent && typeof window.parent[fnName] === 'function') {
+                    window.parent[fnName]();
+                    return true;
+                }
+                if (window.top && typeof window.top[fnName] === 'function') {
+                    window.top[fnName]();
+                    return true;
+                }
+            }
+            return false;
+            """
+        )
+
+        saved = bool(saved_via_function)
+        if not saved:
+            # First fallback: submit the nearest form from the textarea.
+            submitted_form = driver.execute_script(
+                """
+                const el = arguments[0];
+                const form = el && el.closest ? el.closest('form') : null;
+                if (form) {
+                    if (typeof form.requestSubmit === 'function') {
+                        form.requestSubmit();
+                    } else {
+                        form.submit();
+                    }
+                    return true;
+                }
+                return false;
+                """,
+                job_desc,
+            )
+            saved = bool(submitted_form)
+
+        if not saved:
+            # Second fallback: click visible Save/OK/Update controls.
+            fallback_selectors = [
+                "#btnSaveJobHeader",
+                "button[onclick*='SaveEditJobHeader']",
+                "button[onclick*='SaveJobHeader']",
+                "input[onclick*='SaveEditJobHeader']",
+                "input[onclick*='SaveJobHeader']",
+                "button",
+                "input[type='submit']",
+                "input[type='button']",
+            ]
+            for selector in fallback_selectors:
+                controls = driver.find_elements(By.CSS_SELECTOR, selector)
+                if not controls:
+                    continue
+                for control in controls:
+                    if not (control.is_displayed() and control.is_enabled()):
+                        continue
+                    label = (
+                        (control.text or "").strip()
+                        or (control.get_attribute("value") or "").strip()
+                        or (control.get_attribute("title") or "").strip()
+                        or (control.get_attribute("aria-label") or "").strip()
+                    )
+                    if not label:
+                        onclick = (control.get_attribute("onclick") or "").lower()
+                        if "save" not in onclick and "ok" not in onclick and "update" not in onclick:
+                            continue
+                    elif not re.search(r"(save|ok|update|done)", label, re.IGNORECASE):
+                        continue
+                    driver.execute_script("arguments[0].click();", control)
+                    saved = True
+                    break
+                if saved:
+                    break
+
+        if not saved:
+            logging.warning("Updated jobDesc in dialog, but could not confirm save action.")
+
+        time.sleep(0.5)
+        logging.info(f"Updated job notes with remnant IDs: {', '.join(map(str, unique_ids))}")
+        return True
+
+    except Exception as exc:
+        logging.warning(f"Could not update job notes with remnant IDs: {exc}")
+        return False
+
+
 def main():
     settings = load_settings()
     supabase = create_client(settings.supabase_url, settings.supabase_key)
 
+    headless_enabled = os.getenv("MORAWARE_HEADLESS", "true").lower() in {"1", "true", "yes"}
     running_in_ci = os.getenv("CI", "").lower() == "true" or os.getenv("GITHUB_ACTIONS") == "true"
 
-    def build_options(headless_arg: str) -> Options:
+    def build_options(headless_arg: str | None) -> Options:
         opts = Options()
-        if running_in_ci:
+        if headless_arg:
             opts.add_argument(headless_arg)
+        if running_in_ci:
             opts.add_argument("--no-sandbox")
             opts.add_argument("--disable-dev-shm-usage")
             opts.add_argument("--disable-gpu")
@@ -61,11 +206,14 @@ def main():
                 opts.binary_location = chrome_path
         return opts
 
-    try:
-        driver = webdriver.Chrome(options=build_options("--headless=new"))
-    except SessionNotCreatedException:
-        logging.warning("Chrome failed with --headless=new. Retrying with --headless fallback.")
-        driver = webdriver.Chrome(options=build_options("--headless"))
+    if headless_enabled:
+        try:
+            driver = webdriver.Chrome(options=build_options("--headless=new"))
+        except SessionNotCreatedException:
+            logging.warning("Chrome failed with --headless=new. Retrying with --headless fallback.")
+            driver = webdriver.Chrome(options=build_options("--headless"))
+    else:
+        driver = webdriver.Chrome(options=build_options(None))
 
     total_rows_seen = 0
     total_with_id = 0
@@ -165,6 +313,7 @@ def main():
             logging.info(f"[{job_i}/{len(job_urls)}] Processing job page: {job_url}")
 
             driver.get(job_url)
+            remnant_ids_for_job = []
 
             try:
                 WebDriverWait(driver, 10).until(
@@ -204,6 +353,8 @@ def main():
                     if not m_id:
                         continue
 
+                    remnant_id_from_desc = int(m_id.group(1))
+                    remnant_ids_for_job.append(remnant_id_from_desc)
                     total_with_id += 1
 
                     size_parsed = parse_line(description)
@@ -214,7 +365,7 @@ def main():
                         record_issue(
                             "parse_size_failed",
                             job_url=job_url,
-                            remnant_id=int(m_id.group(1)),
+                            remnant_id=remnant_id_from_desc,
                             details=description,
                         )
                         continue
@@ -341,6 +492,8 @@ def main():
                         details=f"row={idx} error={exc}",
                     )
                     continue
+
+            update_job_desc_with_remnant_ids(driver, wait, remnant_ids_for_job)
 
         logging.info("Sync complete")
         logging.info(f"Total file rows seen: {total_rows_seen}")
