@@ -227,6 +227,7 @@ def main():
 
     run_started_at = datetime.now(timezone.utc).isoformat()
     crawl_completed_successfully = False
+    changed_statuses = {"changed", "inserted", "updated", "created", "upserted"}
 
     def record_issue(kind: str, job_url: str | None = None, remnant_id: int | None = None, details: str = ""):
         issues.append(
@@ -411,7 +412,12 @@ def main():
                     }
 
                     rpc_res = supabase.rpc("sync_remnant", rpc_payload).execute()
-                    sync_status = (rpc_res.data[0]["sync_status"] if rpc_res.data else "no_change")
+
+                    sync_status = "no_change"
+                    if isinstance(rpc_res.data, list) and rpc_res.data:
+                        sync_status = str(rpc_res.data[0].get("sync_status") or "no_change").lower()
+                    elif isinstance(rpc_res.data, dict):
+                        sync_status = str(rpc_res.data.get("sync_status") or "no_change").lower()
 
                     # Mark as seen for this run regardless of whether metadata/photo changed.
                     supabase.table("remnants").update(
@@ -423,13 +429,14 @@ def main():
                         }
                     ).eq("id", remnant_id).execute()
 
-                    if sync_status == "changed":
+                    if sync_status in changed_statuses:
                         total_changed += 1
-                        logging.info(f"Remnant #{remnant_id}: metadata changed (insert/update)")
+                        logging.info(f"Remnant #{remnant_id}: metadata status='{sync_status}'")
                     else:
                         total_no_change += 1
-                        logging.info(f"Remnant #{remnant_id}: no metadata change, skipping photo")
-                        continue
+                        logging.info(
+                            f"Remnant #{remnant_id}: metadata status='{sync_status}', checking photo hash anyway"
+                        )
 
                     logging.info(f"Remnant #{remnant_id}: downloading image bytes")
                     img_resp = sess.get(full_url, timeout=30)
@@ -442,31 +449,38 @@ def main():
 
                     existing = (
                         supabase.table("remnants")
-                        .select("photo_hash")
+                        .select("photo_hash,image,image_path")
                         .eq("id", remnant_id)
                         .limit(1)
                         .execute()
                     )
-                    existing_hash = existing.data[0].get("photo_hash") if existing.data else None
+                    existing_row = existing.data[0] if existing.data else {}
+                    existing_hash = existing_row.get("photo_hash")
+                    existing_image = existing_row.get("image")
+                    existing_image_path = existing_row.get("image_path")
 
-                    if existing_hash == new_photo_hash:
+                    if existing_hash == new_photo_hash and existing_image:
                         total_photo_skipped_same_hash += 1
                         logging.info(f"Remnant #{remnant_id}: photo unchanged, skipping upload")
                         continue
 
-                    content_type = img_resp.headers.get("Content-Type", "")
+                    content_type = (img_resp.headers.get("Content-Type") or "").split(";")[0].strip()
                     ext = infer_extension(full_url, content_type)
-                    image_path = f"{remnant_id}_{new_photo_hash}.{ext}"
+                    image_path = (
+                        existing_image_path
+                        if existing_hash == new_photo_hash and existing_image_path
+                        else f"{remnant_id}_{new_photo_hash}.{ext}"
+                    )
 
                     logging.info(
                         f"Remnant #{remnant_id}: uploading to bucket='{settings.supabase_bucket}' "
-                        f"as '{image_path}' content_type='{content_type}'"
+                        f"as '{image_path}' content_type='{content_type or 'image/jpeg'}'"
                     )
 
                     supabase.storage.from_(settings.supabase_bucket).upload(
                         image_path,
                         img_bytes,
-                        {"content-type": content_type, "upsert": "true"},
+                        {"content-type": content_type or "image/jpeg", "upsert": "true"},
                     )
                     total_photo_uploaded += 1
 
