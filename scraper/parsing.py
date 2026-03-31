@@ -73,7 +73,7 @@ def get_page_material_and_name(title: str):
     if "|" in title:
         left, right = title.split("|", 1)
         material = left.strip()
-        name = right.strip()
+        name = right.rstrip("- Job Detail - Moraware Systemize")
     elif title.strip().lower().startswith("quick "):
         material = "Quick Quartz"
         print("Title: ", title)
