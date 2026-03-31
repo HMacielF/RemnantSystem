@@ -40,7 +40,7 @@ jobs:
           MORAWARE_USER: ${{ secrets.MORAWARE_USER }}
           MORAWARE_PASS: ${{ secrets.MORAWARE_PASS }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_KEY }}
           SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
         run: |
           echo "CI=$CI GITHUB_ACTIONS=$GITHUB_ACTIONS"
