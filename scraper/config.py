@@ -23,8 +23,11 @@ def load_settings() -> Settings:
         moraware_user=os.getenv("MORAWARE_USER", ""),
         moraware_pass=os.getenv("MORAWARE_PASS", ""),
         supabase_url=os.getenv("SUPABASE_URL", ""),
-        supabase_key=os.getenv("SUPABASE_KEY", ""),
-        supabase_bucket=os.getenv("SUPABASE_BUCKET", "remnant-images"),
+        supabase_key=(
+            os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            or os.getenv("SUPABASE_KEY", "")
+        ),
+        supabase_bucket=os.getenv("SUPABASE_BUCKET") or "remnant-images",
         page_delay_sec=float(os.getenv("MORAWARE_PAGE_DELAY_SEC", "0.15")),
     )
 
