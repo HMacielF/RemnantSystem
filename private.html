@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Management Workspace</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: #f4f4f4;
+        color: #222;
+      }
+      .wrap {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+      .card {
+        width: min(860px, calc(100vw - 32px));
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        padding: 24px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin-top: 20px;
+      }
+      .panel {
+        border: 1px solid #ececec;
+        border-radius: 14px;
+        padding: 18px;
+        background: #fafafa;
+      }
+      .eyebrow {
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 12px;
+        color: #8a6a54;
+      }
+      a {
+        color: #b85b1b;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <p class="eyebrow">Management Workspace</p>
+        <h1>Internal Remnant Controls</h1>
+        <p>You are signed in and can access the protected management workspace.</p>
+        <p>This separate workspace is the better fit for protected actions like status changes, deletes, uploads, and owner-scoped tools because it keeps the public viewer simple and lets your RLS rules govern the real capabilities.</p>
+        <div class="grid">
+          <div class="panel">
+            <h2>Status Updates</h2>
+            <p>Use this area for actions like marking remnants as sold, on hold, or available once those endpoints are connected.</p>
+          </div>
+          <div class="panel">
+            <h2>Inventory Changes</h2>
+            <p>Add new remnants or remove old ones here without exposing admin controls on the public browsing experience.</p>
+          </div>
+          <div class="panel">
+            <h2>Role-Aware Access</h2>
+            <p>Keep partner- or owner-specific actions inside this workspace so the UI can mirror the permissions enforced by RLS.</p>
+          </div>
+        </div>
+        <p><a href="/">Back to remnant viewer</a></p>
+        <p><a href="/logout">Log out</a></p>
+      </div>
+    </div>
+  </body>
+</html>

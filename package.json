@@ -11,7 +11,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon -e *",
+    "start": "nodemon index.js",
     "scraper:run": "python3 -m scraper",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
