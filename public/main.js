@@ -5,20 +5,29 @@ let allRemnants = [];
 let debounceTimer = null;
 let activeAbortController = null;
 const isManagementView = document.body?.dataset?.view === "management";
+let activeRemnantId = null;
 
 function currentParams() {
     return new URLSearchParams(window.location.search);
 }
 
 function normalizeStatus(value) {
-    return (value || "Available").trim();
+    const normalized = String(value || "").trim().toLowerCase();
+
+    if (!normalized || normalized === "available") return "Available";
+    if (normalized === "hold" || normalized === "on hold") return "On Hold";
+    if (normalized === "sold") return "Sold";
+    if (normalized === "deleted") return "Deleted";
+
+    return String(value || "Available").trim();
 }
 
 function statusBadgeClass(status) {
     const lc = status.toLowerCase();
-    if (lc.includes("sold")) return "bg-red-100 text-red-700";
-    if (lc.includes("hold") || lc.includes("pending")) return "bg-yellow-100 text-yellow-800";
-    return "bg-green-100 text-green-700";
+    if (lc === "sold") return "bg-rose-100 text-rose-800 ring-1 ring-rose-200";
+    if (lc === "on hold") return "bg-amber-100 text-amber-900 ring-1 ring-amber-200";
+    if (lc === "deleted") return "bg-stone-200 text-stone-900 ring-1 ring-stone-300";
+    return "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200";
 }
 
 function renderMaterialCheckboxes() {
@@ -77,9 +86,8 @@ function managementCardAction(remnant) {
         <button
             type="button"
             data-remnant-id="${remnant.id}"
-            class="absolute top-3 right-3 z-20 h-11 w-11 rounded-2xl bg-[#232323]/92 text-white shadow-lg ring-1 ring-white/70 backdrop-blur-sm flex items-center justify-center text-[18px] hover:bg-[#E78B4B] hover:scale-105 transition-all"
+            class="absolute top-3 right-3 z-20 h-11 w-11 rounded-2xl bg-[#232323]/92 text-white shadow-lg ring-1 ring-white/70 backdrop-blur-sm flex items-center justify-center text-[18px] transition-all hover:bg-[#E78B4B] hover:scale-105 active:brightness-90 active:scale-95"
             aria-label="Configure remnant ${remnant.id}"
-            title="Configure remnant"
         >
             &#9881;
         </button>
@@ -201,6 +209,7 @@ function populateEditModal(remnant) {
 function openEditModal(remnantId) {
     const remnant = allRemnants.find((item) => String(item.id) === String(remnantId));
     if (!remnant) return;
+    activeRemnantId = String(remnantId);
     populateEditModal(remnant);
     openModal("edit-remnant-modal");
 }
@@ -218,7 +227,143 @@ function openAddModal() {
     }
     if (emptyState) emptyState.classList.remove("hidden");
 
+    activeRemnantId = null;
     openModal("add-remnant-modal");
+}
+
+function showActionMessage(message, isError = false) {
+    let el = document.getElementById("action-feedback");
+    if (!el) {
+        el = document.createElement("div");
+        el.id = "action-feedback";
+        el.className = "fixed bottom-5 right-5 z-[60] rounded-2xl px-4 py-3 text-sm font-medium shadow-lg";
+        document.body.appendChild(el);
+    }
+
+    el.textContent = message;
+    el.className = `fixed bottom-5 right-5 z-[60] rounded-2xl px-4 py-3 text-sm font-medium shadow-lg ${
+        isError ? "bg-rose-600 text-white" : "bg-[#232323] text-white"
+    }`;
+
+    window.clearTimeout(showActionMessage.timeoutId);
+    showActionMessage.timeoutId = window.setTimeout(() => {
+        el.remove();
+    }, 2400);
+}
+
+async function fileToPayload(file) {
+    if (!file) return null;
+
+    const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Failed to read file"));
+        reader.readAsDataURL(file);
+    });
+
+    return {
+        name: file.name,
+        type: file.type,
+        dataUrl,
+    };
+}
+
+function serializeForm(prefix) {
+    return {
+        id: document.getElementById(`${prefix}-id`)?.value.trim(),
+        name: document.getElementById(`${prefix}-name`)?.value.trim(),
+        material: document.getElementById(`${prefix}-material`)?.value.trim(),
+        width: document.getElementById(`${prefix}-width`)?.value,
+        height: document.getElementById(`${prefix}-height`)?.value,
+        thickness: document.getElementById(`${prefix}-thickness`)?.value.trim(),
+        l_shape: document.getElementById(`${prefix}-l-shape`)?.checked,
+        l_width: document.getElementById(`${prefix}-l-width`)?.value,
+        l_height: document.getElementById(`${prefix}-l-height`)?.value,
+    };
+}
+
+async function updateStatus(status) {
+    if (!activeRemnantId) return;
+
+    const res = await fetch(`/api/remnants/${activeRemnantId}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+    });
+
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Failed to update status");
+    }
+
+    await loadRemnants();
+    closeModal("edit-remnant-modal");
+    showActionMessage(`Status updated to ${status}.`);
+}
+
+async function modifyRemnant() {
+    if (!activeRemnantId) return;
+
+    const payload = serializeForm("edit");
+    const imageFile = document.getElementById("edit-image-file")?.files?.[0];
+    if (imageFile) {
+        payload.image_file = await fileToPayload(imageFile);
+    }
+
+    const res = await fetch(`/api/remnants/${activeRemnantId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Failed to modify remnant");
+    }
+
+    await loadRemnants();
+    closeModal("edit-remnant-modal");
+    showActionMessage("Remnant updated.");
+}
+
+async function deleteRemnant() {
+    if (!activeRemnantId) return;
+
+    const res = await fetch(`/api/remnants/${activeRemnantId}`, {
+        method: "DELETE",
+    });
+
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Failed to delete remnant");
+    }
+
+    await loadRemnants();
+    closeModal("edit-remnant-modal");
+    showActionMessage("Remnant deleted.");
+}
+
+async function createRemnant() {
+    const payload = serializeForm("add");
+    const imageFile = document.getElementById("add-image-file")?.files?.[0];
+    if (imageFile) {
+        payload.image_file = await fileToPayload(imageFile);
+    }
+
+    const res = await fetch("/api/remnants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Failed to create remnant");
+    }
+
+    await loadRemnants();
+    closeModal("add-remnant-modal");
+    showActionMessage("Remnant created.");
 }
 
 function bindManagementActions() {
@@ -297,6 +442,54 @@ function bindManagementActions() {
             if (emptyState) emptyState.classList.add("hidden");
         });
     }
+
+    document.getElementById("edit-mark-available")?.addEventListener("click", async () => {
+        try {
+            await updateStatus("Available");
+        } catch (error) {
+            showActionMessage(error.message, true);
+        }
+    });
+
+    document.getElementById("edit-mark-hold")?.addEventListener("click", async () => {
+        try {
+            await updateStatus("Hold");
+        } catch (error) {
+            showActionMessage(error.message, true);
+        }
+    });
+
+    document.getElementById("edit-mark-sold")?.addEventListener("click", async () => {
+        try {
+            await updateStatus("Sold");
+        } catch (error) {
+            showActionMessage(error.message, true);
+        }
+    });
+
+    document.getElementById("edit-delete")?.addEventListener("click", async () => {
+           try {
+            await updateStatus("Deleted");
+        } catch (error) {
+            showActionMessage(error.message, true);
+        }
+    });
+
+    document.getElementById("edit-modify")?.addEventListener("click", async () => {
+        try {
+            await modifyRemnant();
+        } catch (error) {
+            showActionMessage(error.message, true);
+        }
+    });
+
+    document.getElementById("add-create")?.addEventListener("click", async () => {
+        try {
+            await createRemnant();
+        } catch (error) {
+            showActionMessage(error.message, true);
+        }
+    });
 }
 
 async function loadRemnants() {

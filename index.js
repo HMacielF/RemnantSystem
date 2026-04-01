@@ -5,11 +5,11 @@ const cookieParser = require("cookie-parser");
 const supabase = require("./supabaseClient");
 
 const app = express();
-const port = 3030;
+const port = 3003;
 const loginPath = "/portal";
 const managePath = "/manage";
 
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: "20mb" }));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "public")));

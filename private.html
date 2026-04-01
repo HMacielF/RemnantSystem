@@ -81,14 +81,13 @@
         >
           <option value="">All Statuses</option>
           <option value="Available">Available</option>
-          <option value="Hold">Hold</option>
           <option value="On Hold">On Hold</option>
-          <option value="Pending">Pending</option>
           <option value="Sold">Sold</option>
+          <option value="Deleted">Deleted</option>
         </select>
         <button
           type="submit"
-          class="bg-[#E78B4B] text-white px-5 py-2 text-sm rounded hover:bg-[#cf7335] transition-all w-full md:w-auto"
+          class="bg-[#E78B4B] text-white px-5 py-2 text-sm rounded transition-all w-full md:w-auto active:brightness-90 active:scale-[0.99]"
         >
           Apply Filters
         </button>
@@ -96,8 +95,7 @@
           type="button"
           id="open-add-remnant"
           aria-label="Upload stone"
-          title="Upload stone"
-          class="w-full md:w-auto h-12 rounded-2xl bg-[#232323] text-white px-5 md:px-6 flex items-center justify-center gap-3 shadow-[0_12px_24px_rgba(35,35,35,0.16)] hover:bg-[#E78B4B] hover:-translate-y-0.5 transition-all"
+          class="w-full md:w-auto h-12 rounded-2xl bg-[#232323] text-white px-5 md:px-6 flex items-center justify-center gap-3 shadow-[0_12px_24px_rgba(35,35,35,0.16)] transition-all active:brightness-90 active:scale-[0.99]"
         >
           <span class="text-3xl leading-none">+</span>
           <span class="text-sm font-semibold tracking-[0.12em] uppercase"
@@ -128,7 +126,7 @@
           <button
             type="button"
             data-close-modal="edit-remnant-modal"
-            class="h-10 w-10 rounded-full border border-gray-300 text-xl hover:bg-gray-100 transition-colors"
+            class="h-10 w-10 rounded-full border border-gray-300 text-xl transition-colors active:bg-gray-300"
             aria-label="Close edit remnant form"
           >
             ×
@@ -195,7 +193,7 @@
                       type="button"
                       id="edit-l-shape-toggle"
                       aria-pressed="false"
-                      class="relative h-7 w-12 rounded-full bg-gray-300 transition-colors"
+                      class="relative h-7 w-12 rounded-full bg-gray-300 transition-colors active:bg-gray-400"
                     >
                       <span
                         id="edit-l-shape-knob"
@@ -253,19 +251,19 @@
               </div>
             </div>
             <div class="mt-auto pt-8 grid grid-cols-2 gap-3">
-              <button type="button" class="rounded-2xl bg-emerald-100 text-emerald-800 py-3 text-sm font-semibold border border-emerald-200">
+              <button type="button" id="edit-mark-available" class="rounded-2xl bg-emerald-100 text-emerald-800 py-3 text-sm font-semibold border border-emerald-200 transition-colors active:bg-emerald-200">
                 Available
               </button>
-              <button type="button" class="rounded-2xl bg-amber-100 text-amber-900 py-3 text-sm font-semibold border border-amber-200">
+              <button type="button" id="edit-mark-hold" class="rounded-2xl bg-amber-100 text-amber-900 py-3 text-sm font-semibold border border-amber-200 transition-colors active:bg-amber-200">
                 On Hold
               </button>
-              <button type="button" class="rounded-2xl bg-rose-100 text-rose-800 py-3 text-sm font-semibold border border-rose-200">
+              <button type="button" id="edit-mark-sold" class="rounded-2xl bg-rose-100 text-rose-800 py-3 text-sm font-semibold border border-rose-200 transition-colors active:bg-rose-200">
                 Sold
               </button>
-              <button type="button" class="rounded-2xl bg-stone-200 text-stone-900 py-3 text-sm font-semibold border border-stone-300">
+              <button type="button" id="edit-delete" class="rounded-2xl bg-stone-200 text-stone-900 py-3 text-sm font-semibold border border-stone-300 transition-colors active:bg-stone-300">
                 Delete
               </button>
-              <button type="button" class="col-span-2 rounded-2xl bg-[#232323] text-white py-3.5 text-sm font-semibold tracking-[0.08em] uppercase shadow-[0_10px_18px_rgba(35,35,35,0.18)] hover:bg-[#E78B4B] transition-colors">
+              <button type="button" id="edit-modify" class="col-span-2 rounded-2xl bg-[#232323] text-white py-3.5 text-sm font-semibold tracking-[0.08em] uppercase shadow-[0_10px_18px_rgba(35,35,35,0.18)] transition-all active:bg-[#121212] active:scale-[0.99]">
                 Modify
               </button>
             </div>
@@ -288,7 +286,7 @@
           <button
             type="button"
             data-close-modal="add-remnant-modal"
-            class="h-10 w-10 rounded-full border border-gray-300 text-xl hover:bg-gray-100 transition-colors"
+            class="h-10 w-10 rounded-full border border-gray-300 text-xl transition-colors active:bg-gray-200"
             aria-label="Close add remnant form"
           >
             ×
@@ -395,15 +393,6 @@
                 class="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm"
               />
             </label>
-            <label class="md:col-span-2 block text-sm font-medium text-gray-700">
-              Image URL
-              <input
-                id="add-image-url"
-                type="text"
-                class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
-                placeholder="Optional external image URL"
-              />
-            </label>
           </form>
           <div class="border-t lg:border-t-0 lg:border-l border-gray-200 bg-[#fbf8f6] p-6 flex flex-col">
             <p class="text-xs uppercase tracking-[0.22em] text-[#8a6a54] mb-3">New Remnant</p>
@@ -418,7 +407,8 @@
             </div>
             <button
               type="button"
-              class="mt-auto pt-8 rounded-2xl bg-[#232323] text-white py-3 text-sm font-semibold hover:bg-[#E78B4B] transition-colors"
+              id="add-create"
+              class="mt-auto pt-8 rounded-2xl bg-[#232323] text-white py-3 text-sm font-semibold transition-colors active:brightness-90 active:scale-[0.99]"
             >
               Create Remnant
             </button>
