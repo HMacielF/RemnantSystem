@@ -59,7 +59,7 @@ function buildQueryFromForm(form) {
 }
 
 function sizeText(remnant) {
-    if (remnant.l_shape && remnant.l_width && remnant.l_height) {
+    if (remnant.l_shape) {
         return `${remnant.width} x ${remnant.height} + ${remnant.l_width} x ${remnant.l_height}`;
     }
     return `${remnant.width} x ${remnant.height}`;
