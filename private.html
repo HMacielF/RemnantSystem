@@ -4,72 +4,426 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Management Workspace</title>
-    <style>
-      body {
-        margin: 0;
-        font-family: Arial, sans-serif;
-        background: #f4f4f4;
-        color: #222;
-      }
-      .wrap {
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        padding: 24px;
-      }
-      .card {
-        width: min(860px, calc(100vw - 32px));
-        background: #fff;
-        border-radius: 16px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-        padding: 24px;
-      }
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 16px;
-        margin-top: 20px;
-      }
-      .panel {
-        border: 1px solid #ececec;
-        border-radius: 14px;
-        padding: 18px;
-        background: #fafafa;
-      }
-      .eyebrow {
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        font-size: 12px;
-        color: #8a6a54;
-      }
-      a {
-        color: #b85b1b;
-      }
-    </style>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/main.js" defer></script>
   </head>
-  <body>
-    <div class="wrap">
-      <div class="card">
-        <p class="eyebrow">Management Workspace</p>
-        <h1>Internal Remnant Controls</h1>
-        <p>You are signed in and can access the protected management workspace.</p>
-        <p>This separate workspace is the better fit for protected actions like status changes, deletes, uploads, and owner-scoped tools because it keeps the public viewer simple and lets your RLS rules govern the real capabilities.</p>
-        <div class="grid">
-          <div class="panel">
-            <h2>Status Updates</h2>
-            <p>Use this area for actions like marking remnants as sold, on hold, or available once those endpoints are connected.</p>
+  <body
+    data-view="management"
+    class="bg-[#F1F1F1] text-[#232323] font-[Inter] font-medium text-[15px] px-4 py-6"
+  >
+    <div class="max-w-7xl mx-auto mb-6 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-4">
+        <img
+          src="/assets/Quick_Logo.png"
+          alt="Quick Countertop Logo"
+          class="h-14 md:h-20 w-auto"
+        />
+        <div>
+          <p class="text-xs uppercase tracking-[0.24em] text-[#8a6a54]">
+            Management Workspace
+          </p>
+          <h1 class="text-2xl md:text-3xl font-semibold">Remnant Controls</h1>
+        </div>
+      </div>
+      <a
+        href="/logout"
+        class="shrink-0 rounded-full border border-[#d7b198] px-4 py-2 text-sm text-[#8f4c1a] hover:bg-white transition-colors"
+      >
+        Log Out
+      </a>
+    </div>
+
+    <form
+      id="filter-form"
+      method="GET"
+      class="max-w-7xl mx-auto bg-white p-6 rounded-lg shadow-md mb-6"
+    >
+      <div class="mb-4">
+        <label class="block font-semibold text-sm text-[#232323] mb-1"
+          >Material Types:</label
+        >
+        <div
+          id="material-checkboxes"
+          class="flex flex-wrap gap-x-4 gap-y-2 text-sm text-[#232323]"
+        ></div>
+      </div>
+
+      <div class="flex flex-wrap items-end justify-start gap-4">
+        <input
+          type="text"
+          name="stone"
+          id="stone-filter"
+          placeholder="Search by Stone Name"
+          class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full md:w-64 placeholder-gray-400"
+        />
+        <input
+          type="number"
+          name="min-width"
+          id="min-width"
+          placeholder="Min Width"
+          class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full md:w-36 placeholder-gray-400"
+        />
+        <input
+          type="number"
+          name="min-height"
+          id="min-height"
+          placeholder="Min Height"
+          class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full md:w-36 placeholder-gray-400"
+        />
+        <select
+          name="status"
+          id="status-filter"
+          class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full md:w-48 bg-white"
+        >
+          <option value="">All Statuses</option>
+          <option value="Available">Available</option>
+          <option value="Hold">Hold</option>
+          <option value="On Hold">On Hold</option>
+          <option value="Pending">Pending</option>
+          <option value="Sold">Sold</option>
+        </select>
+        <button
+          type="submit"
+          class="bg-[#E78B4B] text-white px-5 py-2 text-sm rounded hover:bg-[#cf7335] transition-all w-full md:w-auto"
+        >
+          Apply Filters
+        </button>
+        <button
+          type="button"
+          id="open-add-remnant"
+          aria-label="Upload stone"
+          title="Upload stone"
+          class="w-full md:w-auto h-12 rounded-2xl bg-[#232323] text-white px-5 md:px-6 flex items-center justify-center gap-3 shadow-[0_12px_24px_rgba(35,35,35,0.16)] hover:bg-[#E78B4B] hover:-translate-y-0.5 transition-all"
+        >
+          <span class="text-3xl leading-none">+</span>
+          <span class="text-sm font-semibold tracking-[0.12em] uppercase"
+            >Add Stone</span
+          >
+        </button>
+      </div>
+    </form>
+
+    <div
+      id="remnants-container"
+      class="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 max-w-7xl mx-auto"
+    >
+      Loading...
+    </div>
+
+    <div
+      id="edit-remnant-modal"
+      data-modal-overlay="edit-remnant-modal"
+      class="hidden fixed inset-0 z-50 bg-black/45 px-4 py-8 overflow-y-auto"
+    >
+      <div class="max-w-4xl mx-auto bg-white rounded-[28px] shadow-2xl overflow-hidden">
+        <div class="flex items-center justify-between px-6 py-5 border-b border-gray-200">
+          <div>
+            <p class="text-xs uppercase tracking-[0.22em] text-[#8a6a54]">Config</p>
+            <h2 class="text-2xl font-semibold">Edit Remnant</h2>
           </div>
-          <div class="panel">
-            <h2>Inventory Changes</h2>
-            <p>Add new remnants or remove old ones here without exposing admin controls on the public browsing experience.</p>
-          </div>
-          <div class="panel">
-            <h2>Role-Aware Access</h2>
-            <p>Keep partner- or owner-specific actions inside this workspace so the UI can mirror the permissions enforced by RLS.</p>
+          <button
+            type="button"
+            data-close-modal="edit-remnant-modal"
+            class="h-10 w-10 rounded-full border border-gray-300 text-xl hover:bg-gray-100 transition-colors"
+            aria-label="Close edit remnant form"
+          >
+            ×
+          </button>
+        </div>
+        <div class="grid lg:grid-cols-[1.2fr_0.8fr] gap-0">
+          <form id="edit-remnant-form" class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="block text-sm font-medium text-gray-700">
+              Remnant ID
+              <input
+                id="edit-id"
+                type="text"
+                readonly
+                class="mt-1 w-full rounded-xl border border-gray-300 bg-gray-100 px-3 py-2.5 text-sm"
+              />
+            </label>
+            <label class="block text-sm font-medium text-gray-700">
+              Stone Name
+              <input
+                id="edit-name"
+                type="text"
+                class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+              />
+            </label>
+            <label class="block text-sm font-medium text-gray-700">
+              Material
+              <input
+                id="edit-material"
+                type="text"
+                class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+              />
+            </label>
+            <label class="block text-sm font-medium text-gray-700">
+              Width
+              <input
+                id="edit-width"
+                type="number"
+                class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+              />
+            </label>
+            <label class="block text-sm font-medium text-gray-700">
+              Height
+              <input
+                id="edit-height"
+                type="number"
+                class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+              />
+            </label>
+            <label class="block text-sm font-medium text-gray-700">
+              Thickness
+              <input
+                id="edit-thickness"
+                type="text"
+                class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+              />
+            </label>
+            <div class="md:col-span-2">
+              <div class="flex flex-wrap items-end gap-4">
+                <div class="min-w-[140px]">
+                  <p class="text-sm font-medium text-gray-700 mb-2">L-Shape</p>
+                  <label class="inline-flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3">
+                    <span class="text-sm font-medium text-gray-700">False</span>
+                    <button
+                      type="button"
+                      id="edit-l-shape-toggle"
+                      aria-pressed="false"
+                      class="relative h-7 w-12 rounded-full bg-gray-300 transition-colors"
+                    >
+                      <span
+                        id="edit-l-shape-knob"
+                        class="absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform"
+                      ></span>
+                    </button>
+                    <span class="text-sm font-medium text-gray-700">True</span>
+                  </label>
+                  <input id="edit-l-shape" type="checkbox" class="hidden" />
+                </div>
+                <div id="edit-l-dimensions" class="hidden flex-1 min-w-[320px] grid grid-cols-2 gap-4">
+                  <label class="block text-sm font-medium text-gray-700">
+                    L Width
+                    <input
+                      id="edit-l-width"
+                      type="number"
+                      class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+                    />
+                  </label>
+                  <label class="block text-sm font-medium text-gray-700">
+                    L Height
+                    <input
+                      id="edit-l-height"
+                      type="number"
+                      class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+            <label class="md:col-span-2 block text-sm font-medium text-gray-700">
+              Replace Image
+              <input
+                id="edit-image-file"
+                type="file"
+                accept="image/*"
+                class="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm"
+              />
+            </label>
+          </form>
+          <div class="border-t lg:border-t-0 lg:border-l border-gray-200 bg-[#fbf8f6] p-6 flex flex-col">
+            <p class="text-xs uppercase tracking-[0.22em] text-[#8a6a54] mb-3">Preview</p>
+            <div class="aspect-[4/3] rounded-3xl bg-white border border-gray-200 overflow-hidden shadow-sm">
+              <img
+                id="edit-image-preview"
+                src=""
+                alt="Remnant preview"
+                class="h-full w-full object-cover hidden"
+              />
+              <div
+                id="edit-image-empty"
+                class="h-full w-full flex items-center justify-center text-sm text-gray-400"
+              >
+                Image preview
+              </div>
+            </div>
+            <div class="mt-auto pt-8 grid grid-cols-2 gap-3">
+              <button type="button" class="rounded-2xl bg-emerald-100 text-emerald-800 py-3 text-sm font-semibold border border-emerald-200">
+                Available
+              </button>
+              <button type="button" class="rounded-2xl bg-amber-100 text-amber-900 py-3 text-sm font-semibold border border-amber-200">
+                On Hold
+              </button>
+              <button type="button" class="rounded-2xl bg-rose-100 text-rose-800 py-3 text-sm font-semibold border border-rose-200">
+                Sold
+              </button>
+              <button type="button" class="rounded-2xl bg-stone-200 text-stone-900 py-3 text-sm font-semibold border border-stone-300">
+                Delete
+              </button>
+              <button type="button" class="col-span-2 rounded-2xl bg-[#232323] text-white py-3.5 text-sm font-semibold tracking-[0.08em] uppercase shadow-[0_10px_18px_rgba(35,35,35,0.18)] hover:bg-[#E78B4B] transition-colors">
+                Modify
+              </button>
+            </div>
           </div>
         </div>
-        <p><a href="/">Back to remnant viewer</a></p>
-        <p><a href="/logout">Log out</a></p>
+      </div>
+    </div>
+
+    <div
+      id="add-remnant-modal"
+      data-modal-overlay="add-remnant-modal"
+      class="hidden fixed inset-0 z-50 bg-black/45 px-4 py-8 overflow-y-auto"
+    >
+      <div class="max-w-4xl mx-auto bg-white rounded-[28px] shadow-2xl overflow-hidden">
+        <div class="flex items-center justify-between px-6 py-5 border-b border-gray-200">
+          <div>
+            <p class="text-xs uppercase tracking-[0.22em] text-[#8a6a54]">Upload</p>
+            <h2 class="text-2xl font-semibold">Add Remnant</h2>
+          </div>
+          <button
+            type="button"
+            data-close-modal="add-remnant-modal"
+            class="h-10 w-10 rounded-full border border-gray-300 text-xl hover:bg-gray-100 transition-colors"
+            aria-label="Close add remnant form"
+          >
+            ×
+          </button>
+        </div>
+        <div class="grid lg:grid-cols-[1.2fr_0.8fr] gap-0">
+          <form id="add-remnant-form" class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="block text-sm font-medium text-gray-700">
+              Remnant ID
+              <input
+                id="add-id"
+                type="text"
+                class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+                placeholder="Reference ID"
+              />
+            </label>
+            <label class="block text-sm font-medium text-gray-700">
+              Stone Name
+              <input
+                id="add-name"
+                type="text"
+                class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+              />
+            </label>
+            <label class="block text-sm font-medium text-gray-700">
+              Material
+              <input
+                id="add-material"
+                type="text"
+                class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+              />
+            </label>
+            <label class="block text-sm font-medium text-gray-700">
+              Width
+              <input
+                id="add-width"
+                type="number"
+                class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+              />
+            </label>
+            <label class="block text-sm font-medium text-gray-700">
+              Height
+              <input
+                id="add-height"
+                type="number"
+                class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+              />
+            </label>
+            <label class="block text-sm font-medium text-gray-700">
+              Thickness
+              <input
+                id="add-thickness"
+                type="text"
+                class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+              />
+            </label>
+            <div class="md:col-span-2">
+              <div class="flex flex-wrap items-end gap-4">
+                <div class="min-w-[140px]">
+                  <p class="text-sm font-medium text-gray-700 mb-2">L-Shape</p>
+                  <label class="inline-flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3">
+                    <span class="text-sm font-medium text-gray-700">False</span>
+                    <button
+                      type="button"
+                      id="add-l-shape-toggle"
+                      aria-pressed="false"
+                      class="relative h-7 w-12 rounded-full bg-gray-300 transition-colors"
+                    >
+                      <span
+                        id="add-l-shape-knob"
+                        class="absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform"
+                      ></span>
+                    </button>
+                    <span class="text-sm font-medium text-gray-700">True</span>
+                  </label>
+                  <input id="add-l-shape" type="checkbox" class="hidden" />
+                </div>
+                <div id="add-l-dimensions" class="hidden flex-1 min-w-[320px] grid grid-cols-2 gap-4">
+                  <label class="block text-sm font-medium text-gray-700">
+                    L Width
+                    <input
+                      id="add-l-width"
+                      type="number"
+                      class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+                    />
+                  </label>
+                  <label class="block text-sm font-medium text-gray-700">
+                    L Height
+                    <input
+                      id="add-l-height"
+                      type="number"
+                      class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+            <label class="md:col-span-2 block text-sm font-medium text-gray-700">
+              Image Upload
+              <input
+                id="add-image-file"
+                type="file"
+                accept="image/*"
+                class="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm"
+              />
+            </label>
+            <label class="md:col-span-2 block text-sm font-medium text-gray-700">
+              Image URL
+              <input
+                id="add-image-url"
+                type="text"
+                class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+                placeholder="Optional external image URL"
+              />
+            </label>
+          </form>
+          <div class="border-t lg:border-t-0 lg:border-l border-gray-200 bg-[#fbf8f6] p-6 flex flex-col">
+            <p class="text-xs uppercase tracking-[0.22em] text-[#8a6a54] mb-3">New Remnant</p>
+            <div class="aspect-[4/3] rounded-3xl bg-white border border-gray-200 overflow-hidden shadow-sm flex items-center justify-center">
+              <img
+                id="add-image-preview"
+                src=""
+                alt="New remnant preview"
+                class="h-full w-full object-cover hidden"
+              />
+              <span id="add-image-empty" class="text-sm text-gray-400">Image preview</span>
+            </div>
+            <button
+              type="button"
+              class="mt-auto pt-8 rounded-2xl bg-[#232323] text-white py-3 text-sm font-semibold hover:bg-[#E78B4B] transition-colors"
+            >
+              Create Remnant
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </body>

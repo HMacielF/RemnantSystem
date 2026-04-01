@@ -5,7 +5,7 @@ const cookieParser = require("cookie-parser");
 const supabase = require("./supabaseClient");
 
 const app = express();
-const port = 3000;
+const port = 3030;
 const loginPath = "/portal";
 const managePath = "/manage";
 
