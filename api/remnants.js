@@ -181,6 +181,20 @@ function resolveCompanySlug(companyKey) {
     return key;
 }
 
+function publicCompanyFromSlug(companySlug) {
+    const normalized = resolveCompanySlug(companySlug);
+
+    if (normalized === "quick-countertop") {
+        return { slug: normalized, name: "Quick Countertop" };
+    }
+
+    if (normalized === "prime-countertop") {
+        return { slug: normalized, name: "Prime Countertop" };
+    }
+
+    return null;
+}
+
 async function fetchMaterialIdsByNames(names) {
     if (!Array.isArray(names) || names.length === 0) return [];
 
@@ -523,7 +537,7 @@ async function handleCompanyRemnants(req, res) {
     const minHeight = asNumber(req.query["min-height"] ?? req.query.minHeight);
 
     try {
-        const company = await fetchCompanyBySlug(companySlug);
+        const company = publicCompanyFromSlug(companySlug) || await fetchCompanyBySlug(companySlug);
         if (!company) {
             return res.status(404).json({ error: "Company not found" });
         }
