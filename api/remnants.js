@@ -582,10 +582,7 @@ router.get("/prime/remnants", (req, res) => {
 
 router.get("/remnants/summary", async (_req, res) => {
     try {
-        const optionalAuthed = await getOptionalAuthedSupabase(_req);
-        const summary = optionalAuthed
-            ? await fetchInventorySummary(optionalAuthed.client, "remnants")
-            : await fetchInventorySummary();
+        const summary = await fetchInventorySummary();
         res.json(summary);
     } catch (err) {
         console.error("Error loading remnant summary:", err);
