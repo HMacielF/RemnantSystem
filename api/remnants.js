@@ -30,6 +30,20 @@ const REMNANT_SELECT = `
     material:materials(id,name),
     thickness:thicknesses(id,name)
 `;
+const ACTIVE_REMNANT_SELECT = `
+    id,
+    company,
+    material,
+    thickness,
+    name,
+    width,
+    height,
+    l_shape,
+    l_width,
+    l_height,
+    status,
+    image
+`;
 
 if (!SUPABASE_URL) {
     throw new Error("SUPABASE_URL is required");
@@ -53,13 +67,7 @@ function getReadClient() {
 }
 
 function getPublicReadClient() {
-    if (!serviceSupabase) {
-        throw new Error(
-            "SUPABASE_SERVICE_ROLE_KEY is required on the server for public read-only inventory routes."
-        );
-    }
-
-    return serviceSupabase;
+    return supabase;
 }
 
 function getWriteClient(authedClient) {
@@ -99,9 +107,9 @@ function formatRemnant(row) {
 
 function formatCompanyRemnant(row) {
     return {
-        id: row.moraware_remnant_id || row.id,
-        material: row.material?.name || "",
-        thickness: row.thickness?.name || "",
+        id: row.id,
+        material: row.material || "",
+        thickness: row.thickness || "",
         name: row.name,
         width: row.width,
         height: row.height,
@@ -109,7 +117,7 @@ function formatCompanyRemnant(row) {
         l_width: row.l_width,
         l_height: row.l_height,
         status: row.status,
-        image: row.image || row.source_image_url || "",
+        image: row.image || "",
     };
 }
 
@@ -132,7 +140,7 @@ function slugifyCompanyName(value) {
 }
 
 async function fetchLookupRows(tableName) {
-    const readClient = getPublicReadClient();
+    const readClient = getReadClient();
     const { data, error } = await readClient
         .from(tableName)
         .select("id,name,active")
@@ -144,7 +152,7 @@ async function fetchLookupRows(tableName) {
 }
 
 async function fetchCompanyBySlug(companySlug) {
-    const readClient = getPublicReadClient();
+    const readClient = getReadClient();
     const { data, error } = await readClient
         .from("companies")
         .select("id,name")
@@ -167,7 +175,7 @@ function excludedCompanyMaterials(companySlug) {
 async function fetchMaterialIdsByNames(names) {
     if (!Array.isArray(names) || names.length === 0) return [];
 
-    const readClient = getPublicReadClient();
+    const readClient = getReadClient();
     const { data, error } = await readClient
         .from("materials")
         .select("id,name")
@@ -277,9 +285,8 @@ async function fetchNextStoneId() {
 async function fetchInventorySummary() {
     const readClient = getPublicReadClient();
     const { data, error } = await readClient
-        .from("remnants")
+        .from("active_remnants")
         .select("status")
-        .is("deleted_at", null);
 
     if (error) throw error;
 
@@ -413,15 +420,19 @@ async function handleRemnantFilter(req, res) {
     try {
         const readClient = getPublicReadClient();
         let query = readClient
-            .from("remnants")
-            .select(REMNANT_SELECT)
-            .is("deleted_at", null)
-            .order("moraware_remnant_id", { ascending: true, nullsFirst: false })
+            .from("active_remnants")
+            .select(ACTIVE_REMNANT_SELECT)
             .order("id", { ascending: true });
 
-        if (materialIds.length > 0) query = query.in("material_id", materialIds);
+        if (materialIds.length > 0) {
+            const materials = await fetchLookupRows("materials");
+            const selectedNames = materials
+                .filter((row) => materialIds.includes(row.id))
+                .map((row) => row.name);
+            if (selectedNames.length > 0) query = query.in("material", selectedNames);
+        }
         if (stone && searchedRemnantId !== null) {
-            query = query.or(`name.ilike.%${stoneLike}%,moraware_remnant_id.eq.${searchedRemnantId}`);
+            query = query.or(`name.ilike.%${stoneLike}%,id.eq.${searchedRemnantId}`);
         } else if (stone) {
             query = query.ilike("name", `%${stoneLike}%`);
         }
@@ -432,7 +443,13 @@ async function handleRemnantFilter(req, res) {
         const { data, error } = await query;
         if (error) throw error;
 
-        res.status(200).json((data || []).map(formatRemnant));
+        res.status(200).json((data || []).map((row) => ({
+            ...row,
+            display_id: row.id,
+            company_name: row.company || "",
+            material_name: row.material || "",
+            thickness_name: row.thickness || "",
+        })));
     } catch (err) {
         console.error("Error filtering remnants:", err);
         res.status(500).json({
@@ -464,21 +481,24 @@ router.get("/companies/:companySlug/remnants", async (req, res) => {
         }
 
         const excludedMaterials = excludedCompanyMaterials(companySlug);
-        const excludedMaterialIds = await fetchMaterialIdsByNames(excludedMaterials);
 
         const readClient = getPublicReadClient();
         let query = readClient
-            .from("remnants")
-            .select(REMNANT_SELECT)
-            .is("deleted_at", null)
-            .eq("company_id", company.id)
-            .order("moraware_remnant_id", { ascending: true, nullsFirst: false })
+            .from("active_remnants")
+            .select(ACTIVE_REMNANT_SELECT)
+            .eq("company", company.name)
             .order("id", { ascending: true });
 
-        if (materialIds.length > 0) query = query.in("material_id", materialIds);
-        if (excludedMaterialIds.length > 0) query = query.not("material_id", "in", `(${excludedMaterialIds.join(",")})`);
+        if (materialIds.length > 0) {
+            const materials = await fetchLookupRows("materials");
+            const selectedNames = materials
+                .filter((row) => materialIds.includes(row.id))
+                .map((row) => row.name);
+            if (selectedNames.length > 0) query = query.in("material", selectedNames);
+        }
+        if (excludedMaterials.length > 0) query = query.not("material", "in", `(${excludedMaterials.map((name) => `"${name}"`).join(",")})`);
         if (stone && searchedRemnantId !== null) {
-            query = query.or(`name.ilike.%${stoneLike}%,moraware_remnant_id.eq.${searchedRemnantId}`);
+            query = query.or(`name.ilike.%${stoneLike}%,id.eq.${searchedRemnantId}`);
         } else if (stone) {
             query = query.ilike("name", `%${stoneLike}%`);
         }
