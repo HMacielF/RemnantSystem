@@ -571,7 +571,14 @@ async function handleCompanyRemnants(req, res) {
 }
 
 router.get("/companies/:companySlug/remnants", handleCompanyRemnants);
-router.get("/:companyKey(quick|prime)/remnants", handleCompanyRemnants);
+router.get("/quick/remnants", (req, res) => {
+    req.params.companyKey = "quick";
+    return handleCompanyRemnants(req, res);
+});
+router.get("/prime/remnants", (req, res) => {
+    req.params.companyKey = "prime";
+    return handleCompanyRemnants(req, res);
+});
 
 router.get("/remnants/summary", async (_req, res) => {
     try {
