@@ -9,6 +9,15 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SUPABASE_BUCKET = process.env.SUPABASE_BUCKET || "remnant-images";
 const VALID_STATUSES = new Set(["available", "hold", "sold"]);
+const PUBLIC_MATERIAL_ORDER = [
+    "Granite",
+    "Marble",
+    "Porcelain",
+    "Quartz",
+    "Quartzite",
+    "Quick Quartz",
+    "Soapstone",
+];
 const REMNANT_SELECT = `
     id,
     moraware_remnant_id,
@@ -164,13 +173,24 @@ async function fetchPublicLookupRows() {
             .map((value) => String(value || "").trim())
             .filter(Boolean)
     ))
-        .sort((a, b) => a.localeCompare(b))
         .map((name) => ({ id: name, name, active: true }));
 
+    const sortMaterials = (rows) => {
+        const rank = new Map(PUBLIC_MATERIAL_ORDER.map((name, index) => [name, index]));
+        return [...rows].sort((a, b) => {
+            const aRank = rank.has(a.name) ? rank.get(a.name) : Number.MAX_SAFE_INTEGER;
+            const bRank = rank.has(b.name) ? rank.get(b.name) : Number.MAX_SAFE_INTEGER;
+            if (aRank !== bRank) return aRank - bRank;
+            return a.name.localeCompare(b.name);
+        });
+    };
+
+    const sortByName = (rows) => [...rows].sort((a, b) => a.name.localeCompare(b.name));
+
     return {
-        companies: uniqueRows((data || []).map((row) => row.company)),
-        materials: uniqueRows((data || []).map((row) => row.material)),
-        thicknesses: uniqueRows((data || []).map((row) => row.thickness)),
+        companies: sortByName(uniqueRows((data || []).map((row) => row.company))),
+        materials: sortMaterials(uniqueRows((data || []).map((row) => row.material))),
+        thicknesses: sortByName(uniqueRows((data || []).map((row) => row.thickness))),
     };
 }
 

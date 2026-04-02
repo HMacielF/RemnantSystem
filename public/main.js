@@ -18,6 +18,15 @@ let inventorySummary = {
     hold: 0,
     sold: 0,
 };
+const PUBLIC_MATERIAL_TYPES = [
+    "Granite",
+    "Marble",
+    "Porcelain",
+    "Quartz",
+    "Quartzite",
+    "Quick Quartz",
+    "Soapstone",
+];
 const pendingImagePayloads = {
     add: null,
     edit: null,
@@ -125,7 +134,11 @@ function renderMaterialCheckboxes() {
     const container = document.getElementById("material-checkboxes");
     if (!container) return;
 
-    container.innerHTML = lookupData.materials.map((material) => `
+    const materials = isManagementView
+        ? lookupData.materials
+        : PUBLIC_MATERIAL_TYPES.map((name) => ({ id: name, name }));
+
+    container.innerHTML = materials.map((material) => `
         <label class="inline-flex items-center gap-1.5 rounded-full border border-transparent px-2 py-1.5 text-[13px] font-medium text-gray-700 transition-colors hover:border-[#ead8ca] hover:bg-[#fff7f1]">
             <input type="checkbox" name="material" value="${material.id}" ${selected.has(String(material.id)) ? "checked" : ""}>
             ${material.name}
