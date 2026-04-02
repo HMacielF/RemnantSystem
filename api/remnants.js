@@ -52,6 +52,16 @@ function getReadClient() {
     return serviceSupabase || supabase;
 }
 
+function getPublicReadClient() {
+    if (!serviceSupabase) {
+        throw new Error(
+            "SUPABASE_SERVICE_ROLE_KEY is required on the server for public read-only inventory routes."
+        );
+    }
+
+    return serviceSupabase;
+}
+
 function getWriteClient(authedClient) {
     return serviceSupabase || authedClient;
 }
@@ -122,7 +132,7 @@ function slugifyCompanyName(value) {
 }
 
 async function fetchLookupRows(tableName) {
-    const readClient = getReadClient();
+    const readClient = getPublicReadClient();
     const { data, error } = await readClient
         .from(tableName)
         .select("id,name,active")
@@ -134,7 +144,7 @@ async function fetchLookupRows(tableName) {
 }
 
 async function fetchCompanyBySlug(companySlug) {
-    const readClient = getReadClient();
+    const readClient = getPublicReadClient();
     const { data, error } = await readClient
         .from("companies")
         .select("id,name")
@@ -157,7 +167,7 @@ function excludedCompanyMaterials(companySlug) {
 async function fetchMaterialIdsByNames(names) {
     if (!Array.isArray(names) || names.length === 0) return [];
 
-    const readClient = getReadClient();
+    const readClient = getPublicReadClient();
     const { data, error } = await readClient
         .from("materials")
         .select("id,name")
@@ -265,7 +275,7 @@ async function fetchNextStoneId() {
 // just the currently filtered card set. This helper returns a compact summary
 // that can be reused by both the public and management pages.
 async function fetchInventorySummary() {
-    const readClient = getReadClient();
+    const readClient = getPublicReadClient();
     const { data, error } = await readClient
         .from("remnants")
         .select("status")
@@ -401,7 +411,7 @@ async function handleRemnantFilter(req, res) {
     const minHeight = asNumber(req.query["min-height"] ?? req.query.minHeight);
 
     try {
-        const readClient = getReadClient();
+        const readClient = getPublicReadClient();
         let query = readClient
             .from("remnants")
             .select(REMNANT_SELECT)
@@ -456,7 +466,7 @@ router.get("/companies/:companySlug/remnants", async (req, res) => {
         const excludedMaterials = excludedCompanyMaterials(companySlug);
         const excludedMaterialIds = await fetchMaterialIdsByNames(excludedMaterials);
 
-        const readClient = getReadClient();
+        const readClient = getPublicReadClient();
         let query = readClient
             .from("remnants")
             .select(REMNANT_SELECT)
