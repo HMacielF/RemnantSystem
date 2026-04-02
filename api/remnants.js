@@ -151,6 +151,29 @@ async function fetchLookupRows(tableName, client = getReadClient()) {
     return data || [];
 }
 
+async function fetchPublicLookupRows() {
+    const readClient = getPublicReadClient();
+    const { data, error } = await readClient
+        .from("active_remnants")
+        .select("company,material,thickness");
+
+    if (error) throw error;
+
+    const uniqueRows = (values) => Array.from(new Set(
+        (values || [])
+            .map((value) => String(value || "").trim())
+            .filter(Boolean)
+    ))
+        .sort((a, b) => a.localeCompare(b))
+        .map((name) => ({ id: name, name, active: true }));
+
+    return {
+        companies: uniqueRows((data || []).map((row) => row.company)),
+        materials: uniqueRows((data || []).map((row) => row.material)),
+        thicknesses: uniqueRows((data || []).map((row) => row.thickness)),
+    };
+}
+
 async function fetchCompanyBySlug(companySlug, client = getReadClient()) {
     const readClient = client;
     const { data, error } = await readClient
@@ -443,9 +466,13 @@ async function uploadImageIfPresent(client, imageKey, imageFile) {
 
 async function handleRemnantFilter(req, res) {
     const materialFiltersRaw = req.query.material;
-    const materialIds = (Array.isArray(materialFiltersRaw) ? materialFiltersRaw : materialFiltersRaw ? [materialFiltersRaw] : [])
+    const materialFilters = Array.isArray(materialFiltersRaw) ? materialFiltersRaw : materialFiltersRaw ? [materialFiltersRaw] : [];
+    const materialIds = materialFilters
         .map(asNumber)
         .filter((value) => value !== null);
+    const materialNames = materialFilters
+        .map((value) => String(value || "").trim())
+        .filter((value) => value && asNumber(value) === null);
     const stone = (req.query.stone || "").trim();
     const stoneLike = escapeLikeValue(stone);
     const searchedRemnantId = extractRemnantIdSearch(stone);
@@ -486,7 +513,9 @@ async function handleRemnantFilter(req, res) {
             .select(ACTIVE_REMNANT_SELECT)
             .order("id", { ascending: true });
 
-        if (materialIds.length > 0) {
+        if (materialNames.length > 0) {
+            query = query.in("material", materialNames);
+        } else if (materialIds.length > 0) {
             const materials = await fetchLookupRows("materials");
             const selectedNames = materials
                 .filter((row) => materialIds.includes(row.id))
@@ -526,9 +555,13 @@ router.get("/remnants", handleRemnantFilter);
 async function handleCompanyRemnants(req, res) {
     const companySlug = resolveCompanySlug(req.params.companySlug || req.params.companyKey);
     const materialFiltersRaw = req.query.material;
-    const materialIds = (Array.isArray(materialFiltersRaw) ? materialFiltersRaw : materialFiltersRaw ? [materialFiltersRaw] : [])
+    const materialFilters = Array.isArray(materialFiltersRaw) ? materialFiltersRaw : materialFiltersRaw ? [materialFiltersRaw] : [];
+    const materialIds = materialFilters
         .map(asNumber)
         .filter((value) => value !== null);
+    const materialNames = materialFilters
+        .map((value) => String(value || "").trim())
+        .filter((value) => value && asNumber(value) === null);
     const stone = (req.query.stone || "").trim();
     const stoneLike = escapeLikeValue(stone);
     const searchedRemnantId = extractRemnantIdSearch(stone);
@@ -551,7 +584,9 @@ async function handleCompanyRemnants(req, res) {
             .eq("company", company.name)
             .order("id", { ascending: true });
 
-        if (materialIds.length > 0) {
+        if (materialNames.length > 0) {
+            query = query.in("material", materialNames);
+        } else if (materialIds.length > 0) {
             const materials = await fetchLookupRows("materials");
             const selectedNames = materials
                 .filter((row) => materialIds.includes(row.id))
@@ -607,14 +642,19 @@ router.get("/remnants/summary", async (_req, res) => {
 router.get("/lookups", async (_req, res) => {
     try {
         const optionalAuthed = await getOptionalAuthedSupabase(_req);
-        const lookupClient = optionalAuthed?.client || getReadClient();
-        const [companies, materials, thicknesses] = await Promise.all([
-            fetchLookupRows("companies", lookupClient),
-            fetchLookupRows("materials", lookupClient),
-            fetchLookupRows("thicknesses", lookupClient),
-        ]);
+        const lookupPayload = optionalAuthed
+            ? await Promise.all([
+                fetchLookupRows("companies", optionalAuthed.client),
+                fetchLookupRows("materials", optionalAuthed.client),
+                fetchLookupRows("thicknesses", optionalAuthed.client),
+            ]).then(([companies, materials, thicknesses]) => ({
+                companies,
+                materials,
+                thicknesses,
+            }))
+            : await fetchPublicLookupRows();
 
-        res.json({ companies, materials, thicknesses });
+        res.json(lookupPayload);
     } catch (err) {
         console.error("Error loading lookups:", err);
         res.status(500).json({ error: err.message || "Failed to load lookups" });
