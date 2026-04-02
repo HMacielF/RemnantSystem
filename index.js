@@ -2,12 +2,16 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const path = require("path");
 const cookieParser = require("cookie-parser");
+const { createClient } = require("@supabase/supabase-js");
 const supabase = require("./supabaseClient");
 
 const app = express();
-const port = 3003;
+const port = 3000;
 const loginPath = "/portal";
 const managePath = "/manage";
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const ALLOWED_MANAGEMENT_ROLES = new Set(["super_admin", "manager", "status_user"]);
 
 app.use(bodyParser.json({ limit: "20mb" }));
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -17,14 +21,32 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use("/api", require("./api/remnants"));
 
 app.get("/auth/config.js", (_req, res) => {
-    const publicKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || "";
     res.type("application/javascript").send(
         `window.__SUPABASE_CONFIG__ = ${JSON.stringify({
-            url: process.env.SUPABASE_URL || "",
-            anonKey: publicKey,
+            url: SUPABASE_URL || "",
+            anonKey: SUPABASE_ANON_KEY || "",
         })};`
     );
 });
+
+function getAuthedSupabase(req) {
+    const token = req.cookies?.access_token;
+    if (!token || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+
+    return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        accessToken: async () => token,
+        auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
+        },
+        global: {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        },
+    });
+}
 
 app.post("/forgot-password", async (req, res) => {
     const { email } = req.body;
@@ -100,6 +122,33 @@ app.get("/private", async (req, res) => {
 
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data?.user) {
+        res.clearCookie("access_token");
+        return res.redirect(loginPath);
+    }
+
+    try {
+        const authedSupabase = getAuthedSupabase(req);
+        if (!authedSupabase) {
+            res.clearCookie("access_token");
+            return res.redirect(`${loginPath}?error=missing_config`);
+        }
+
+        const { data: profile, error: profileError } = await authedSupabase
+            .from("profiles")
+            .select("active,system_role")
+            .eq("id", data.user.id)
+            .maybeSingle();
+
+        if (
+            profileError ||
+            !profile ||
+            profile.active !== true ||
+            !ALLOWED_MANAGEMENT_ROLES.has(profile.system_role)
+        ) {
+            res.clearCookie("access_token");
+            return res.redirect(loginPath);
+        }
+    } catch (_err) {
         res.clearCookie("access_token");
         return res.redirect(loginPath);
     }

@@ -31,17 +31,21 @@ def load_settings() -> Settings:
         page_delay_sec=float(os.getenv("MORAWARE_PAGE_DELAY_SEC", "0.15")),
     )
 
-    if not all(
-        [
-            settings.moraware_url,
-            settings.moraware_user,
-            settings.moraware_pass,
-            settings.supabase_url,
-            settings.supabase_key,
-        ]
-    ):
+    missing = []
+    if not settings.moraware_url:
+        missing.append("MORAWARE_URL")
+    if not settings.moraware_user:
+        missing.append("MORAWARE_USER")
+    if not settings.moraware_pass:
+        missing.append("MORAWARE_PASS")
+    if not settings.supabase_url:
+        missing.append("SUPABASE_URL")
+    if not settings.supabase_key:
+        missing.append("SUPABASE_SERVICE_ROLE_KEY")
+
+    if missing:
         raise RuntimeError(
-            "Missing required env vars. Check .env for Moraware + Supabase values."
+            "Missing required env vars: " + ", ".join(missing)
         )
 
     return settings

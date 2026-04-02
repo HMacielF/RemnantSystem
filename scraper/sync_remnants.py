@@ -32,6 +32,64 @@ logging.basicConfig(
 )
 
 
+VALID_STATUSES = {"available", "hold", "sold"}
+
+
+def normalize_status(value: str) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized == "on hold":
+        return "hold"
+    if normalized in VALID_STATUSES:
+        return normalized
+    return "available"
+
+
+def get_first_row(data):
+    if isinstance(data, list):
+        return data[0] if data else None
+    if isinstance(data, dict):
+        return data
+    return None
+
+
+def get_or_create_lookup_id(supabase, table_name: str, name: str) -> int:
+    cleaned_name = (name or "").strip() or "Other"
+    existing = (
+        supabase.table(table_name)
+        .select("id,name")
+        .ilike("name", cleaned_name)
+        .limit(1)
+        .execute()
+    )
+    existing_row = get_first_row(existing.data)
+    if existing_row:
+        return existing_row["id"]
+
+    inserted = (
+        supabase.table(table_name)
+        .insert({"name": cleaned_name, "active": True})
+        .execute()
+    )
+    inserted_row = get_first_row(inserted.data)
+    if not inserted_row:
+        raise RuntimeError(f"Failed to create {table_name} row for '{cleaned_name}'")
+    return inserted_row["id"]
+
+
+def build_storage_path(kind: str, identifier: int, ext: str) -> str:
+    safe_ext = (ext or "jpg").strip().lower().lstrip(".") or "jpg"
+    return f"remnant_{identifier}.{safe_ext}"
+
+
+def resolve_company_id(supabase, settings) -> int:
+    company_id_raw = os.getenv("MORAWARE_COMPANY_ID", "").strip()
+    if company_id_raw:
+        return int(company_id_raw)
+
+    company_name = os.getenv("MORAWARE_COMPANY_NAME", "").strip() or "Quick Countertop"
+    return get_or_create_lookup_id(supabase, "companies", company_name)
+
+
 def update_job_desc_with_remnant_ids(driver, wait, remnant_ids: list[int]) -> bool:
     """Update Moraware job notes with one `ID #<n>` line per remnant in this job."""
     if not remnant_ids:
@@ -178,6 +236,9 @@ def update_job_desc_with_remnant_ids(driver, wait, remnant_ids: list[int]) -> bo
 def main():
     settings = load_settings()
     supabase = create_client(settings.supabase_url, settings.supabase_key)
+    company_id = resolve_company_id(supabase, settings)
+    material_ids: dict[str, int] = {}
+    thickness_ids: dict[str, int] = {}
 
     headless_enabled = os.getenv("MORAWARE_HEADLESS", "true").lower() in {"1", "true", "yes"}
     running_in_ci = os.getenv("CI", "").lower() == "true" or os.getenv("GITHUB_ACTIONS") == "true"
@@ -227,8 +288,7 @@ def main():
 
     run_started_at = datetime.now(timezone.utc).isoformat()
     crawl_completed_successfully = False
-    changed_statuses = {"changed", "inserted", "updated", "created", "upserted"}
-
+    reconciliation_safe = False
     def record_issue(kind: str, job_url: str | None = None, remnant_id: int | None = None, details: str = ""):
         issues.append(
             {
@@ -328,7 +388,7 @@ def main():
             sess = requests_session_from_selenium(driver)
             material_from_title, name_from_title = get_page_material_and_name(driver.title or "")
             name = name_from_title or "unknown"
-            material = material_from_title or "unknown"
+            material = material_from_title or "Other"
 
             file_rows = driver.find_elements(By.CSS_SELECTOR, "#FilesScroll1Body tr")
             logging.info(f"Found {max(0, len(file_rows) - 1)} file rows on page")
@@ -372,7 +432,18 @@ def main():
                         continue
 
                     remnant_id, width, height, l_shape, l_width, l_height, remnant_status = size_parsed
+                    normalized_status = normalize_status(remnant_status)
                     thickness = parse_thickness(description)
+                    material_key = material.strip() or "Other"
+                    thickness_key = thickness.strip() or "Other"
+                    material_id = material_ids.get(material_key)
+                    if material_id is None:
+                        material_id = get_or_create_lookup_id(supabase, "materials", material_key)
+                        material_ids[material_key] = material_id
+                    thickness_id = thickness_ids.get(thickness_key)
+                    if thickness_id is None:
+                        thickness_id = get_or_create_lookup_id(supabase, "thicknesses", thickness_key)
+                        thickness_ids[thickness_key] = thickness_id
 
                     download_links = tds[1].find_elements(By.TAG_NAME, "a")
                     if not download_links:
@@ -394,49 +465,98 @@ def main():
 
                     logging.info(
                         f"Remnant #{remnant_id} | {material} | {name} | "
-                        f"Size {width}x{height} | L-shape={bool(l_shape)} | Status={remnant_status}"
+                        f"Size {width}x{height} | L-shape={bool(l_shape)} | Status={normalized_status}"
                     )
 
-                    rpc_payload = {
-                        "p_id": remnant_id,
-                        "p_name": name,
-                        "p_material": material,
-                        "p_status": remnant_status,
-                        "p_width": width,
-                        "p_height": height,
-                        "p_thickness": thickness,
-                        "p_l_shape": bool(l_shape),
-                        "p_l_width": l_width,
-                        "p_l_height": l_height,
-                        "p_source_image_url": full_url,
+                    existing = (
+                        supabase.table("remnants")
+                        .select(
+                            "id,company_id,material_id,thickness_id,name,width,height,l_shape,l_width,l_height,status,"
+                            "source_image_url,deleted_at,last_seen_at,photo_hash,image,image_path"
+                        )
+                        .eq("moraware_remnant_id", remnant_id)
+                        .limit(1)
+                        .execute()
+                    )
+                    existing_row = get_first_row(existing.data)
+
+                    base_payload = {
+                        "moraware_remnant_id": remnant_id,
+                        "company_id": company_id,
+                        "material_id": material_id,
+                        "thickness_id": thickness_id,
+                        "name": name,
+                        "width": width,
+                        "height": height,
+                        "l_shape": bool(l_shape),
+                        "l_width": l_width,
+                        "l_height": l_height,
+                        "status": normalized_status,
+                        "hash": sha256_bytes(
+                            "|".join(
+                                [
+                                    str(remnant_id),
+                                    str(company_id),
+                                    str(material_id),
+                                    str(thickness_id),
+                                    name,
+                                    str(width),
+                                    str(height),
+                                    str(bool(l_shape)),
+                                    str(l_width),
+                                    str(l_height),
+                                    normalized_status,
+                                    full_url,
+                                ]
+                            ).encode("utf-8")
+                        ),
+                        "source_image_url": full_url,
+                        "last_seen_at": run_started_at,
+                        "deleted_at": None,
                     }
 
-                    rpc_res = supabase.rpc("sync_remnant", rpc_payload).execute()
-
-                    sync_status = "no_change"
-                    if isinstance(rpc_res.data, list) and rpc_res.data:
-                        sync_status = str(rpc_res.data[0].get("sync_status") or "no_change").lower()
-                    elif isinstance(rpc_res.data, dict):
-                        sync_status = str(rpc_res.data.get("sync_status") or "no_change").lower()
-
-                    # Mark as seen for this run regardless of whether metadata/photo changed.
-                    supabase.table("remnants").update(
-                        {
-                            "last_seen_at": run_started_at,
-                            "is_active": True,
-                            "deleted_at": None,
-                            "updated_at": now_iso_utc(),
-                        }
-                    ).eq("id", remnant_id).execute()
-
-                    if sync_status in changed_statuses:
+                    if not existing_row:
+                        inserted = supabase.table("remnants").insert(base_payload).execute()
+                        if not get_first_row(inserted.data):
+                            raise RuntimeError(f"Insert failed for Moraware remnant #{remnant_id}")
                         total_changed += 1
-                        logging.info(f"Remnant #{remnant_id}: metadata status='{sync_status}'")
-                    else:
-                        total_no_change += 1
-                        logging.info(
-                            f"Remnant #{remnant_id}: metadata status='{sync_status}', checking photo hash anyway"
+                        logging.info(f"Remnant #{remnant_id}: inserted")
+                        existing_row = (
+                            supabase.table("remnants")
+                            .select("id,photo_hash,image,image_path")
+                            .eq("moraware_remnant_id", remnant_id)
+                            .limit(1)
+                            .execute()
                         )
+                        existing_row = get_first_row(existing_row.data) or {}
+                    else:
+                        metadata_changed = any(
+                            [
+                                existing_row.get("company_id") != company_id,
+                                existing_row.get("material_id") != material_id,
+                                existing_row.get("thickness_id") != thickness_id,
+                                existing_row.get("name") != name,
+                                existing_row.get("width") != width,
+                                existing_row.get("height") != height,
+                                bool(existing_row.get("l_shape")) != bool(l_shape),
+                                existing_row.get("l_width") != l_width,
+                                existing_row.get("l_height") != l_height,
+                                normalize_status(existing_row.get("status")) != normalized_status,
+                                existing_row.get("source_image_url") != full_url,
+                                existing_row.get("deleted_at") is not None,
+                            ]
+                        )
+                        supabase.table("remnants").update(base_payload).eq(
+                            "moraware_remnant_id", remnant_id
+                        ).execute()
+                        if metadata_changed:
+                            total_changed += 1
+                            logging.info(f"Remnant #{remnant_id}: metadata updated")
+                        else:
+                            total_no_change += 1
+                            logging.info(
+                                f"Remnant #{remnant_id}: metadata unchanged, checking photo hash anyway"
+                            )
 
                     logging.info(f"Remnant #{remnant_id}: downloading image bytes")
                     img_resp = sess.get(full_url, timeout=30)
@@ -447,14 +567,6 @@ def main():
                     new_photo_hash = sha256_bytes(img_bytes)
                     logging.info(f"Remnant #{remnant_id}: photo_hash={new_photo_hash[:12]}...")
 
-                    existing = (
-                        supabase.table("remnants")
-                        .select("photo_hash,image,image_path")
-                        .eq("id", remnant_id)
-                        .limit(1)
-                        .execute()
-                    )
-                    existing_row = existing.data[0] if existing.data else {}
                     existing_hash = existing_row.get("photo_hash")
                     existing_image = existing_row.get("image")
                     existing_image_path = existing_row.get("image_path")
@@ -466,11 +578,7 @@ def main():
 
                     content_type = (img_resp.headers.get("Content-Type") or "").split(";")[0].strip()
                     ext = infer_extension(full_url, content_type)
-                    image_path = (
-                        existing_image_path
-                        if existing_hash == new_photo_hash and existing_image_path
-                        else f"{remnant_id}_{new_photo_hash}.{ext}"
-                    )
+                    image_path = build_storage_path("remnant", remnant_id, ext)
 
                     logging.info(
                         f"Remnant #{remnant_id}: uploading to bucket='{settings.supabase_bucket}' "
@@ -493,7 +601,7 @@ def main():
                             "photo_synced_at": now_iso_utc(),
                             "updated_at": now_iso_utc(),
                         }
-                    ).eq("id", remnant_id).execute()
+                    ).eq("moraware_remnant_id", remnant_id).execute()
 
                     logging.info(f"Remnant #{remnant_id}: photo uploaded + DB updated")
 
@@ -526,6 +634,7 @@ def main():
         else:
             logging.info("Issue summary: no issues recorded.")
         crawl_completed_successfully = True
+        reconciliation_safe = total_errors == 0 and len(issues) == 0
 
     except Exception:
         total_errors += 1
@@ -553,9 +662,24 @@ def main():
     except Exception as exc:
         logging.warning(f"Could not write issue report: {exc}")
 
-    if crawl_completed_successfully:
-        res = supabase.rpc("reconcile_deletions", {"p_run_started_at": run_started_at}).execute()
-        print(res.data)
+    if crawl_completed_successfully and reconciliation_safe:
+        reconciliation = (
+            supabase.table("remnants")
+            .update({"deleted_at": now_iso_utc()})
+            .eq("company_id", company_id)
+            .filter("moraware_remnant_id", "not.is", "null")
+            .lt("last_seen_at", run_started_at)
+            .filter("deleted_at", "is", "null")
+            .execute()
+        )
+        logging.info(
+            "Soft-deleted stale Moraware remnants: %s",
+            len(reconciliation.data or []) if isinstance(reconciliation.data, list) else 0,
+        )
+    elif crawl_completed_successfully:
+        logging.warning(
+            "Skipped deletion reconciliation because the crawl had row-level issues or errors."
+        )
     else:
         logging.warning("Skipped reconcile_deletions because crawl did not complete successfully.")
 

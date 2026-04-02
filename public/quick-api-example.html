@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quick API Example</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Fraunces:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Manrope", "sans-serif"],
+              display: ["Fraunces", "serif"],
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="min-h-screen bg-[linear-gradient(180deg,#f8f1ea_0%,#f4ede6_26%,#efe7de_100%)] font-sans text-[#2d2623]">
+    <main class="mx-auto max-w-6xl px-4 py-8">
+      <section class="rounded-[32px] border border-white/70 bg-white/85 p-6 shadow-xl">
+        <p class="text-sm font-semibold uppercase tracking-[0.22em] text-[#9d6f4c]">API Example</p>
+        <h1 class="mt-2 font-display text-4xl text-[#2c211c]">Quick remnants only</h1>
+        <p class="mt-3 max-w-3xl text-sm leading-6 text-[#6e5a4d]">
+          This page calls the company-scoped API route and renders only remnants that belong to Quick.
+        </p>
+        <pre class="mt-4 overflow-x-auto rounded-2xl bg-[#f7efe8] px-4 py-3 text-sm text-[#5f4a3e]">GET /api/companies/quick-countertop/remnants</pre>
+      </section>
+
+      <section class="mt-6 rounded-[32px] border border-white/70 bg-white/85 p-6 shadow-xl">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#9c7355]">Company Feed</p>
+            <h2 id="company-name" class="mt-1 text-2xl font-semibold text-[#2d2623]">Loading...</h2>
+          </div>
+          <div id="remnant-count" class="rounded-full bg-[#f5ede6] px-4 py-2 text-sm font-semibold text-[#956746]">0 remnants</div>
+        </div>
+
+        <div id="error-message" class="mt-4 hidden rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"></div>
+
+        <div id="remnants-grid" class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div class="rounded-[26px] border border-white/80 bg-white/70 p-6 text-sm text-[#6d584b] shadow-sm">Loading remnants...</div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function sizeText(remnant) {
+        if (remnant.l_shape) {
+          return `${remnant.width} x ${remnant.height} + ${remnant.l_width} x ${remnant.l_height}`;
+        }
+        return `${remnant.width} x ${remnant.height}`;
+      }
+
+      async function loadQuickRemnants() {
+        const companyName = document.getElementById("company-name");
+        const remnantCount = document.getElementById("remnant-count");
+        const grid = document.getElementById("remnants-grid");
+        const errorBox = document.getElementById("error-message");
+
+        try {
+          const res = await fetch("/api/companies/quick-countertop/remnants");
+          const data = await res.json();
+
+          if (!res.ok) {
+            throw new Error(data.error || "Failed to load Quick remnants");
+          }
+
+          companyName.textContent = data.company;
+          remnantCount.textContent = `${data.remnants.length} remnants`;
+          grid.innerHTML = data.remnants.map((remnant) => `
+            <article class="overflow-hidden rounded-[26px] border border-white/80 bg-white/92 shadow-[0_20px_45px_rgba(58,37,22,0.08)]">
+              <img
+                src="${escapeHtml(remnant.image || remnant.source_image_url || "")}"
+                alt="Remnant ${escapeHtml(remnant.id)}"
+                class="h-44 w-full bg-[#f4ece4] object-contain"
+              />
+              <div class="space-y-2 p-4 text-sm text-[#232323]">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="inline-flex items-center rounded-full bg-[#f5ede6] px-2.5 py-1.5 text-sm font-semibold uppercase tracking-[0.16em] text-[#956746]">
+                    Remnant #${escapeHtml(remnant.id)}
+                  </span>
+                  <span class="inline-block rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
+                    remnant.status === "sold"
+                      ? "bg-rose-100 text-rose-800 ring-1 ring-rose-200"
+                      : remnant.status === "hold"
+                        ? "bg-amber-100 text-amber-900 ring-1 ring-amber-200"
+                        : "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200"
+                  }">
+                    ${escapeHtml(remnant.status)}
+                  </span>
+                </div>
+                <div class="space-y-1.5 px-2.5">
+                  <p><strong>Material:</strong> ${escapeHtml(remnant.material || "Unknown")}</p>
+                  <p><strong>Stone:</strong> ${escapeHtml(remnant.name || "Unknown")}</p>
+                  <p><strong>Thickness:</strong> ${escapeHtml(remnant.thickness || "Unknown")}</p>
+                  <p><strong>Size:</strong> ${escapeHtml(sizeText(remnant))}</p>
+                </div>
+              </div>
+            </article>
+          `).join("");
+        } catch (error) {
+          errorBox.textContent = error.message;
+          errorBox.classList.remove("hidden");
+          companyName.textContent = "Quick remnants";
+          grid.innerHTML = "";
+        }
+      }
+
+      loadQuickRemnants();
+    </script>
+  </body>
+</html>

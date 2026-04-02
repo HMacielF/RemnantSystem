@@ -1,32 +1,7 @@
 {
-  "run_started_at": "2026-03-31T16:31:48.879433+00:00",
-  "crawl_completed_successfully": true,
-  "total_errors": 3,
-  "issue_count": 4,
-  "issues": [
-    {
-      "kind": "row_exception",
-      "job_url": "https://quickcountertop.moraware.net/sys/job/1129",
-      "remnant_id": null,
-      "details": "row=1 error=invalid literal for int() with base 10: '606 (POSTE K)'"
-    },
-    {
-      "kind": "row_exception",
-      "job_url": "https://quickcountertop.moraware.net/sys/job/1129",
-      "remnant_id": null,
-      "details": "row=2 error=invalid literal for int() with base 10: '763 (POSTE F)'"
-    },
-    {
-      "kind": "missing_files_table",
-      "job_url": "https://quickcountertop.moraware.net/sys/job/1980",
-      "remnant_id": null,
-      "details": ""
-    },
-    {
-      "kind": "row_exception",
-      "job_url": "https://quickcountertop.moraware.net/sys/job/4051",
-      "remnant_id": null,
-      "details": "row=2 error=invalid literal for int() with base 10: '948 Emerstone Arctic Gold - Custo $15.25'"
-    }
-  ]
+  "run_started_at": "2026-04-01T23:07:00.206774+00:00",
+  "crawl_completed_successfully": false,
+  "total_errors": 1,
+  "issue_count": 0,
+  "issues": []
 }
