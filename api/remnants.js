@@ -172,6 +172,15 @@ function excludedCompanyMaterials(companySlug) {
     return [];
 }
 
+function resolveCompanySlug(companyKey) {
+    const key = String(companyKey || "").trim().toLowerCase();
+
+    if (key === "quick") return "quick-countertop";
+    if (key === "prime") return "prime-countertop";
+
+    return key;
+}
+
 async function fetchMaterialIdsByNames(names) {
     if (!Array.isArray(names) || names.length === 0) return [];
 
@@ -500,8 +509,8 @@ async function handleRemnantFilter(req, res) {
 
 router.get("/remnants", handleRemnantFilter);
 
-router.get("/companies/:companySlug/remnants", async (req, res) => {
-    const companySlug = String(req.params.companySlug || "").trim().toLowerCase();
+async function handleCompanyRemnants(req, res) {
+    const companySlug = resolveCompanySlug(req.params.companySlug || req.params.companyKey);
     const materialFiltersRaw = req.query.material;
     const materialIds = (Array.isArray(materialFiltersRaw) ? materialFiltersRaw : materialFiltersRaw ? [materialFiltersRaw] : [])
         .map(asNumber)
@@ -559,7 +568,10 @@ router.get("/companies/:companySlug/remnants", async (req, res) => {
             details: err?.message || String(err),
         });
     }
-});
+}
+
+router.get("/companies/:companySlug/remnants", handleCompanyRemnants);
+router.get("/:companyKey(quick|prime)/remnants", handleCompanyRemnants);
 
 router.get("/remnants/summary", async (_req, res) => {
     try {
