@@ -139,8 +139,8 @@ function slugifyCompanyName(value) {
         .replace(/^-+|-+$/g, "");
 }
 
-async function fetchLookupRows(tableName) {
-    const readClient = getReadClient();
+async function fetchLookupRows(tableName, client = getReadClient()) {
+    const readClient = client;
     const { data, error } = await readClient
         .from(tableName)
         .select("id,name,active")
@@ -151,8 +151,8 @@ async function fetchLookupRows(tableName) {
     return data || [];
 }
 
-async function fetchCompanyBySlug(companySlug) {
-    const readClient = getReadClient();
+async function fetchCompanyBySlug(companySlug, client = getReadClient()) {
+    const readClient = client;
     const { data, error } = await readClient
         .from("companies")
         .select("id,name")
@@ -224,6 +224,19 @@ async function requireAuthedSupabase(req, res) {
     };
 }
 
+async function getOptionalAuthedSupabase(req) {
+    const token = req.cookies?.access_token;
+    if (!token) return null;
+
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user) return null;
+
+    return {
+        client: getAuthedSupabase(req),
+        user: data.user,
+    };
+}
+
 async function fetchProfile(client, userId) {
     const { data, error } = await client
         .from("profiles")
@@ -265,8 +278,8 @@ async function requireActiveProfile(req, res, allowedRoles = []) {
     };
 }
 
-async function fetchNextStoneId() {
-    const readClient = getReadClient();
+async function fetchNextStoneId(client = getReadClient()) {
+    const readClient = client;
     const { data, error } = await readClient
         .from("remnants")
         .select("moraware_remnant_id")
@@ -282,10 +295,10 @@ async function fetchNextStoneId() {
 // The status chips in the UI should reflect the whole active inventory, not
 // just the currently filtered card set. This helper returns a compact summary
 // that can be reused by both the public and management pages.
-async function fetchInventorySummary() {
-    const readClient = getPublicReadClient();
+async function fetchInventorySummary(client = getPublicReadClient(), source = "active_remnants") {
+    const readClient = client;
     const { data, error } = await readClient
-        .from("active_remnants")
+        .from(source)
         .select("status")
 
     if (error) throw error;
@@ -418,6 +431,32 @@ async function handleRemnantFilter(req, res) {
     const minHeight = asNumber(req.query["min-height"] ?? req.query.minHeight);
 
     try {
+        const optionalAuthed = await getOptionalAuthedSupabase(req);
+
+        if (optionalAuthed) {
+            let query = optionalAuthed.client
+                .from("remnants")
+                .select(REMNANT_SELECT)
+                .is("deleted_at", null)
+                .order("moraware_remnant_id", { ascending: true, nullsFirst: false })
+                .order("id", { ascending: true });
+
+            if (materialIds.length > 0) query = query.in("material_id", materialIds);
+            if (stone && searchedRemnantId !== null) {
+                query = query.or(`name.ilike.%${stoneLike}%,moraware_remnant_id.eq.${searchedRemnantId}`);
+            } else if (stone) {
+                query = query.ilike("name", `%${stoneLike}%`);
+            }
+            if (status) query = query.eq("status", status);
+            if (minWidth !== null) query = query.gte("width", minWidth);
+            if (minHeight !== null) query = query.gte("height", minHeight);
+
+            const { data, error } = await query;
+            if (error) throw error;
+
+            return res.status(200).json((data || []).map(formatRemnant));
+        }
+
         const readClient = getPublicReadClient();
         let query = readClient
             .from("active_remnants")
@@ -524,7 +563,10 @@ router.get("/companies/:companySlug/remnants", async (req, res) => {
 
 router.get("/remnants/summary", async (_req, res) => {
     try {
-        const summary = await fetchInventorySummary();
+        const optionalAuthed = await getOptionalAuthedSupabase(_req);
+        const summary = optionalAuthed
+            ? await fetchInventorySummary(optionalAuthed.client, "remnants")
+            : await fetchInventorySummary();
         res.json(summary);
     } catch (err) {
         console.error("Error loading remnant summary:", err);
@@ -534,10 +576,12 @@ router.get("/remnants/summary", async (_req, res) => {
 
 router.get("/lookups", async (_req, res) => {
     try {
+        const optionalAuthed = await getOptionalAuthedSupabase(_req);
+        const lookupClient = optionalAuthed?.client || getReadClient();
         const [companies, materials, thicknesses] = await Promise.all([
-            fetchLookupRows("companies"),
-            fetchLookupRows("materials"),
-            fetchLookupRows("thicknesses"),
+            fetchLookupRows("companies", lookupClient),
+            fetchLookupRows("materials", lookupClient),
+            fetchLookupRows("thicknesses", lookupClient),
         ]);
 
         res.json({ companies, materials, thicknesses });
@@ -582,7 +626,7 @@ router.get("/next-stone-id", async (req, res) => {
     if (!authed) return;
 
     try {
-        const nextStoneId = await fetchNextStoneId();
+        const nextStoneId = await fetchNextStoneId(authed.client);
         res.json({ nextStoneId });
     } catch (err) {
         console.error("Error loading next stone id:", err);
