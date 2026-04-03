@@ -37,6 +37,7 @@ const PUBLIC_MATERIAL_TYPES = [
     "Quick Quartz",
     "Soapstone",
 ];
+const MAX_BROWSER_IMAGE_PIXELS = 16_000_000;
 const pendingImagePayloads = {
     add: null,
     edit: null,
@@ -902,7 +903,7 @@ function openImageLightbox(src) {
 }
 
 function preferredCropType(contentType) {
-    return "image/jpeg";
+    return "image/webp";
 }
 
 function imagePayloadFromDataUrl(dataUrl, fileName, contentType) {
@@ -1145,10 +1146,8 @@ async function saveCropImage() {
     sourceContext.restore();
 
     const outputCanvas = document.createElement("canvas");
-    const maxOutputWidth = 1400;
-    const scale = rect.width > maxOutputWidth ? maxOutputWidth / rect.width : 1;
-    outputCanvas.width = Math.max(1, Math.round(rect.width * scale));
-    outputCanvas.height = Math.max(1, Math.round(rect.height * scale));
+    outputCanvas.width = Math.max(1, Math.round(rect.width));
+    outputCanvas.height = Math.max(1, Math.round(rect.height));
     const outputContext = outputCanvas.getContext("2d");
     outputContext.drawImage(
         sourceCanvas,
@@ -1348,6 +1347,11 @@ window.showActionMessage = showActionMessage;
 async function fileToPayload(file) {
     if (!file) return null;
 
+    const normalizedImage = await normalizeImageFile(file);
+    if (normalizedImage) {
+        return normalizedImage;
+    }
+
     const dataUrl = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
@@ -1360,6 +1364,58 @@ async function fileToPayload(file) {
         type: file.type,
         dataUrl,
     };
+}
+
+async function normalizeImageFile(file) {
+    const contentType = String(file.type || "").toLowerCase();
+    if (!contentType.startsWith("image/")) return null;
+    if (contentType === "image/gif") return null;
+
+    const imageUrl = URL.createObjectURL(file);
+
+    try {
+        const image = await new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error("Failed to load image for compression"));
+            img.src = imageUrl;
+        });
+
+        // We preserve original dimensions for normal uploads, but extremely
+        // large photos can blow up browser memory when drawn to a canvas. In
+        // that case we scale down just enough to stay under a safe pixel budget
+        // while keeping the aspect ratio intact.
+        const originalWidth = image.naturalWidth || image.width;
+        const originalHeight = image.naturalHeight || image.height;
+        const originalPixels = originalWidth * originalHeight;
+        const scale = originalPixels > MAX_BROWSER_IMAGE_PIXELS
+            ? Math.sqrt(MAX_BROWSER_IMAGE_PIXELS / originalPixels)
+            : 1;
+        const targetWidth = Math.max(1, Math.round(originalWidth * scale));
+        const targetHeight = Math.max(1, Math.round(originalHeight * scale));
+
+        const canvas = document.createElement("canvas");
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+
+        const context = canvas.getContext("2d");
+        if (!context) {
+            throw new Error("Failed to prepare image compression canvas");
+        }
+
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+        const compressedType = preferredCropType(contentType);
+        const dataUrl = canvas.toDataURL(compressedType, 0.86);
+
+        return {
+            name: file.name.replace(/\.[^.]+$/, "") + ".webp",
+            type: compressedType,
+            dataUrl,
+        };
+    } finally {
+        URL.revokeObjectURL(imageUrl);
+    }
 }
 
 async function resolveImagePayload(prefix) {

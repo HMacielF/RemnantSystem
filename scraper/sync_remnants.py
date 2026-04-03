@@ -23,7 +23,13 @@ if __package__ is None or __package__ == "":
 
 from scraper.config import load_settings
 from scraper.parsing import get_page_material_and_name, parse_line, parse_thickness
-from scraper.utils import infer_extension, now_iso_utc, requests_session_from_selenium, sha256_bytes
+from scraper.utils import (
+    infer_extension,
+    normalize_image_bytes,
+    now_iso_utc,
+    requests_session_from_selenium,
+    sha256_bytes,
+)
 
 # ---------- Logging ----------
 logging.basicConfig(
@@ -562,7 +568,20 @@ def main():
                     img_resp = sess.get(full_url, timeout=30)
                     img_resp.raise_for_status()
                     img_bytes = img_resp.content
+                    original_content_type = (img_resp.headers.get("Content-Type") or "").split(";")[0].strip()
                     total_photo_downloaded += 1
+
+                    try:
+                        img_bytes, content_type, ext = normalize_image_bytes(img_bytes, original_content_type)
+                        logging.info(
+                            f"Remnant #{remnant_id}: normalized image to '{content_type or original_content_type or 'image/jpeg'}'"
+                        )
+                    except Exception as normalize_exc:
+                        logging.warning(
+                            f"Remnant #{remnant_id}: image normalization failed, uploading original bytes instead ({normalize_exc})"
+                        )
+                        content_type = original_content_type
+                        ext = infer_extension(full_url, content_type)
 
                     new_photo_hash = sha256_bytes(img_bytes)
                     logging.info(f"Remnant #{remnant_id}: photo_hash={new_photo_hash[:12]}...")
@@ -576,8 +595,6 @@ def main():
                         logging.info(f"Remnant #{remnant_id}: photo unchanged, skipping upload")
                         continue
 
-                    content_type = (img_resp.headers.get("Content-Type") or "").split(";")[0].strip()
-                    ext = infer_extension(full_url, content_type)
                     image_path = build_storage_path("remnant", remnant_id, ext)
 
                     logging.info(
