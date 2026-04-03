@@ -1,4 +1,6 @@
 const LIVE_SEARCH_DELAY_MS = 300;
+window.__REMNANT_APP_VERSION__ = "2026-04-02-hold-request-fix-6";
+window.__holdRequestNativePending = false;
 
 let allRemnants = [];
 let debounceTimer = null;
@@ -10,8 +12,16 @@ let lookupData = {
     materials: [],
     thicknesses: [],
 };
+let salesRepData = [];
 let currentProfile = null;
 let nextStoneId = null;
+let activeHoldRequestRemnant = null;
+let salesRepLoadPromise = null;
+let holdRequestsData = [];
+let activeQuickHoldRemnantId = null;
+let activeManageHoldRemnantId = null;
+let activeSoldRemnantId = null;
+let activeSoldSource = "card";
 let inventorySummary = {
     total: 0,
     available: 0,
@@ -57,6 +67,11 @@ const cropState = {
     },
 };
 
+// This single runtime powers both the public inventory page and the private
+// management workspace. The branching looks heavy in places, but the upside is
+// that both pages stay visually and behaviorally aligned instead of drifting
+// into two unrelated apps.
+
 // The UI now has a few summary panels above the cards. We keep their state
 // derived from the fetched remnants instead of storing duplicate counters.
 const STATUS_META = {
@@ -97,6 +112,76 @@ function displayText(value, fallback = "Unknown") {
     return trimmed || fallback;
 }
 
+function prettyDate(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+    });
+}
+
+function prettyDateTime(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+    });
+}
+
+function defaultHoldExpirationInputValue() {
+    const date = new Date();
+    date.setDate(date.getDate() + 7);
+    return date.toISOString().slice(0, 10);
+}
+
+function holdSummaryLines(remnant) {
+    // Cards only show the most immediately useful hold details. Deeper context
+    // like notes and full ownership controls lives in the hold modal/inbox.
+    const hold = remnant.current_hold;
+    if (!hold) return [];
+
+    const lines = [];
+    const jobNumber = String(hold.job_number || "").trim();
+    const jobSuffix = jobNumber ? ` - J#${jobNumber}` : "";
+    if (hold.status === "active") {
+        lines.push(`until ${prettyDate(hold.expires_at) || "Unknown date"}${jobSuffix}`);
+    } else if (hold.status === "expired") {
+        lines.push(`expired on ${prettyDate(hold.expires_at) || "Unknown date"}${jobSuffix}`);
+    }
+    return lines;
+}
+
+function statusDetailLines(remnant) {
+    // Management cards get one extra status-specific line so the grid remains
+    // easy to scan without opening every modal.
+    const status = String(remnant?.status || "").trim().toLowerCase();
+
+    if (status === "hold") {
+        return holdSummaryLines(remnant).map((line, index) => ({
+            label: index === 0 ? "Hold" : "",
+            value: line,
+        }));
+    }
+
+    if (status === "sold") {
+        const jobNumber = String(remnant?.sold_job_number || "").trim();
+        return [{
+            label: "Sold",
+            value: `on ${prettyDate(remnant?.sold_at) || "Unknown date"}${jobNumber ? ` - J#${jobNumber}` : ""}`,
+        }];
+    }
+
+    return [];
+}
+
 // The backend stores compact status values, but the UI reads better with
 // friendlier labels. This helper keeps that conversion in one place.
 function normalizeStatus(value) {
@@ -109,13 +194,17 @@ function normalizeStatus(value) {
     return String(value || "Available").trim();
 }
 
+function statusText(remnant) {
+    return normalizeStatus(remnant?.status);
+}
+
 // Cards, buttons, and badges all use the same visual language for statuses.
 // Centralizing the classes here keeps the markup cleaner later.
 function statusBadgeClass(status) {
     const lc = status.toLowerCase();
-    if (lc === "sold") return "bg-rose-100 text-rose-800 ring-1 ring-rose-200";
-    if (lc === "on hold") return "bg-amber-100 text-amber-900 ring-1 ring-amber-200";
-    return "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200";
+    if (lc === "sold") return "bg-rose-100 text-rose-800 ring-1 ring-rose-300";
+    if (lc === "on hold") return "bg-amber-100 text-amber-900 ring-1 ring-amber-300";
+    return "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300";
 }
 
 // Structural edits are intentionally limited to higher roles. We still show the
@@ -124,6 +213,50 @@ function statusBadgeClass(status) {
 function canManageStructure() {
     const role = currentProfile?.system_role;
     return role === "super_admin" || role === "manager";
+}
+
+function isPrivilegedProfile(profile) {
+    const role = profile?.system_role;
+    return role === "super_admin" || role === "manager";
+}
+
+function isOwnCompanyStatusUser(profile, remnant) {
+    return profile?.system_role === "status_user"
+        && profile?.company_id !== null
+        && Number(profile.company_id) === Number(remnant?.company_id);
+}
+
+function isStatusUserView() {
+    return isManagementView && currentProfile?.system_role === "status_user";
+}
+
+function canStatusUserManageRemnant(remnant) {
+    return isStatusUserView() && isOwnCompanyStatusUser(currentProfile, remnant);
+}
+
+function canCurrentUserControlHold(remnant) {
+    // status_user permissions depend on both company ownership and hold
+    // ownership. This helper keeps that rule in one place for the card UI.
+    const hold = remnant?.current_hold;
+    if (!hold || !["active", "expired"].includes(String(hold.status || "").toLowerCase())) {
+        return canStatusUserManageRemnant(remnant);
+    }
+
+    if (isPrivilegedProfile(currentProfile)) return true;
+    return String(hold.hold_owner_user_id || "") === String(currentProfile?.id || "");
+}
+
+function currentStatusActor(remnant) {
+    return remnant?.current_status_actor || null;
+}
+
+function currentStatusActorName(remnant, fallback = "sales rep") {
+    const soldByName = String(remnant?.sold_by_name || "").trim();
+    if (soldByName) return soldByName;
+
+    const actor = currentStatusActor(remnant);
+    const name = String(actor?.actor_name || "").trim();
+    return name || fallback;
 }
 
 // Materials come from the database, so the checkbox list is rebuilt after the
@@ -161,6 +294,18 @@ function renderSelectOptions(selectId, rows, placeholder) {
     if (currentValue) select.value = currentValue;
 }
 
+function renderSalesRepOptions(selectId, rows, placeholder) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+
+    const currentValue = select.value;
+    select.innerHTML = `
+        <option value="">${placeholder}</option>
+        ${rows.map((row) => `<option value="${row.id}">${row.display_name || row.full_name || row.email || "User"}</option>`).join("")}
+    `;
+    if (currentValue) select.value = currentValue;
+}
+
 function renderWelcomeUser() {
     const target = document.getElementById("welcome-user");
     if (!target) return;
@@ -172,8 +317,103 @@ function renderWelcomeUser() {
     target.textContent = `WELCOME, ${String(preferredName).toUpperCase()}`;
 }
 
+function renderHoldRequests() {
+    const container = document.getElementById("hold-requests-list");
+    if (!container) return;
+
+    if (!holdRequestsData.length) {
+        container.innerHTML = `
+            <div class="rounded-[24px] border border-dashed border-[#d7c4b6] bg-[#fff9f4] px-5 py-8 text-center text-[#6d584b]">
+                <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#9c7355]">No Requests</p>
+                <p class="mt-2 text-sm">There are no hold requests to review right now.</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = holdRequestsData.map((request) => {
+        const repName = request.sales_rep?.full_name || request.sales_rep?.email || "Unassigned";
+        const reviewedBy = request.reviewed_by?.full_name || request.reviewed_by?.email || "";
+        const remnantId = request.remnant?.moraware_remnant_id || request.remnant?.id || request.remnant_id;
+        const remnantName = request.remnant?.name || "Remnant";
+        return `
+            <article class="rounded-[24px] border border-[#eadfd7] bg-[#fffaf6] p-5 shadow-sm">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#9c7355]">${escapeHtml(request.status || "pending")}</p>
+                        <h3 class="mt-1 text-lg font-semibold text-[#2d2623]">Remnant #${escapeHtml(remnantId)} - ${escapeHtml(remnantName)}</h3>
+                        <p class="mt-1 text-sm text-[#6d584b]">${escapeHtml(request.requester_name)} · ${escapeHtml(request.requester_email)}</p>
+                    </div>
+                    <div class="rounded-full bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[#8f5a36] shadow-sm">
+                        ${escapeHtml(prettyDateTime(request.created_at) || "Just now")}
+                    </div>
+                </div>
+                <div class="mt-4 grid gap-2 text-sm text-[#4d3d34] sm:grid-cols-2">
+                    <p><strong>Sales Rep:</strong> ${escapeHtml(repName)}</p>
+                    <p><strong>Project:</strong> ${escapeHtml(request.project_reference || "Not provided")}</p>
+                    <p><strong>Notes:</strong> ${escapeHtml(request.notes || "Not provided")}</p>
+                    <label class="block">
+                        <strong>Job Number:</strong>
+                        <input
+                            type="text"
+                            data-request-job-number="${request.id}"
+                            value="${escapeHtml(request.job_number || "")}"
+                            placeholder="Required for approval"
+                            class="mt-1 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 py-2.5 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                        />
+                    </label>
+                </div>
+                ${String(request.status || "").toLowerCase() === "pending" ? `
+                    <div class="mt-4 grid grid-cols-2 gap-3">
+                        <button
+                            type="button"
+                            data-hold-request-action="approved"
+                            data-hold-request-id="${request.id}"
+                            class="rounded-2xl bg-emerald-100 text-emerald-800 py-3 text-sm font-semibold border border-emerald-200 transition-colors active:bg-emerald-200"
+                        >
+                            Approve
+                        </button>
+                        <button
+                            type="button"
+                            data-hold-request-action="rejected"
+                            data-hold-request-id="${request.id}"
+                            class="rounded-2xl bg-rose-100 text-rose-800 py-3 text-sm font-semibold border border-rose-200 transition-colors active:bg-rose-200"
+                        >
+                            Deny
+                        </button>
+                    </div>
+                ` : ""}
+                ${reviewedBy ? `<p class="mt-3 text-xs text-[#8a6a54]">Reviewed by ${escapeHtml(reviewedBy)}.</p>` : ""}
+            </article>
+        `;
+    }).join("");
+}
+
+function renderHoldRequestCount() {
+    const badge = document.getElementById("hold-requests-count");
+    if (!badge) return;
+
+    const count = holdRequestsData.length;
+    badge.textContent = String(count);
+    badge.classList.toggle("hidden", count === 0);
+}
+
 function cropCanvas() {
     return document.getElementById("crop-canvas");
+}
+
+function cropSourceUrl(src) {
+    const value = String(src || "").trim();
+    if (!value) return "";
+    if (value.startsWith("blob:") || value.startsWith("data:")) return value;
+
+    try {
+        const parsed = new URL(value, window.location.origin);
+        if (parsed.origin === window.location.origin) return parsed.toString();
+        return `/api/image-proxy?url=${encodeURIComponent(parsed.toString())}`;
+    } catch (_error) {
+        return value;
+    }
 }
 
 // The management UI is permission-aware. Instead of sprinkling conditionals
@@ -187,6 +427,7 @@ function applyRoleVisibility() {
     const editImageInput = document.getElementById("edit-image-file");
     const editCropButton = document.getElementById("edit-open-crop");
     const addCropButton = document.getElementById("add-open-crop");
+    const holdOwnerSelect = document.getElementById("edit-hold-owner");
     const editForm = document.getElementById("edit-remnant-form");
     const addForm = document.getElementById("add-remnant-form");
     const structureAllowed = canManageStructure();
@@ -197,6 +438,7 @@ function applyRoleVisibility() {
     if (editCropButton) editCropButton.classList.toggle("hidden", !structureAllowed);
     if (addCropButton) addCropButton.classList.toggle("hidden", !structureAllowed);
     if (editImageInput) editImageInput.disabled = !structureAllowed;
+    if (holdOwnerSelect) holdOwnerSelect.disabled = !structureAllowed;
 
     if (editForm) {
         editForm.querySelectorAll("input, select").forEach((field) => {
@@ -274,6 +516,10 @@ function displayRemnantId(remnant) {
     return remnant.display_id || remnant.moraware_remnant_id || remnant.id;
 }
 
+function internalRemnantId(remnant) {
+    return remnant.internal_remnant_id || null;
+}
+
 // "unknown" thickness is useful as a database fallback but noisy in the card
 // UI, so we hide it unless we have a real value to show.
 function hasKnownThickness(remnant) {
@@ -282,6 +528,7 @@ function hasKnownThickness(remnant) {
 }
 
 function cardDetail(label, value) {
+    if (!label) return `<p>${escapeHtml(value)}</p>`;
     return `<p><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</p>`;
 }
 
@@ -352,26 +599,49 @@ function loadingMarkup() {
     `).join("");
 }
 
-function buildRemnantCardMarkup(remnant, status) {
+function buildRemnantCardMarkup(remnant, status, index = 0) {
     const image = imageSrc(remnant);
     const displayCompany = displayText(remnant.company_name || remnant.company?.name);
     const displayMaterial = displayText(remnant.material_name || remnant.material?.name);
     const displayStoneName = displayText(remnant.name);
     const displayThickness = displayText(remnant.thickness_name || remnant.thickness?.name);
     const displayId = displayRemnantId(remnant);
+    const statusLines = isManagementView ? statusDetailLines(remnant) : [];
 
     const detailLines = [
-        isManagementView ? cardDetail("Company", displayCompany) : "",
+        !isManagementView || !currentProfile?.company_id ? cardDetail("Company", displayCompany) : "",
         cardDetail("Material", displayMaterial),
         cardDetail("Stone", displayStoneName),
-        hasKnownThickness(remnant)
+        isManagementView && hasKnownThickness(remnant)
             ? cardDetail("Thickness", displayThickness)
             : "",
         cardDetail("Size", sizeText(remnant)),
+        ...statusLines.map((line) => cardDetail(line.label, line.value)),
     ].filter(Boolean).join("");
+
+    const holdRequestButton = !isManagementView && String(remnant.status || "").toLowerCase() === "available"
+        ? `
+            <div class="absolute top-3 left-3 z-20">
+                <button
+                    type="button"
+                    data-request-hold="${displayId}"
+                    class="peer inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white/92 text-[#8f4c1a] shadow-lg ring-1 ring-white/70 backdrop-blur-sm transition-colors hover:bg-[#fff8f1] active:scale-95"
+                    aria-label="Request hold for remnant ${escapeHtml(displayId)}"
+                >
+                    &#128278;
+                </button>
+                <span class="pointer-events-none absolute left-1/2 bottom-[calc(100%+8px)] hidden -translate-x-1/2 whitespace-nowrap rounded-full bg-[#232323] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white shadow-lg peer-hover:block">
+                    Request Hold
+                </span>
+            </div>
+        `
+        : "";
+
+    const eagerImage = index < 8;
 
     return `
         ${managementCardAction(remnant)}
+        ${holdRequestButton}
         <div class="absolute inset-x-0 top-0 h-24 bg-[linear-gradient(180deg,rgba(35,35,35,0.42),transparent)] pointer-events-none"></div>
         <button
             type="button"
@@ -379,8 +649,8 @@ function buildRemnantCardMarkup(remnant, status) {
             data-open-image="${escapeHtml(image)}"
             aria-label="Open image for remnant ${escapeHtml(displayId)}"
         >
-        <img src="${escapeHtml(image)}" loading="lazy" alt="Remnant ${escapeHtml(displayId)}"
-            class="h-44 w-full object-contain bg-[#f4ece4] transition-transform duration-500 group-hover:scale-[1.02] md:h-48"
+        <img src="${escapeHtml(image)}" loading="${eagerImage ? "eager" : "lazy"}" fetchpriority="${eagerImage ? "high" : "auto"}" decoding="async" alt="Remnant ${escapeHtml(displayId)}"
+            class="h-44 w-full object-contain bg-[#f4ece4] md:h-48"
             onerror="this.src=''; this.classList.add('bg-gray-100');">
         </button>
 
@@ -394,22 +664,132 @@ function buildRemnantCardMarkup(remnant, status) {
                 </span>
             </div>
             <div class="space-y-1.5 px-2.5">${detailLines}</div>
+            ${statusUserCardActions(remnant)}
         </div>
     `;
 }
 
 function managementCardAction(remnant) {
-    if (!isManagementView) return "";
+    if (!isManagementView || !canManageStructure()) return "";
 
     return `
-        <button
-            type="button"
-            data-remnant-id="${remnant.id}"
-            class="absolute top-3 right-3 z-20 h-11 w-11 rounded-2xl bg-[#232323]/92 text-white shadow-lg ring-1 ring-white/70 backdrop-blur-sm flex items-center justify-center text-[18px] transition-all hover:bg-[#E78B4B] hover:scale-105 active:brightness-90 active:scale-95"
-            aria-label="Configure remnant ${remnant.id}"
-        >
-            &#9881;
-        </button>
+        <div class="absolute top-3 left-3 z-20">
+            <button
+                type="button"
+                data-hold-remnant-id="${remnant.id}"
+                class="peer inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white/92 text-[#8f4c1a] shadow-lg ring-1 ring-white/70 backdrop-blur-sm transition-colors hover:bg-[#fff8f1] active:scale-95"
+                aria-label="Manage hold for remnant ${remnant.id}"
+            >
+                &#128278;
+            </button>
+            <span class="pointer-events-none absolute left-1/2 bottom-[calc(100%+8px)] hidden -translate-x-1/2 whitespace-nowrap rounded-full bg-[#232323] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white shadow-lg peer-hover:block">
+                Hold
+            </span>
+        </div>
+        <div class="absolute top-3 right-3 z-20">
+            <button
+                type="button"
+                data-remnant-id="${remnant.id}"
+                class="peer h-11 w-11 rounded-2xl bg-[#232323]/92 text-white shadow-lg ring-1 ring-white/70 backdrop-blur-sm flex items-center justify-center text-[18px] transition-all hover:bg-[#E78B4B] hover:scale-105 active:brightness-90 active:scale-95"
+                aria-label="Configure remnant ${remnant.id}"
+            >
+                &#9881;
+            </button>
+            <span class="pointer-events-none absolute right-0 bottom-[calc(100%+8px)] hidden whitespace-nowrap rounded-full bg-[#232323] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white shadow-lg peer-hover:block">
+                Modify
+            </span>
+        </div>
+    `;
+}
+
+function statusUserCardActions(remnant) {
+    if (!canStatusUserManageRemnant(remnant)) return "";
+
+    const hold = remnant.current_hold || null;
+    const holdStatus = String(hold?.status || "").toLowerCase();
+    const currentStatus = String(remnant.status || "").toLowerCase();
+    const soldByOtherUser = currentStatus === "sold"
+        && remnant.sold_by_user_id
+        && String(remnant.sold_by_user_id || "") !== String(currentProfile?.id || "");
+    if (soldByOtherUser) {
+        return `
+            <div class="mt-3 px-2.5">
+                <div class="inline-flex w-full items-center justify-center rounded-2xl border border-[#ead8ca] bg-[#fff7f1] px-4 py-3 text-sm font-semibold text-[#8f5a36]">
+                    Sold by ${escapeHtml(currentStatusActorName(remnant))}
+                </div>
+            </div>
+        `;
+    }
+
+    const isLockedHold = ["active", "expired"].includes(holdStatus) && !canCurrentUserControlHold(remnant);
+    if (isLockedHold) {
+        return `
+            <div class="mt-3 px-2.5">
+                <div class="inline-flex w-full items-center justify-center rounded-2xl border border-[#ead8ca] bg-[#fff7f1] px-4 py-3 text-sm font-semibold text-[#8f5a36]">
+                    On hold for ${escapeHtml(hold.owner_name || "sales rep")}
+                </div>
+            </div>
+        `;
+    }
+
+    const controls = [];
+
+    if (currentStatus === "available") {
+        controls.push({
+            kind: "hold",
+            label: "Hold",
+            action: "create",
+            classes: "border-amber-300 bg-amber-100 text-amber-900 hover:border-amber-400 hover:bg-amber-200",
+        });
+        controls.push({
+            kind: "status",
+            label: "Sold",
+            action: "sold",
+            classes: "border-rose-300 bg-rose-100 text-rose-800 hover:border-rose-400 hover:bg-rose-200",
+        });
+    } else if (currentStatus === "hold") {
+        controls.push({
+            kind: "status",
+            label: "Available",
+            action: "available",
+            classes: "border-emerald-300 bg-emerald-100 text-emerald-800 hover:border-emerald-400 hover:bg-emerald-200",
+        });
+        controls.push({
+            kind: "status",
+            label: "Sold",
+            action: "sold",
+            classes: "border-rose-300 bg-rose-100 text-rose-800 hover:border-rose-400 hover:bg-rose-200",
+        });
+    } else if (currentStatus === "sold") {
+        controls.push({
+            kind: "hold",
+            label: "On Hold",
+            action: "create",
+            classes: "border-amber-300 bg-amber-100 text-amber-900 hover:border-amber-400 hover:bg-amber-200",
+        });
+        controls.push({
+            kind: "status",
+            label: "Available",
+            action: "available",
+            classes: "border-emerald-300 bg-emerald-100 text-emerald-800 hover:border-emerald-400 hover:bg-emerald-200",
+        });
+    }
+
+    return `
+        <div class="mt-3 grid grid-cols-2 gap-2 px-2.5">
+            ${controls.map((control) => `
+                <button
+                    type="button"
+                    ${control.kind === "status"
+                        ? `data-quick-status="${control.action}"`
+                        : `data-quick-hold="${control.action}"`}
+                    data-remnant-id="${remnant.id}"
+                    class="inline-flex h-10 items-center justify-center rounded-2xl border text-[11px] font-semibold uppercase tracking-[0.14em] transition ${control.classes}"
+                >
+                    ${control.label}
+                </button>
+            `).join("")}
+        </div>
     `;
 }
 
@@ -430,18 +810,14 @@ function renderRemnants() {
         return;
     }
 
-    container.innerHTML = "";
-
-    allRemnants.forEach((remnant) => {
-        const status = normalizeStatus(remnant.status);
-        const card = document.createElement("div");
-        card.className =
-            "group relative bg-white/92 border border-white/80 rounded-[26px] shadow-[0_20px_45px_rgba(58,37,22,0.08)] hover:shadow-[0_28px_60px_rgba(58,37,22,0.12)] transition-all duration-300 flex flex-col overflow-hidden backdrop-blur";
-
-        card.innerHTML = buildRemnantCardMarkup(remnant, status);
-
-        container.appendChild(card);
-    });
+    container.innerHTML = allRemnants.map((remnant, index) => {
+        const status = statusText(remnant);
+        return `
+            <div class="group relative bg-white/92 border border-white/80 rounded-[26px] shadow-[0_20px_45px_rgba(58,37,22,0.08)] flex flex-col overflow-visible backdrop-blur">
+                ${buildRemnantCardMarkup(remnant, status, index)}
+            </div>
+        `;
+    }).join("");
 }
 
 // Generic field setter used by both modals. Keeping checkbox handling here
@@ -526,9 +902,7 @@ function openImageLightbox(src) {
 }
 
 function preferredCropType(contentType) {
-    return ["image/png", "image/webp", "image/jpeg"].includes(contentType)
-        ? contentType
-        : "image/jpeg";
+    return "image/jpeg";
 }
 
 function imagePayloadFromDataUrl(dataUrl, fileName, contentType) {
@@ -699,8 +1073,7 @@ async function openCropModal(prefix) {
     }
 
     const image = new Image();
-    image.crossOrigin = "anonymous";
-    image.src = src;
+    image.src = cropSourceUrl(src);
 
     try {
         await new Promise((resolve, reject) => {
@@ -772,8 +1145,10 @@ async function saveCropImage() {
     sourceContext.restore();
 
     const outputCanvas = document.createElement("canvas");
-    outputCanvas.width = Math.round(rect.width);
-    outputCanvas.height = Math.round(rect.height);
+    const maxOutputWidth = 1400;
+    const scale = rect.width > maxOutputWidth ? maxOutputWidth / rect.width : 1;
+    outputCanvas.width = Math.max(1, Math.round(rect.width * scale));
+    outputCanvas.height = Math.max(1, Math.round(rect.height * scale));
     const outputContext = outputCanvas.getContext("2d");
     outputContext.drawImage(
         sourceCanvas,
@@ -821,6 +1196,13 @@ function bindModalInteractions() {
             return;
         }
 
+        const holdRequestTrigger = event.target.closest("[data-request-hold]");
+        if (holdRequestTrigger) {
+            openHoldRequestModal(holdRequestTrigger.dataset.requestHold)
+                .catch((error) => showActionMessage(error.message, true));
+            return;
+        }
+
         const closeTrigger = event.target.closest("[data-close-modal]");
         if (closeTrigger) {
             closeModal(closeTrigger.dataset.closeModal);
@@ -851,9 +1233,61 @@ function populateEditModal(remnant) {
     setPreviewImage("edit", imageSrc(remnant));
     const imageInput = document.getElementById("edit-image-file");
     if (imageInput) imageInput.value = "";
+
+}
+
+function populateManageHoldModal(remnant) {
+    const hold = remnant.current_hold || null;
+    const badge = document.getElementById("manage-hold-badge");
+    const summary = document.getElementById("manage-hold-summary");
+    const owner = document.getElementById("manage-hold-owner");
+    const expiresAt = document.getElementById("manage-hold-expires-at");
+    const project = document.getElementById("manage-hold-project-reference");
+    const jobNumber = document.getElementById("manage-hold-job-number");
+    const notes = document.getElementById("manage-hold-notes");
+    const title = document.getElementById("manage-hold-title");
+    const subtitle = document.getElementById("manage-hold-subtitle");
+
+    if (title) title.textContent = `Manage hold for #${displayRemnantId(remnant)}`;
+    if (subtitle) {
+        subtitle.textContent = remnant.name
+            ? `${remnant.name} hold details and status actions.`
+            : "Hold details and status actions for this remnant.";
+    }
+
+    if (badge) {
+        badge.textContent = hold
+            ? hold.status === "active"
+                ? "Active Hold"
+                : `${normalizeStatus(hold.status)} Hold`
+            : "No Active Hold";
+    }
+
+    if (summary) {
+        summary.innerHTML = hold
+            ? holdSummaryLines(remnant).map((line) => `<p>${escapeHtml(line)}</p>`).join("")
+            : "No hold is linked to this remnant yet.";
+    }
+
+    if (owner) owner.value = hold?.hold_owner_user_id || currentProfile?.id || "";
+    if (expiresAt) expiresAt.value = hold?.expires_at ? String(hold.expires_at).slice(0, 10) : defaultHoldExpirationInputValue();
+    if (project) project.value = hold?.project_reference || "";
+    if (jobNumber) jobNumber.value = hold?.job_number || "";
+    if (notes) notes.value = hold?.notes || "";
+}
+
+function openManageHoldModal(remnantId) {
+    // Managers/admins got a separate hold modal so hold logic and structural
+    // remnant edits do not compete for space inside one overloaded panel.
+    const remnant = allRemnants.find((item) => String(item.id) === String(remnantId));
+    if (!remnant) return;
+    activeManageHoldRemnantId = String(remnantId);
+    populateManageHoldModal(remnant);
+    openModal("manage-hold-modal");
 }
 
 function openEditModal(remnantId) {
+    // Structural edit modal used by manager/admin flows.
     const remnant = allRemnants.find((item) => String(item.id) === String(remnantId));
     if (!remnant) return;
     activeRemnantId = String(remnantId);
@@ -886,6 +1320,8 @@ function openAddModal() {
 // Temporary toast-style feedback keeps the workflow fast without forcing full
 // page refreshes or alert dialogs.
 function showActionMessage(message, isError = false) {
+    // Fast toast-style feedback keeps the UI moving without blocking the user
+    // with alert() popups after every small action.
     let el = document.getElementById("action-feedback");
     if (!el) {
         el = document.createElement("div");
@@ -904,6 +1340,8 @@ function showActionMessage(message, isError = false) {
         el.remove();
     }, 2400);
 }
+
+window.showActionMessage = showActionMessage;
 
 // File inputs return Blob/File objects. The API expects JSON, so we convert the
 // chosen image into a data URL before sending it.
@@ -957,13 +1395,15 @@ function serializeForm(prefix) {
 
 // Status updates are their own API route because status_user users are allowed
 // to do this even when they cannot perform structural edits.
-async function updateStatus(status) {
+async function updateStatus(status, extraPayload = {}) {
+    // Edit-modal version of status changes. extraPayload is mainly used by the
+    // sold flow to send the required job number alongside the status itself.
     if (!activeRemnantId) return;
 
     const res = await fetch(`/api/remnants/${activeRemnantId}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, ...extraPayload }),
     });
 
     if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to update status"));
@@ -971,6 +1411,22 @@ async function updateStatus(status) {
     await loadRemnants();
     await loadInventorySummary();
     closeModal("edit-remnant-modal");
+    showActionMessage(`Status updated to ${normalizeStatus(status)}.`);
+}
+
+async function updateStatusFromCard(remnantId, status, extraPayload = {}) {
+    // Card-level version of the same status route. status_user relies on this
+    // heavily so they can work directly from the grid.
+    const res = await fetch(`/api/remnants/${remnantId}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, ...extraPayload }),
+    });
+
+    if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to update status"));
+
+    await loadRemnants();
+    await loadInventorySummary();
     showActionMessage(`Status updated to ${normalizeStatus(status)}.`);
 }
 
@@ -1032,6 +1488,192 @@ async function createRemnant() {
     showActionMessage("Remnant created.");
 }
 
+async function saveHold() {
+    const targetRemnantId = activeManageHoldRemnantId || activeRemnantId;
+    if (!targetRemnantId) return;
+    const ownerFieldId = activeManageHoldRemnantId ? "manage-hold-owner" : "edit-hold-owner";
+    const expiresFieldId = activeManageHoldRemnantId ? "manage-hold-expires-at" : "edit-hold-expires-at";
+    const projectFieldId = activeManageHoldRemnantId ? "manage-hold-project-reference" : "edit-hold-project-reference";
+    const jobNumberFieldId = activeManageHoldRemnantId ? "manage-hold-job-number" : "edit-hold-job-number";
+    const notesFieldId = activeManageHoldRemnantId ? "manage-hold-notes" : "edit-hold-notes";
+    const jobNumber = document.getElementById(jobNumberFieldId)?.value.trim() || "";
+    if (!jobNumber) throw new Error("Job number is required");
+
+    const payload = {
+        hold_owner_user_id: document.getElementById(ownerFieldId)?.value || currentProfile?.id || "",
+        expires_at: document.getElementById(expiresFieldId)?.value,
+        project_reference: document.getElementById(projectFieldId)?.value.trim(),
+        job_number: jobNumber,
+        notes: document.getElementById(notesFieldId)?.value.trim(),
+    };
+
+    const res = await fetch(`/api/remnants/${targetRemnantId}/hold`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to save hold"));
+
+    await loadRemnants();
+    await loadInventorySummary();
+    if (activeManageHoldRemnantId) {
+        closeModal("manage-hold-modal");
+        activeManageHoldRemnantId = null;
+    } else {
+        closeModal("edit-remnant-modal");
+    }
+    showActionMessage("Hold saved.");
+}
+
+async function quickCreateHold(remnantId, payload) {
+    const res = await fetch(`/api/remnants/${remnantId}/hold`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to create hold"));
+
+    await loadRemnants();
+    await loadInventorySummary();
+    showActionMessage("Hold created for 7 days.");
+}
+
+function openQuickHoldModal(remnantId) {
+    activeQuickHoldRemnantId = String(remnantId);
+    const remnant = allRemnants.find((item) => String(item.id) === String(remnantId));
+    const form = document.getElementById("quick-hold-form");
+    if (form) form.reset();
+
+    const title = document.getElementById("quick-hold-title");
+    const subtitle = document.getElementById("quick-hold-subtitle");
+    const displayId = remnant ? displayRemnantId(remnant) : remnantId;
+
+    if (title) title.textContent = `Create hold for #${displayId}`;
+    if (subtitle) {
+        subtitle.textContent = remnant?.name
+            ? `${remnant.name} will be held for 7 days once saved.`
+            : "This remnant will be held for 7 days once saved.";
+    }
+
+    openModal("quick-hold-modal");
+}
+
+function openSoldModal(remnantId, source = "card") {
+    // "Sold" needs an extra required field, so we collect it in a small modal
+    // instead of silently marking sold with incomplete information.
+    activeSoldRemnantId = String(remnantId);
+    activeSoldSource = source;
+
+    const remnant = allRemnants.find((item) => String(item.id) === String(remnantId));
+    const displayId = remnant ? displayRemnantId(remnant) : remnantId;
+    const title = document.getElementById("sold-project-title");
+    const subtitle = document.getElementById("sold-project-subtitle");
+    const input = document.getElementById("sold-job-number");
+    const form = document.getElementById("sold-project-form");
+
+    if (form) form.reset();
+    if (title) title.textContent = `Mark remnant #${displayId} as sold`;
+    if (subtitle) {
+        subtitle.textContent = remnant?.name
+            ? `${remnant.name} will be marked sold to this project.`
+            : "This remnant will be marked sold to this project.";
+    }
+    if (input) input.value = "";
+
+    openModal("sold-project-modal");
+}
+
+async function submitSoldStatus() {
+    // Shared sold-submit path for both:
+    // - status_user card actions
+    // - manager/admin edit modal action
+    if (!activeSoldRemnantId) return;
+
+    const soldJobNumber = document.getElementById("sold-job-number")?.value.trim() || "";
+    if (!soldJobNumber) {
+        throw new Error("Sold job number is required");
+    }
+
+    if (activeSoldSource === "edit") {
+        await updateStatus("sold", { sold_job_number: soldJobNumber });
+    } else {
+        await updateStatusFromCard(activeSoldRemnantId, "sold", { sold_job_number: soldJobNumber });
+    }
+
+    closeModal("sold-project-modal");
+    activeSoldRemnantId = null;
+    activeSoldSource = "card";
+}
+
+async function releaseHold() {
+    const targetRemnantId = activeManageHoldRemnantId || activeRemnantId;
+    if (!targetRemnantId) return;
+
+    const remnant = allRemnants.find((item) => String(item.id) === String(targetRemnantId));
+    const holdId = remnant?.current_hold?.id;
+    if (!holdId) throw new Error("No hold is linked to this remnant");
+
+    const res = await fetch(`/api/holds/${holdId}/release`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+    });
+
+    if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to release hold"));
+
+    await loadRemnants();
+    await loadInventorySummary();
+    if (activeManageHoldRemnantId) {
+        closeModal("manage-hold-modal");
+        activeManageHoldRemnantId = null;
+    } else {
+        closeModal("edit-remnant-modal");
+    }
+    showActionMessage("Hold released.");
+}
+
+async function quickReleaseHold(remnantId) {
+    const remnant = allRemnants.find((item) => String(item.id) === String(remnantId));
+    const holdId = remnant?.current_hold?.id;
+    if (!holdId) throw new Error("No hold is linked to this remnant");
+
+    const res = await fetch(`/api/holds/${holdId}/release`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+    });
+
+    if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to release hold"));
+
+    await loadRemnants();
+    await loadInventorySummary();
+    showActionMessage("Hold released.");
+}
+
+async function openHoldRequestModal(remnantId) {
+    // Public visitors request holds from inside the browsing flow instead of
+    // being sent to a separate page, which keeps the experience lightweight.
+    const remnant = allRemnants.find((item) => String(displayRemnantId(item)) === String(remnantId));
+    if (!remnant) return;
+
+    if (!salesRepData.length) {
+        await loadSalesReps();
+    }
+
+    activeHoldRequestRemnant = remnant;
+    const form = document.getElementById("hold-request-form");
+    if (form) form.reset();
+    setFieldValue("hold-request-internal-id", internalRemnantId(remnant));
+    setFieldValue("hold-request-external-id", displayRemnantId(remnant));
+
+    const label = document.getElementById("hold-request-remnant-label");
+    if (label) {
+        label.textContent = `Request a hold for Remnant #${displayRemnantId(remnant)}${remnant.name ? ` - ${remnant.name}` : ""}.`;
+    }
+
+    openModal("hold-request-modal");
+}
+
 // Load the lookup tables that feed filters and form selects.
 async function loadLookups() {
     const res = await fetch("/api/lookups");
@@ -1047,6 +1689,31 @@ async function loadLookups() {
     renderSelectOptions("add-thickness", lookupData.thicknesses, "Select thickness");
 }
 
+async function loadSalesReps() {
+    // Sales reps are lazy-loaded because the public page does not need them
+    // until someone actually opens the hold-request modal.
+    if (salesRepLoadPromise) return salesRepLoadPromise;
+
+    salesRepLoadPromise = (async () => {
+        const endpoint = isManagementView ? "/api/sales-reps" : "/api/public/sales-reps";
+        const res = await fetch(endpoint);
+        if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to load sales reps"));
+
+        salesRepData = await res.json();
+        renderSalesRepOptions("edit-hold-owner", salesRepData, "Select hold owner");
+        renderSalesRepOptions("manage-hold-owner", salesRepData, "Select hold owner");
+        renderSalesRepOptions("hold-request-sales-rep", salesRepData, "Select sales rep");
+        return salesRepData;
+    })();
+
+    try {
+        return await salesRepLoadPromise;
+    } catch (error) {
+        salesRepLoadPromise = null;
+        throw error;
+    }
+}
+
 async function loadInventorySummary() {
     const res = await fetch("/api/remnants/summary");
     if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to load remnant summary"));
@@ -1059,6 +1726,41 @@ async function loadInventorySummary() {
 
     renderInventorySummary();
     renderStatusSummary();
+}
+
+async function loadHoldRequests() {
+    if (!isManagementView) return [];
+
+    const res = await fetch("/api/hold-requests?status=pending");
+    if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to load hold requests"));
+
+    holdRequestsData = await res.json();
+    renderHoldRequests();
+    renderHoldRequestCount();
+    return holdRequestsData;
+}
+
+async function reviewHoldRequest(requestId, status) {
+    const jobNumberInput = document.querySelector(`[data-request-job-number="${requestId}"]`);
+    const jobNumber = jobNumberInput instanceof HTMLInputElement ? jobNumberInput.value.trim() : "";
+
+    const res = await fetch(`/api/hold-requests/${requestId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            status,
+            job_number: jobNumber,
+        }),
+    });
+
+    if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to update hold request"));
+
+    await Promise.all([
+        loadHoldRequests(),
+        loadRemnants(),
+        loadInventorySummary(),
+    ]);
+    showActionMessage(status === "approved" ? "Hold request approved." : "Hold request denied.");
 }
 
 // Load the current user's profile so the management UI can adapt itself by role.
@@ -1094,11 +1796,53 @@ async function loadNextStoneId() {
 // All management-only click handlers live here so the public page keeps a
 // lighter startup path.
 function bindManagementActions() {
+    // All management-only listeners are grouped here so the public page does
+    // not carry extra event wiring for controls it never renders.
     if (!isManagementView) return;
 
     document.addEventListener("click", (event) => {
+        const holdManagementTrigger = event.target.closest("[data-hold-remnant-id]");
+        if (holdManagementTrigger) {
+            openManageHoldModal(holdManagementTrigger.dataset.holdRemnantId);
+            return;
+        }
+
+        const holdRequestAction = event.target.closest("[data-hold-request-action]");
+        if (holdRequestAction) {
+            reviewHoldRequest(
+                holdRequestAction.dataset.holdRequestId,
+                holdRequestAction.dataset.holdRequestAction
+            ).catch((error) => showActionMessage(error.message, true));
+            return;
+        }
+
+        const quickStatusTrigger = event.target.closest("[data-quick-status]");
+        if (quickStatusTrigger) {
+            if (quickStatusTrigger.dataset.quickStatus === "sold") {
+                openSoldModal(quickStatusTrigger.dataset.remnantId, "card");
+                return;
+            }
+            updateStatusFromCard(
+                quickStatusTrigger.dataset.remnantId,
+                quickStatusTrigger.dataset.quickStatus
+            ).catch((error) => showActionMessage(error.message, true));
+            return;
+        }
+
+        const quickHoldTrigger = event.target.closest("[data-quick-hold]");
+        if (quickHoldTrigger) {
+            const action = quickHoldTrigger.dataset.quickHold;
+            const remnantId = quickHoldTrigger.dataset.remnantId;
+            const task = action === "release"
+                ? quickReleaseHold(remnantId)
+                : (openQuickHoldModal(remnantId), Promise.resolve());
+            Promise.resolve(task).catch((error) => showActionMessage(error.message, true));
+            return;
+        }
+
         const trigger = event.target.closest("[data-remnant-id]");
         if (trigger) {
+            if (!canManageStructure()) return;
             openEditModal(trigger.dataset.remnantId);
         }
     });
@@ -1107,6 +1851,53 @@ function bindManagementActions() {
     if (addButton) {
         addButton.addEventListener("click", openAddModal);
     }
+
+    document.getElementById("open-hold-requests")?.addEventListener("click", async () => {
+        try {
+            const title = document.getElementById("hold-requests-title");
+            if (title) {
+                title.textContent = currentProfile?.system_role === "status_user"
+                    ? "Your hold requests"
+                    : "Pending hold requests";
+            }
+            const container = document.getElementById("hold-requests-list");
+            if (container) container.innerHTML = "Loading...";
+            openModal("hold-requests-modal");
+            await loadHoldRequests();
+        } catch (error) {
+            closeModal("hold-requests-modal");
+            showActionMessage(error.message, true);
+        }
+    });
+
+    document.getElementById("quick-hold-form")?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        if (!activeQuickHoldRemnantId) {
+            showActionMessage("Remnant selection was lost. Please try again.", true);
+            return;
+        }
+
+        const jobNumber = document.getElementById("quick-hold-job-number")?.value.trim() || "";
+        if (!jobNumber) {
+            showActionMessage("Job number is required", true);
+            return;
+        }
+
+        try {
+            await quickCreateHold(activeQuickHoldRemnantId, {
+                hold_owner_user_id: currentProfile?.id || "",
+                expires_at: defaultHoldExpirationInputValue(),
+                job_number: jobNumber,
+                project_reference: document.getElementById("quick-hold-project-reference")?.value.trim() || "",
+                notes: document.getElementById("quick-hold-notes")?.value.trim() || "",
+            });
+            closeModal("quick-hold-modal");
+            activeQuickHoldRemnantId = null;
+        } catch (error) {
+            showActionMessage(error.message, true);
+        }
+    });
 
     ["edit", "add"].forEach((prefix) => {
         const checkbox = document.getElementById(`${prefix}-l-shape`);
@@ -1260,6 +2051,30 @@ function bindManagementActions() {
         }
     });
 
+    document.getElementById("edit-save-hold")?.addEventListener("click", async () => {
+        try {
+            await saveHold();
+        } catch (error) {
+            showActionMessage(error.message, true);
+        }
+    });
+
+    document.getElementById("edit-release-hold")?.addEventListener("click", async () => {
+        try {
+            await releaseHold();
+        } catch (error) {
+            showActionMessage(error.message, true);
+        }
+    });
+
+    document.getElementById("manage-hold-save")?.addEventListener("click", async () => {
+        try {
+            await saveHold();
+        } catch (error) {
+            showActionMessage(error.message, true);
+        }
+    });
+
     document.getElementById("edit-mark-available")?.addEventListener("click", async () => {
         try {
             await updateStatus("available");
@@ -1268,17 +2083,14 @@ function bindManagementActions() {
         }
     });
 
-    document.getElementById("edit-mark-hold")?.addEventListener("click", async () => {
-        try {
-            await updateStatus("hold");
-        } catch (error) {
-            showActionMessage(error.message, true);
-        }
+    document.getElementById("edit-mark-sold")?.addEventListener("click", async () => {
+        openSoldModal(activeRemnantId, "edit");
     });
 
-    document.getElementById("edit-mark-sold")?.addEventListener("click", async () => {
+    document.getElementById("sold-project-form")?.addEventListener("submit", async (event) => {
+        event.preventDefault();
         try {
-            await updateStatus("sold");
+            await submitSoldStatus();
         } catch (error) {
             showActionMessage(error.message, true);
         }
@@ -1290,6 +2102,52 @@ function bindManagementActions() {
         } catch (error) {
             showActionMessage(error.message, true);
         }
+    });
+
+    document.getElementById("hold-request-form")?.addEventListener("submit", (event) => {
+        // Public hold requests still submit through a hidden iframe so the page
+        // can stay on the inventory view instead of navigating to raw API JSON.
+        const form = event.currentTarget;
+        if (!(form instanceof HTMLFormElement)) return;
+
+        if (activeHoldRequestRemnant) {
+            setFieldValue("hold-request-internal-id", internalRemnantId(activeHoldRequestRemnant));
+            setFieldValue("hold-request-external-id", displayRemnantId(activeHoldRequestRemnant));
+        }
+
+        const externalId = document.getElementById("hold-request-external-id")?.value;
+        const internalId = document.getElementById("hold-request-internal-id")?.value;
+        if (!externalId && !internalId) {
+            event.preventDefault();
+            showActionMessage("Remnant selection was lost. Please reopen the hold request.", true);
+            return;
+        }
+
+        window.__holdRequestNativePending = true;
+        closeModal("hold-request-modal");
+        activeHoldRequestRemnant = null;
+    });
+
+    window.addEventListener("message", (event) => {
+        // The iframe response posts a small payload back to the main window.
+        // We translate that into the visible success/error toast here.
+        if (event.origin !== window.location.origin) return;
+        if (!window.__holdRequestNativePending) return;
+
+        const payload = event.data;
+        if (!payload || payload.type !== "hold-request") return;
+
+        window.__holdRequestNativePending = false;
+
+        if (payload.success === true) {
+            closeModal("hold-request-modal");
+            activeHoldRequestRemnant = null;
+            showActionMessage("Hold request received. A sales rep will review it soon.");
+            return;
+        }
+
+        const errorMessage = payload.error || "Failed to submit hold request";
+        showActionMessage(errorMessage, true);
     });
 
     document.getElementById("edit-modify")?.addEventListener("click", async () => {
@@ -1327,6 +2185,8 @@ async function readErrorMessage(response, fallbackMessage) {
 // Fetch the current remnant list from the API based on URL filters. Abort
 // previous in-flight requests so fast typing does not render stale results.
 async function loadRemnants() {
+    // The grid is the main thing users came to see, so we render a skeleton
+    // immediately and abort stale in-flight requests when filters change fast.
     const container = document.getElementById("remnants-container");
     if (!container) return;
     container.innerHTML = loadingMarkup();
@@ -1410,9 +2270,12 @@ function bindSummaryActions() {
 
 // Page bootstrap:
 // 1. hydrate form state from the URL
-// 2. load lookups/profile metadata
-// 3. attach live interactions
-// 4. fetch and render remnants
+// 2. attach shared interactions
+// 3. load whichever metadata the current page needs
+// 4. fetch and render the remnant grid
+//
+// Public and private share this same startup path. The main difference is that
+// management mode loads extra role/profile/sales-rep/hold-request data first.
 document.addEventListener("DOMContentLoaded", async () => {
     try {
         initFormFromURL();
@@ -1421,13 +2284,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         bindGlobalShortcuts();
         bindSummaryActions();
 
-        await loadLookups();
-        await loadInventorySummary();
         if (isManagementView) {
-            await loadProfile();
+            await Promise.all([
+                loadLookups(),
+                loadSalesReps(),
+                loadInventorySummary(),
+                loadProfile(),
+                loadHoldRequests(),
+            ]);
             await loadNextStoneId();
             toggleLShapeFields("edit", false);
             toggleLShapeFields("add", false);
+        } else {
+            await Promise.all([
+                loadLookups(),
+                loadInventorySummary(),
+            ]);
         }
 
         const form = document.getElementById("filter-form");

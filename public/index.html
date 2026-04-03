@@ -24,7 +24,7 @@
         },
       };
     </script>
-    <script src="/main.js" defer></script>
+    <script src="/main.js?v=2026-04-03-remnant-sales-1" defer></script>
   </head>
   <body class="min-h-screen bg-[linear-gradient(180deg,#f8f1ea_0%,#f4ede6_26%,#efe7de_100%)] text-[#2d2623] font-sans text-[15px]">
     <div class="relative overflow-hidden">
@@ -126,6 +126,65 @@
         >
           Loading...
         </div>
+      </div>
+    </div>
+
+    <div
+      id="hold-request-modal"
+      data-modal-overlay="hold-request-modal"
+      class="hidden fixed inset-0 z-[72] bg-black/50 px-4 py-8 overflow-y-auto"
+    >
+      <div class="mx-auto max-w-2xl rounded-[32px] border border-white/70 bg-white shadow-soft overflow-hidden">
+        <div class="flex items-center justify-between border-b border-[#eadfd7] bg-[linear-gradient(135deg,#fffaf6_0%,#f7efe8_100%)] px-6 py-5">
+          <div>
+            <p class="text-xs uppercase tracking-[0.22em] text-[#8a6a54]">Hold Request</p>
+            <h2 class="text-2xl font-semibold text-[#2c211c]">Request a hold</h2>
+            <p id="hold-request-remnant-label" class="mt-1 text-sm text-[#7d6759]">Submit a request for this remnant.</p>
+          </div>
+          <button
+            type="button"
+            data-close-modal="hold-request-modal"
+            class="h-10 w-10 rounded-full border border-gray-300 text-xl transition-colors active:bg-gray-200"
+            aria-label="Close hold request form"
+          >
+            ×
+          </button>
+        </div>
+        <form id="hold-request-form" action="/api/hold-requests" method="post" target="hold-request-target" class="grid gap-4 p-6" onsubmit="document.getElementById('hold-request-modal')?.classList.add('hidden');document.body.classList.remove('overflow-hidden');window.showActionMessage&&window.showActionMessage('Hold request received. A sales rep will review it soon.');">
+          <input id="hold-request-internal-id" name="remnant_id" type="hidden" />
+          <input id="hold-request-external-id" name="external_remnant_id" type="hidden" />
+          <input name="response_mode" type="hidden" value="iframe" />
+          <label class="block text-sm font-medium text-gray-700">
+            Name
+            <input id="hold-request-name" name="requester_name" type="text" class="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm" required />
+          </label>
+          <label class="block text-sm font-medium text-gray-700">
+            Email
+            <input id="hold-request-email" name="requester_email" type="email" class="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm" required />
+          </label>
+          <label class="block text-sm font-medium text-gray-700">
+            Sales Rep
+            <select id="hold-request-sales-rep" name="sales_rep_user_id" class="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"></select>
+          </label>
+          <label class="block text-sm font-medium text-gray-700">
+            Project Reference
+            <input id="hold-request-project-reference" name="project_reference" type="text" class="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm" placeholder="Project name, client, or address" />
+          </label>
+          <label class="block text-sm font-medium text-gray-700">
+            Notes
+            <textarea id="hold-request-notes" name="notes" rows="3" class="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm" placeholder="Anything the sales rep should know"></textarea>
+          </label>
+          <div class="flex items-center justify-between gap-3 pt-2">
+            <p class="text-sm text-[#6d584b]">A sales rep will review this request before any hold is approved.</p>
+            <button
+              type="submit"
+              class="inline-flex h-12 items-center justify-center rounded-2xl bg-[#232323] px-6 text-sm font-semibold uppercase tracking-[0.16em] text-white shadow-lg shadow-[#232323]/15 transition-all hover:-translate-y-0.5 hover:bg-[#E78B4B] active:translate-y-0"
+            >
+              Send Request
+            </button>
+          </div>
+        </form>
+        <iframe name="hold-request-target" class="hidden" tabindex="-1" aria-hidden="true"></iframe>
       </div>
     </div>
 

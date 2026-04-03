@@ -24,6 +24,11 @@ The app expects the Supabase schema to include:
 - `public.thicknesses`
 - `public.profiles`
 - `public.remnants`
+- `public.holds`
+- `public.hold_requests`
+- `public.notification_queue`
+- `public.audit_logs`
+- `public.remnant_sales`
 
 Key `public.remnants` columns used by this repo:
 
@@ -52,11 +57,12 @@ Key `public.remnants` columns used by this repo:
 
 The viewer and management UI now use lookup-table IDs instead of free-text material and thickness fields.
 
-`GET /api/remnants` returns active rows from `public.remnants`:
+`GET /api/remnants` now serves two modes:
 
-- `deleted_at is null`
-- ordered by `id desc`
-- joined with `companies`, `materials`, and `thicknesses`
+- authenticated management users read the internal `public.remnants` table
+- public users read the `public.active_remnants` view
+- both paths are enriched with current hold metadata
+- management rows are also enriched with latest status actor / sale metadata
 
 Supported filter params:
 
@@ -70,11 +76,20 @@ Extra API endpoints:
 
 - `GET /api/lookups`
 - `GET /api/me`
+- `GET /api/remnants/summary`
+- `GET /api/hold-requests`
+- `POST /api/hold-requests`
+- `PATCH /api/hold-requests/:id`
+- `POST /api/remnants/:id/hold`
+- `POST /api/remnants/:id/status`
+- `PATCH /api/remnants/:id/image`
 
 Management actions:
 
 - status changes use `public.update_remnant_status(bigint, text)`
 - archive/delete uses `public.soft_delete_remnant(bigint)`
+- hold creation/renewal uses the dedicated `public.holds` table
+- sales are recorded in `public.remnant_sales`
 
 ## Local Development
 
@@ -87,15 +102,21 @@ npm start
 
 ### Scraper
 
+Preferred entrypoint:
+
 ```bash
-pip install -r requirements.txt
 python -m scraper
+```
+
+Direct entrypoint also supported:
+
+```bash
+python scraper/sync_remnants.py
 ```
 
 Also supported:
 
 ```bash
-python scraper/sync_remnants.py
 python scraper/selenium_utils.py
 ```
 
@@ -159,25 +180,15 @@ Important behavior:
 - the Moraware identifier is stored in `remnants.moraware_remnant_id`
 - manual app-created remnants can coexist with synced Moraware rows
 - stale-row reconciliation only targets rows with a non-null `moraware_remnant_id`
-
-## GitHub Cron
-
-Cron workflow file:
-
-- `.github/workflows/remnants-cron.yml`
-
-Suggested secrets:
-
-- `MORAWARE_URL`
-- `MORAWARE_USER`
-- `MORAWARE_PASS`
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `SUPABASE_BUCKET`
-- `MORAWARE_COMPANY_ID` or `MORAWARE_COMPANY_NAME`
+- image upload naming is simplified to `remnant_<id>.<ext>`
 
 ## Notes
 
 - Last scraper issues report is written to `scraper/last_sync_issues.json`.
 - The scraper uses the service role so it can resolve lookups and sync rows without being blocked by RLS.
 - Status values in the app and database are lowercase: `available`, `hold`, `sold`.
+
+## Known Issues
+
+- Public hold requests still show a success message before the server confirms success.
+  The public hold-request form currently closes the modal and shows the success toast immediately on submit, so a backend failure can still look successful to the visitor.

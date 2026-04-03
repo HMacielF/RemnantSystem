@@ -138,3 +138,6 @@ dist
 # Python
 __pycache__/
 *.pyc
+
+# Local SQL snapshots / migrations
+sql/
