@@ -734,14 +734,14 @@
     <div
       id="crop-image-modal"
       data-modal-overlay="crop-image-modal"
-      class="hidden fixed inset-0 z-[75] bg-black/60 px-4 py-6 overflow-y-auto"
+      class="hidden fixed inset-0 z-[75] bg-black/60 px-4 py-2 overflow-y-auto"
     >
       <div class="mx-auto max-w-4xl overflow-hidden rounded-[32px] border border-white/20 bg-white shadow-[0_24px_80px_rgba(0,0,0,0.25)]">
-        <div class="flex items-center justify-between border-b border-[#eadfd7] bg-[linear-gradient(135deg,#fffaf6_0%,#f7efe8_100%)] px-6 py-5">
+        <div class="flex items-center justify-between border-b border-[#eadfd7] bg-[linear-gradient(135deg,#fffaf6_0%,#f7efe8_100%)] px-5 py-3">
           <div>
             <p class="text-xs uppercase tracking-[0.22em] text-[#8a6a54]">Image Tool</p>
-            <h2 class="text-2xl font-semibold">Crop Image</h2>
-            <p class="mt-1 text-sm text-[#7d6759]">Drag the image or crop frame to reposition it, then tilt if you need to straighten the photo.</p>
+            <h2 class="text-xl font-semibold">Crop Image</h2>
+            <p class="mt-1 text-sm text-[#7d6759]">Reposition, rotate, and save the corrected photo.</p>
           </div>
           <button
             type="button"
@@ -752,18 +752,51 @@
             ×
           </button>
         </div>
-        <div class="bg-[#fbf8f6] p-6">
-          <div class="overflow-hidden rounded-[28px] border border-[#eadfd7] bg-[#f2ebe3] p-4 shadow-sm">
+        <div class="bg-[#fbf8f6] p-3.5">
+          <div class="overflow-hidden rounded-[28px] border border-[#eadfd7] bg-[linear-gradient(180deg,#f6efe8_0%,#efe5db_100%)] p-2.5 shadow-sm">
+            <div class="mb-2.5 flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-white/60 bg-white/55 px-3.5 py-2">
+              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">Crop Workspace</p>
+              <span class="rounded-full border border-[#e7d4c4] bg-[#fff8f1] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9a6949]">
+                Free Crop
+              </span>
+            </div>
             <canvas
               id="crop-canvas"
               width="1280"
-              height="900"
-              class="aspect-[4/3] w-full cursor-grab rounded-[22px] bg-[#e8ddd2]"
+              height="500"
+              class="h-[500px] w-full cursor-grab rounded-[22px] bg-[#e8ddd2]"
             ></canvas>
           </div>
-          <div class="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px_280px] lg:items-end">
-            <div class="rounded-[24px] border border-[#eadfd7] bg-[#fffaf6] p-4">
-              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+          <div class="mt-3.5 grid gap-3.5 lg:grid-cols-[minmax(0,1fr)_270px] lg:items-stretch">
+            <div class="rounded-[24px] border border-[#eadfd7] bg-[#fffaf6] p-4 shadow-sm">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+                    Adjust Image
+                  </p>
+                  <p class="mt-1 text-sm text-[#6f594a]">Use full turns for sideways photos, then drag the image into place.</p>
+                </div>
+                <span id="crop-rotation-label" class="rounded-full border border-[#e7d4c4] bg-white px-3 py-1 text-sm font-semibold text-[#6f594a]">
+                  0°
+                </span>
+              </div>
+              <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  id="crop-rotate-90-left"
+                  class="rounded-2xl border border-[#d7b198] bg-white px-4 py-3 text-sm font-semibold text-[#8f4c1a] shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#fff8f1] active:translate-y-0 active:scale-[0.99]"
+                >
+                  90° Left
+                </button>
+                <button
+                  type="button"
+                  id="crop-rotate-90-right"
+                  class="rounded-2xl border border-[#d7b198] bg-white px-4 py-3 text-sm font-semibold text-[#8f4c1a] shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#fff8f1] active:translate-y-0 active:scale-[0.99]"
+                >
+                  90° Right
+                </button>
+              </div>
+              <p class="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
                 Tilt
               </p>
               <input
@@ -775,40 +808,28 @@
                 value="0"
                 class="mt-3 w-full accent-[#E78B4B]"
               />
-              <div class="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+              <p class="mt-2 text-xs font-medium text-[#8d7565]">Linear straighten control</p>
+            </div>
+            <div class="rounded-[24px] border border-[#eadfd7] bg-white p-4 shadow-sm">
+              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">Actions</p>
+              <p class="mt-1 text-sm text-[#6f594a]">Reset or save the updated image.</p>
+              <div class="mt-4 grid gap-3">
                 <button
                   type="button"
-                  id="crop-rotate-left"
-                  class="rounded-2xl border border-[#d7b198] bg-white px-3 py-2 text-sm font-semibold text-[#8f4c1a] shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#fff8f1] active:translate-y-0 active:scale-[0.99]"
+                  id="crop-reset"
+                  class="rounded-2xl border border-[#d7b198] bg-white px-4 py-3 text-sm font-semibold text-[#8f4c1a] shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#fff8f1] active:translate-y-0 active:scale-[0.99]"
                 >
-                  -1°
+                  Reset
                 </button>
-                <span id="crop-rotation-label" class="text-center text-sm font-semibold text-[#6f594a]">
-                  0.0°
-                </span>
                 <button
                   type="button"
-                  id="crop-rotate-right"
-                  class="rounded-2xl border border-[#d7b198] bg-white px-3 py-2 text-sm font-semibold text-[#8f4c1a] shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#fff8f1] active:translate-y-0 active:scale-[0.99]"
+                  id="crop-save"
+                  class="rounded-2xl bg-[#232323] px-4 py-3 text-sm font-semibold uppercase tracking-[0.08em] text-white shadow-[0_14px_30px_rgba(35,35,35,0.18)] transition-all hover:bg-[#E78B4B] active:translate-y-0 active:scale-[0.99]"
                 >
-                  +1°
+                  Save Crop
                 </button>
               </div>
             </div>
-            <button
-              type="button"
-              id="crop-reset"
-              class="rounded-2xl border border-[#d7b198] bg-white px-4 py-3 text-sm font-semibold text-[#8f4c1a] shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#fff8f1] active:translate-y-0 active:scale-[0.99]"
-            >
-              Reset
-            </button>
-            <button
-              type="button"
-              id="crop-save"
-              class="rounded-2xl bg-[#232323] px-4 py-3 text-sm font-semibold uppercase tracking-[0.08em] text-white shadow-[0_14px_30px_rgba(35,35,35,0.18)] transition-all hover:bg-[#E78B4B] active:translate-y-0 active:scale-[0.99]"
-            >
-              Save Crop
-            </button>
           </div>
         </div>
       </div>

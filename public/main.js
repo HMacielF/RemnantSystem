@@ -59,6 +59,7 @@ const cropState = {
     startOffsetY: 0,
     dragMode: null,
     activeHandle: null,
+    rotationBase: 0,
     rotation: 0,
     cropRect: {
         x: 120,
@@ -941,11 +942,20 @@ function cropGeometry() {
     return { canvas, image, drawX, drawY, drawWidth, drawHeight };
 }
 
+function totalCropRotation() {
+    return cropState.rotationBase + cropState.rotation;
+}
+
+function formatCropRotationLabel(value) {
+    const rounded = Number(value.toFixed(1));
+    return Number.isInteger(rounded) ? `${rounded}°` : `${rounded.toFixed(1)}°`;
+}
+
 function updateRotationControls() {
     const slider = document.getElementById("crop-rotation");
     const label = document.getElementById("crop-rotation-label");
     if (slider) slider.value = String(cropState.rotation);
-    if (label) label.textContent = `${cropState.rotation.toFixed(1)}°`;
+    if (label) label.textContent = formatCropRotationLabel(totalCropRotation());
 }
 
 function clampCropRect() {
@@ -1041,7 +1051,7 @@ function renderCropCanvas() {
     const centerY = drawY + drawHeight / 2;
     context.save();
     context.translate(centerX, centerY);
-    context.rotate((cropState.rotation * Math.PI) / 180);
+    context.rotate((totalCropRotation() * Math.PI) / 180);
     context.drawImage(cropState.image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
     context.restore();
     drawCropOverlay(context, canvas);
@@ -1059,6 +1069,7 @@ function resetCropState() {
     };
     cropState.dragMode = null;
     cropState.activeHandle = null;
+    cropState.rotationBase = 0;
     cropState.rotation = 0;
 
     updateRotationControls();
@@ -1135,7 +1146,7 @@ async function saveCropImage() {
     const centerY = geometry.drawY + geometry.drawHeight / 2;
     sourceContext.save();
     sourceContext.translate(centerX, centerY);
-    sourceContext.rotate((cropState.rotation * Math.PI) / 180);
+    sourceContext.rotate((totalCropRotation() * Math.PI) / 180);
     sourceContext.drawImage(
         cropState.image,
         -geometry.drawWidth / 2,
@@ -2081,14 +2092,14 @@ function bindManagementActions() {
         renderCropCanvas();
     });
 
-    document.getElementById("crop-rotate-left")?.addEventListener("click", () => {
-        cropState.rotation = Math.max(-20, Number((cropState.rotation - 1).toFixed(1)));
+    document.getElementById("crop-rotate-90-left")?.addEventListener("click", () => {
+        cropState.rotationBase -= 90;
         updateRotationControls();
         renderCropCanvas();
     });
 
-    document.getElementById("crop-rotate-right")?.addEventListener("click", () => {
-        cropState.rotation = Math.min(20, Number((cropState.rotation + 1).toFixed(1)));
+    document.getElementById("crop-rotate-90-right")?.addEventListener("click", () => {
+        cropState.rotationBase += 90;
         updateRotationControls();
         renderCropCanvas();
     });
