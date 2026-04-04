@@ -222,15 +222,6 @@
             />
           </label>
           <label class="block text-sm font-medium text-gray-700">
-            Project Reference
-            <input
-              id="quick-hold-project-reference"
-              type="text"
-              class="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
-              placeholder="Project name, client, or address"
-            />
-          </label>
-          <label class="block text-sm font-medium text-gray-700">
             Notes
             <textarea
               id="quick-hold-notes"
@@ -263,12 +254,12 @@
       data-modal-overlay="sold-project-modal"
       class="hidden fixed inset-0 z-[67] bg-black/45 px-4 py-8 overflow-y-auto"
     >
-      <div class="mx-auto max-w-xl overflow-hidden rounded-[32px] border border-white/75 bg-white shadow-soft">
+      <div class="mx-auto max-w-2xl overflow-hidden rounded-[32px] border border-white/75 bg-white shadow-soft">
         <div class="flex items-center justify-between border-b border-[#eadfd7] bg-[linear-gradient(135deg,#fffaf6_0%,#f7efe8_100%)] px-6 py-5">
           <div>
-            <p class="text-xs uppercase tracking-[0.22em] text-[#8a6a54]">Sold Project</p>
-            <h2 id="sold-project-title" class="text-2xl font-semibold text-[#2c211c]">Mark as sold</h2>
-            <p id="sold-project-subtitle" class="mt-1 text-sm text-[#7d6759]">Capture the project before marking this remnant sold.</p>
+            <p class="text-xs uppercase tracking-[0.22em] text-[#8a6a54]">Sale Workspace</p>
+            <h2 id="sold-project-title" class="text-2xl font-semibold text-[#2c211c]">Manage sale</h2>
+            <p id="sold-project-subtitle" class="mt-1 text-sm text-[#7d6759]">Capture the sale details before marking this remnant sold.</p>
           </div>
           <button
             type="button"
@@ -279,18 +270,45 @@
             ×
           </button>
         </div>
-        <form id="sold-project-form" class="grid gap-4 p-6">
-          <label class="block text-sm font-medium text-gray-700">
-            Job Number
-            <input
-              id="sold-job-number"
-              type="text"
-              class="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
-              placeholder="Job / quote reference"
-              required
-            />
-          </label>
-          <div class="grid grid-cols-2 gap-3 pt-2">
+        <form id="sold-project-form" class="p-6">
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">Sale Details</p>
+            <span class="rounded-full bg-[#fdf0ef] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#b8574f]">
+              Mark as Sold
+            </span>
+          </div>
+          <div class="mt-3 rounded-2xl bg-[#fbf5ef] px-4 py-3 text-sm text-[#6f594a]">
+            Sale history keeps the owner, job number, and any notes for this remnant.
+          </div>
+          <div class="mt-4 grid grid-cols-1 gap-3">
+            <label id="sold-owner-field" class="hidden block text-sm font-medium text-gray-700">
+              Sold By
+              <select
+                id="sold-owner-user-id"
+                class="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
+              ></select>
+            </label>
+            <label class="block text-sm font-medium text-gray-700">
+              Job Number
+              <input
+                id="sold-job-number"
+                type="text"
+                class="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
+                placeholder="Job / quote reference"
+                required
+              />
+            </label>
+            <label class="block text-sm font-medium text-gray-700">
+              Sale Notes
+              <textarea
+                id="sold-notes"
+                rows="3"
+                class="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
+                placeholder="Optional sale context"
+              ></textarea>
+            </label>
+          </div>
+          <div class="mt-5 grid grid-cols-2 gap-3">
             <button
               type="button"
               data-close-modal="sold-project-modal"
@@ -300,7 +318,7 @@
             </button>
             <button
               type="submit"
-              class="rounded-2xl bg-rose-100 py-3 text-sm font-semibold uppercase tracking-[0.08em] text-rose-800 border border-rose-200 shadow-sm transition-all hover:bg-rose-200 active:scale-[0.99]"
+              class="rounded-2xl bg-rose-100 py-3 text-sm font-semibold uppercase tracking-[0.08em] text-rose-800 border border-rose-200 transition-colors active:bg-rose-200"
             >
               Mark Sold
             </button>
@@ -340,6 +358,9 @@
           <div id="manage-hold-summary" class="mt-3 rounded-2xl bg-[#fbf5ef] px-4 py-3 text-sm text-[#6f594a]">
             No hold is linked to this remnant yet.
           </div>
+          <p class="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+            All holds expire automatically after 7 days.
+          </p>
           <div class="mt-4 grid grid-cols-1 gap-3">
             <label class="block text-sm font-medium text-gray-700">
               Hold Owner
@@ -347,23 +368,6 @@
                 id="manage-hold-owner"
                 class="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
               ></select>
-            </label>
-            <label class="block text-sm font-medium text-gray-700">
-              Expiration Date
-              <input
-                id="manage-hold-expires-at"
-                type="date"
-                class="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
-              />
-            </label>
-            <label class="block text-sm font-medium text-gray-700">
-              Project Reference
-              <input
-                id="manage-hold-project-reference"
-                type="text"
-                class="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
-                placeholder="Smith Kitchen Project"
-              />
             </label>
             <label class="block text-sm font-medium text-gray-700">
               Job Number
@@ -384,14 +388,28 @@
               ></textarea>
             </label>
           </div>
-          <div class="mt-5">
-            <button type="button" id="manage-hold-save" class="w-full rounded-2xl bg-amber-100 text-amber-900 py-3 text-sm font-semibold border border-amber-200 transition-colors active:bg-amber-200">
-              Save Hold
+          <div class="mt-5 grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              data-close-modal="manage-hold-modal"
+              class="rounded-2xl border border-[#d8c7b8] bg-white py-3 text-sm font-semibold text-[#6d584b] shadow-sm transition hover:border-[#E78B4B] hover:text-[#241c18]"
+            >
+              Cancel
+            </button>
+            <button type="button" id="manage-hold-save" class="rounded-2xl bg-amber-100 text-amber-900 py-3 text-sm font-semibold uppercase tracking-[0.08em] border border-amber-200 transition-colors active:bg-amber-200">
+              Mark Hold
             </button>
           </div>
         </div>
       </div>
     </div>
+
+    <footer class="px-4 pb-10 pt-2 md:px-6">
+      <div class="mx-auto max-w-[1680px] rounded-[28px] border border-white/70 bg-white/55 px-6 py-5 text-center shadow-sm backdrop-blur">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#9c7355]">Built by EndoMF14</p>
+        <p class="mt-2 text-sm text-[#6d584b]">Designed to keep stone inventory clear, fast, and easy to run.</p>
+      </div>
+    </footer>
 
     <div
       id="edit-remnant-modal"
@@ -684,19 +702,9 @@
                 </div>
               </div>
             </div>
-
-            <label class="block text-sm font-medium text-gray-700 rounded-[28px] border border-[#eadfd7] bg-[#fffaf6] p-5">
-              <span class="text-xs uppercase tracking-[0.18em] text-[#8a6a54]">Photo</span>
-              <input
-                id="add-image-file"
-                type="file"
-                accept="image/*"
-                class="mt-3 w-full rounded-2xl border border-[#d9c5b7] bg-white px-4 py-3 text-sm shadow-sm"
-              />
-            </label>
           </form>
           <div class="border-t lg:border-t-0 lg:border-l border-[#eadfd7] bg-[radial-gradient(circle_at_top,#fff8f1_0%,#f7eee6_58%,#f3e7dd_100%)] p-6 flex flex-col">
-            <p class="text-xs uppercase tracking-[0.22em] text-[#8a6a54] mb-3">Preview</p>
+            <p class="text-xs uppercase tracking-[0.22em] text-[#8a6a54] mb-3">Photo Preview</p>
             <div class="rounded-[30px] border border-white/80 bg-white/85 p-3 shadow-[0_16px_40px_rgba(63,45,31,0.10)]">
               <div class="aspect-[4/3] rounded-[24px] bg-white border border-gray-200 overflow-hidden shadow-sm flex items-center justify-center">
               <img
@@ -705,7 +713,7 @@
                 alt="New remnant preview"
                 class="h-full w-full object-cover hidden"
               />
-              <span id="add-image-empty" class="text-sm text-gray-400">Image preview</span>
+              <span id="add-image-empty" class="text-sm text-gray-400">Photo preview</span>
             </div>
             </div>
             <button
@@ -715,14 +723,19 @@
             >
               Crop Image
             </button>
-            <div class="mt-5 rounded-[24px] bg-white/75 border border-white/70 px-4 py-4 text-sm text-[#6f594a]">
-              <p class="font-semibold text-[#3b2f28]">Quick add tips</p>
-              <p class="mt-2">Start with the suggested Stone ID #, then change it only if you need a specific Systemize number.</p>
-            </div>
+            <label class="mt-4 block text-sm font-medium text-gray-700 rounded-[24px] border border-white/80 bg-white/78 p-4 shadow-[0_16px_40px_rgba(63,45,31,0.08)]">
+              <span class="text-xs uppercase tracking-[0.18em] text-[#8a6a54]">Photo</span>
+              <input
+                id="add-image-file"
+                type="file"
+                accept="image/*"
+                class="mt-3 w-full rounded-2xl border border-[#d9c5b7] bg-white px-4 py-3 text-sm shadow-sm"
+              />
+            </label>
             <button
               type="button"
               id="add-create"
-              class="mt-auto flex w-full items-center justify-center rounded-2xl bg-[#232323] px-6 py-4 text-sm font-semibold tracking-[0.08em] uppercase text-white shadow-[0_16px_32px_rgba(35,35,35,0.18)] transition-all hover:bg-[#E78B4B] hover:shadow-[0_18px_36px_rgba(231,139,75,0.28)] active:scale-[0.99] active:brightness-95"
+              class="mt-6 flex w-full items-center justify-center rounded-2xl bg-[#232323] px-6 py-4 text-sm font-semibold tracking-[0.08em] uppercase text-white shadow-[0_16px_32px_rgba(35,35,35,0.18)] transition-all hover:bg-[#E78B4B] hover:shadow-[0_18px_36px_rgba(231,139,75,0.28)] active:scale-[0.99] active:brightness-95"
             >
               Add Remnant
             </button>

@@ -67,7 +67,6 @@ const HOLD_SELECT = `
     expires_at,
     status,
     notes,
-    project_reference,
     job_number,
     released_at,
     released_by_user_id,
@@ -131,45 +130,8 @@ function logHoldRequestDebug(step, data = {}) {
     console.log("[hold-request]", step, data);
 }
 
-function wantsHoldRequestIframeResponse(req) {
-    return String(req.body?.response_mode || "").trim().toLowerCase() === "iframe";
-}
-
-function serializeInlinePayload(payload) {
-    return JSON.stringify(payload)
-        .replace(/</g, "\\u003c")
-        .replace(/>/g, "\\u003e")
-        .replace(/&/g, "\\u0026");
-}
-
 function sendHoldRequestResponse(req, res, statusCode, payload) {
-    // Public hold requests can ask for an iframe-friendly response instead of
-    // raw JSON. In that mode the API responds with a tiny HTML page that sends
-    // a postMessage back to the parent window so the public page can react
-    // without navigating away from the inventory grid.
-    if (!wantsHoldRequestIframeResponse(req)) {
-        return res.status(statusCode).json(payload);
-    }
-
-    const serializedPayload = serializeInlinePayload({
-        type: "hold-request",
-        ...payload,
-    });
-    const html = `<!doctype html>
-<html lang="en">
-  <body>
-    <script>
-      (function () {
-        var payload = ${serializedPayload};
-        if (window.parent && window.parent !== window) {
-          window.parent.postMessage(payload, "*");
-        }
-      })();
-    </script>
-  </body>
-</html>`;
-
-    return res.status(statusCode).type("html").send(html);
+    return res.status(statusCode).json(payload);
 }
 
 function isPrivilegedProfile(profile) {
@@ -463,6 +425,16 @@ async function queueNotification(client, entry) {
     }
 }
 
+function runBestEffort(task, label) {
+    void (async () => {
+        try {
+            await task();
+        } catch (error) {
+            console.error(`${label} failed:`, error);
+        }
+    })();
+}
+
 async function cancelPendingHoldNotifications(client, holdId) {
     if (!client || !holdId) return;
 
@@ -501,7 +473,6 @@ async function scheduleHoldNotifications(client, hold) {
                 payload: {
                     remnant_id: hold.remnant_id,
                     expires_at: hold.expires_at,
-                    project_reference: hold.project_reference || null,
                     job_number: hold.job_number || null,
                 },
             });
@@ -518,7 +489,6 @@ async function scheduleHoldNotifications(client, hold) {
         payload: {
             remnant_id: hold.remnant_id,
             expires_at: hold.expires_at,
-            project_reference: hold.project_reference || null,
             job_number: hold.job_number || null,
         },
     });
@@ -572,6 +542,37 @@ function formatCompanyRemnant(row) {
         status: row.status,
         image: row.image || "",
     };
+}
+
+function formatPublicRemnant(row) {
+    return {
+        ...row,
+        display_id: row.id,
+        internal_remnant_id: row.internal_remnant_id ?? null,
+        company_name: row.company || "",
+        material_name: row.material || "",
+        thickness_name: row.thickness || "",
+    };
+}
+
+async function fetchRemnantEnrichmentPayload(client, remnantIds, includeStatusMeta = false) {
+    const holdMap = await fetchRelevantHoldMap(client, remnantIds);
+    const saleMap = await fetchLatestSaleMap(client, remnantIds);
+    const statusActorMap = includeStatusMeta ? await fetchStatusActorMap(client, remnantIds) : new Map();
+
+    return remnantIds.map((remnantId) => {
+        const currentSale = saleMap.get(Number(remnantId)) || null;
+        return {
+            remnant_id: Number(remnantId),
+            current_hold: holdMap.get(Number(remnantId)) || null,
+            current_sale: currentSale,
+            sold_by_name: currentSale?.sold_by_name || "",
+            sold_by_user_id: currentSale?.sold_by_user_id || null,
+            sold_at: currentSale?.sold_at || null,
+            sold_job_number: currentSale?.job_number || "",
+            current_status_actor: includeStatusMeta ? (statusActorMap.get(Number(remnantId)) || null) : null,
+        };
+    });
 }
 
 async function fetchPublicRemnantRowByExternalId(client, externalRemnantId) {
@@ -780,6 +781,26 @@ async function getOptionalAuthedSupabase(req) {
     };
 }
 
+async function getOptionalActiveProfile(req, allowedRoles = []) {
+    const authed = await getOptionalAuthedSupabase(req);
+    if (!authed?.client || !authed?.user?.id) return null;
+
+    try {
+        const profile = await fetchProfile(authed.client, authed.user.id);
+        if (!profile || profile.active !== true) return null;
+        if (allowedRoles.length > 0 && !allowedRoles.includes(profile.system_role)) {
+            return null;
+        }
+
+        return {
+            ...authed,
+            profile,
+        };
+    } catch (_error) {
+        return null;
+    }
+}
+
 async function fetchProfile(client, userId) {
     const { data, error } = await client
         .from("profiles")
@@ -796,6 +817,7 @@ async function fetchSalesRepRows(client = getReadClient()) {
         .from("profiles")
         .select("id,email,full_name,system_role,company_id")
         .eq("active", true)
+        .eq("system_role", "status_user")
         .order("full_name", { ascending: true });
 
     if (error) throw error;
@@ -1001,9 +1023,10 @@ async function handleRemnantFilter(req, res) {
     const status = normalizeStatus(req.query.status, "");
     const minWidth = asNumber(req.query["min-width"] ?? req.query.minWidth);
     const minHeight = asNumber(req.query["min-height"] ?? req.query.minHeight);
+    const shouldEnrich = String(req.query.enrich || "1") !== "0";
 
     try {
-        const optionalAuthed = await getOptionalAuthedSupabase(req);
+        const optionalAuthed = await getOptionalActiveProfile(req, ["super_admin", "manager", "status_user"]);
 
         if (optionalAuthed) {
             let query = optionalAuthed.client
@@ -1025,6 +1048,10 @@ async function handleRemnantFilter(req, res) {
 
             const { data, error } = await query;
             if (error) throw error;
+            const formattedRows = (data || []).map(formatRemnant);
+            if (!shouldEnrich) {
+                return res.status(200).json(formattedRows);
+            }
             const remnantIds = (data || []).map((row) => row.id);
             const writeClient = getWriteClient(optionalAuthed.client);
             const holdMap = await fetchRelevantHoldMap(writeClient, remnantIds);
@@ -1033,7 +1060,7 @@ async function handleRemnantFilter(req, res) {
             return res.status(200).json(
                 attachStatusMetaToRows(
                     attachSaleToRows(
-                        attachHoldToRows((data || []).map(formatRemnant), holdMap),
+                        attachHoldToRows(formattedRows, holdMap),
                         saleMap
                     ),
                     statusActorMap
@@ -1068,17 +1095,14 @@ async function handleRemnantFilter(req, res) {
 
         const { data, error } = await query;
         if (error) throw error;
+        const formattedRows = (data || []).map(formatPublicRemnant);
+        if (!shouldEnrich) {
+            return res.status(200).json(formattedRows);
+        }
         const remnantIds = (data || []).map((row) => row.internal_remnant_id ?? row.id);
         const holdMap = await fetchRelevantHoldMap(getReadClient(), remnantIds);
         const saleMap = await fetchLatestSaleMap(getReadClient(), remnantIds);
-        res.status(200).json(attachSaleToRows(attachHoldToRows((data || []).map((row) => ({
-            ...row,
-            display_id: row.id,
-            internal_remnant_id: row.internal_remnant_id ?? null,
-            company_name: row.company || "",
-            material_name: row.material || "",
-            thickness_name: row.thickness || "",
-        })), holdMap), saleMap));
+        res.status(200).json(attachSaleToRows(attachHoldToRows(formattedRows, holdMap), saleMap));
     } catch (err) {
         console.error("Error filtering remnants:", err);
         res.status(500).json({
@@ -1089,6 +1113,30 @@ async function handleRemnantFilter(req, res) {
 }
 
 router.get("/remnants", handleRemnantFilter);
+
+router.post("/remnants/enrichment", async (req, res) => {
+    try {
+        const ids = Array.isArray(req.body?.ids)
+            ? [...new Set(req.body.ids.map(asNumber).filter((value) => value !== null))]
+            : [];
+
+        if (ids.length === 0) {
+            return res.json([]);
+        }
+
+        const optionalAuthed = await getOptionalActiveProfile(req, ["super_admin", "manager", "status_user"]);
+        if (optionalAuthed) {
+            const payload = await fetchRemnantEnrichmentPayload(getWriteClient(optionalAuthed.client), ids, true);
+            return res.json(payload);
+        }
+
+        const payload = await fetchRemnantEnrichmentPayload(getReadClient(), ids, false);
+        return res.json(payload);
+    } catch (err) {
+        console.error("Error loading remnant enrichment:", err);
+        return res.status(500).json({ error: err.message || "Failed to load remnant enrichment" });
+    }
+});
 
 async function handleAllPublicRemnants(req, res) {
     const materialFiltersRaw = req.query.material;
@@ -1448,7 +1496,6 @@ router.post("/hold-requests", async (req, res) => {
                 requester_name: req.body?.requester_name ?? null,
                 requester_email: req.body?.requester_email ?? null,
                 sales_rep_user_id: req.body?.sales_rep_user_id ?? null,
-                project_reference: req.body?.project_reference ?? null,
                 notes_present: Boolean(String(req.body?.notes || "").trim()),
             },
             has_service_role: Boolean(serviceSupabase),
@@ -1526,16 +1573,17 @@ router.post("/hold-requests", async (req, res) => {
             requester_email: requesterEmail,
             sales_rep_user_id: salesRepUserId || null,
             sales_rep_name: salesRepName || null,
-            project_reference: String(req.body.project_reference || "").trim() || null,
             notes: String(req.body.notes || "").trim() || null,
             job_number: String(req.body.job_number || "").trim() || null,
             status: "pending",
         };
         logHoldRequestDebug("insert-payload", insertPayload);
 
-        const { error } = await writeClient
+        const { data: createdRequest, error } = await writeClient
             .from("hold_requests")
-            .insert(insertPayload);
+            .insert(insertPayload)
+            .select("id")
+            .single();
 
         if (error) {
             logHoldRequestDebug("insert-error", error);
@@ -1548,47 +1596,45 @@ router.post("/hold-requests", async (req, res) => {
             sales_rep_user_id: insertPayload.sales_rep_user_id,
         });
 
-        try {
-            await queueNotification(writeClient, {
-                notification_type: "hold_request_created",
-                target_user_id: salesRepUserId || null,
-                remnant_id: resolvedRemnant.id,
-                hold_request_id: null,
-                payload: {
-                    requester_name: requesterName,
-                    requester_email: requesterEmail,
-                    project_reference: insertPayload.project_reference,
-                    job_number: insertPayload.job_number,
-                },
-            });
-            logHoldRequestDebug("notification-sidecar-success");
-        } catch (sidecarError) {
-            console.error("Hold request notification sidecar failed:", sidecarError);
-        }
-
-        try {
-            await writeAuditLog(writeClient, null, {
-                event_type: "hold_request_created",
-                entity_type: "hold_request",
-                entity_id: null,
-                remnant_id: resolvedRemnant.id,
-                company_id: resolvedRemnant.company_id || null,
-                message: `Created public hold request for remnant #${externalRemnantId}`,
-                new_data: insertPayload,
-                meta: {
-                    source: "public",
-                    external_remnant_id: externalRemnantId,
-                    requester_name: requesterName,
-                    requester_email: requesterEmail,
-                },
-            });
-            logHoldRequestDebug("audit-sidecar-success");
-        } catch (sidecarError) {
-            console.error("Hold request audit sidecar failed:", sidecarError);
-        }
-
         logHoldRequestDebug("response-success");
-        return sendHoldRequestResponse(req, res, 201, { success: true });
+        sendHoldRequestResponse(req, res, 201, { success: true });
+
+        // These side effects are best-effort and should not delay the iframe
+        // response that closes the public modal.
+        runBestEffort(async () => {
+                await queueNotification(writeClient, {
+                    notification_type: "hold_request_created",
+                    target_user_id: salesRepUserId || null,
+                    remnant_id: resolvedRemnant.id,
+                    hold_request_id: createdRequest?.id || null,
+                    payload: {
+                        requester_name: requesterName,
+                        requester_email: requesterEmail,
+                        job_number: insertPayload.job_number,
+                    },
+                });
+                logHoldRequestDebug("notification-sidecar-success");
+
+                await writeAuditLog(writeClient, null, {
+                    event_type: "hold_request_created",
+                    entity_type: "hold_request",
+                    entity_id: createdRequest?.id || null,
+                    remnant_id: resolvedRemnant.id,
+                    company_id: resolvedRemnant.company_id || null,
+                    message: `Created public hold request for remnant #${externalRemnantId}`,
+                    new_data: insertPayload,
+                    meta: {
+                        source: "public",
+                        hold_request_id: createdRequest?.id || null,
+                        external_remnant_id: externalRemnantId,
+                        requester_name: requesterName,
+                        requester_email: requesterEmail,
+                    },
+                });
+                logHoldRequestDebug("audit-sidecar-success");
+        }, "Hold request sidecar");
+
+        return;
     } catch (err) {
         console.error("Error creating hold request:", err);
         return sendHoldRequestResponse(req, res, 500, {
@@ -1645,7 +1691,6 @@ router.patch("/hold-requests/:id", async (req, res) => {
 
             const holdPayload = {
                 expires_at: defaultHoldExpirationDate(),
-                project_reference: String(req.body.project_reference || existingRequest.project_reference || "").trim() || null,
                 job_number: jobNumber,
                 notes: String(req.body.notes || existingRequest.notes || "").trim() || null,
             };
@@ -1653,78 +1698,91 @@ router.patch("/hold-requests/:id", async (req, res) => {
             if (validationError) return res.status(400).json({ error: validationError });
 
             const holdOwnerUserId = existingRequest.sales_rep_user_id || authed.profile.id;
+            const { data: approvalResult, error: approvalError } = await writeClient.rpc("approve_hold_request", {
+                p_request_id: requestId,
+                p_hold_owner_user_id: holdOwnerUserId,
+                p_reviewed_by_user_id: authed.profile.id,
+                p_expires_at: new Date(holdPayload.expires_at).toISOString(),
+                p_job_number: holdPayload.job_number,
+                p_notes: holdPayload.notes,
+            });
+
+            if (approvalError) throw approvalError;
+
+            const approvalRow = Array.isArray(approvalResult) ? approvalResult[0] : approvalResult;
+            if (!approvalRow?.hold_id) {
+                throw new Error("Hold approval did not return a hold id");
+            }
+
             const { data: holdData, error: holdError } = await writeClient
                 .from("holds")
-                .insert({
-                    remnant_id: existingRequest.remnant_id,
-                    company_id: existingRequest.company_id,
-                    hold_owner_user_id: holdOwnerUserId,
-                    hold_started_at: new Date().toISOString(),
-                    expires_at: holdPayload.expires_at,
-                    status: "active",
-                    notes: holdPayload.notes,
-                    project_reference: holdPayload.project_reference,
-                    job_number: holdPayload.job_number,
-                })
                 .select(HOLD_SELECT)
+                .eq("id", approvalRow.hold_id)
                 .single();
 
             if (holdError) throw holdError;
 
-            await writeClient
-                .from("remnants")
-                .update({ status: "hold" })
-                .eq("id", existingRequest.remnant_id);
-
             const holdRow = formatHold(holdData);
-            await cancelPendingHoldNotifications(writeClient, holdRow.id);
-            await scheduleHoldNotifications(writeClient, holdRow);
-            await writeAuditLog(writeClient, authed, {
-                event_type: "hold_created",
-                entity_type: "hold",
-                entity_id: holdRow.id,
-                remnant_id: existingRequest.remnant_id,
-                company_id: existingRequest.company_id,
-                message: `Approved hold request #${existingRequest.id} and created hold`,
-                new_data: holdRow,
-                meta: {
-                    source: "hold_request_approval",
-                    hold_request_id: existingRequest.id,
-                },
-            });
+            runBestEffort(async () => {
+                await cancelPendingHoldNotifications(writeClient, holdRow.id);
+                await scheduleHoldNotifications(writeClient, holdRow);
+                await writeAuditLog(writeClient, authed, {
+                    event_type: "hold_created",
+                    entity_type: "hold",
+                    entity_id: holdRow.id,
+                    remnant_id: existingRequest.remnant_id,
+                    company_id: existingRequest.company_id,
+                    message: `Approved hold request #${existingRequest.id} and created hold`,
+                    new_data: holdRow,
+                    meta: {
+                        source: "hold_request_approval",
+                        hold_request_id: existingRequest.id,
+                    },
+                });
+            }, "Approved hold request sidecar");
         }
 
-        const { data, error } = await writeClient
-            .from("hold_requests")
-            .update({
-                status,
-                reviewed_at: new Date().toISOString(),
-                reviewed_by_user_id: authed.profile.id,
-                job_number: String(req.body.job_number || existingRequest.job_number || "").trim() || null,
-            })
-            .eq("id", requestId)
-            .select("*")
-            .maybeSingle();
+        const { data, error } = status === "approved"
+            ? await writeClient
+                .from("hold_requests")
+                .select("*")
+                .eq("id", requestId)
+                .maybeSingle()
+            : await writeClient
+                .from("hold_requests")
+                .update({
+                    status,
+                    reviewed_at: new Date().toISOString(),
+                    reviewed_by_user_id: authed.profile.id,
+                    job_number: String(req.body.job_number || existingRequest.job_number || "").trim() || null,
+                })
+                .eq("id", requestId)
+                .select("*")
+                .maybeSingle();
 
         if (error) throw error;
         if (!data) return res.status(404).json({ error: "Hold request not found" });
 
-        await writeAuditLog(writeClient, authed, {
-            event_type: "hold_request_reviewed",
-            entity_type: "hold_request",
-            entity_id: data.id,
-            remnant_id: data.remnant_id,
-            company_id: data.company_id,
-            message: `Marked hold request #${data.id} as ${status}`,
-            new_data: data,
-            meta: {
-                source: "api",
-                action: "hold_request_review",
-                override: true,
-            },
-        });
-
         res.json(data);
+
+        runBestEffort(async () => {
+            await writeAuditLog(writeClient, authed, {
+                event_type: "hold_request_reviewed",
+                entity_type: "hold_request",
+                entity_id: data.id,
+                remnant_id: data.remnant_id,
+                company_id: data.company_id,
+                message: `Marked hold request #${data.id} as ${status}`,
+                new_data: data,
+                meta: {
+                    source: "api",
+                    action: "hold_request_review",
+                    override: true,
+                },
+            });
+        }, "Hold request review audit");
+
+        return;
     } catch (err) {
         console.error("Error updating hold request:", err);
         res.status(500).json({ error: err.message || "Failed to update hold request" });
@@ -1802,9 +1860,8 @@ router.post("/remnants/:id/hold", async (req, res) => {
             ? String(req.body.hold_owner_user_id).trim()
             : authed.profile.id;
         const holdPayload = {
-            expires_at: String(req.body.expires_at || "").trim() || defaultHoldExpirationDate(),
+            expires_at: defaultHoldExpirationDate(),
             notes: String(req.body.notes || "").trim() || null,
-            project_reference: String(req.body.project_reference || "").trim() || null,
             job_number: String(req.body.job_number || "").trim() || null,
         };
         const validationError = validateHoldPayload(holdPayload);
@@ -1833,7 +1890,6 @@ router.post("/remnants/:id/hold", async (req, res) => {
                 hold_owner_user_id: requestedOwnerUserId,
                 expires_at: holdPayload.expires_at,
                 notes: holdPayload.notes,
-                project_reference: holdPayload.project_reference,
                 job_number: holdPayload.job_number,
                 status: "active",
                 reassigned_from_user_id: requestedOwnerUserId !== currentHold.hold_owner_user_id
@@ -1864,7 +1920,6 @@ router.post("/remnants/:id/hold", async (req, res) => {
                     expires_at: holdPayload.expires_at,
                     status: "active",
                     notes: holdPayload.notes,
-                    project_reference: holdPayload.project_reference,
                     job_number: holdPayload.job_number,
                 })
                 .select(HOLD_SELECT)
@@ -1879,25 +1934,26 @@ router.post("/remnants/:id/hold", async (req, res) => {
             .update({ status: "hold" })
             .eq("id", remnantId);
 
-        await cancelPendingHoldNotifications(writeClient, holdRow.id);
-        await scheduleHoldNotifications(writeClient, holdRow);
-
-        await writeAuditLog(writeClient, authed, {
-            event_type: eventType,
-            entity_type: "hold",
-            entity_id: holdRow.id,
-            remnant_id: remnantId,
-            company_id: remnant.company_id,
-            message: `${eventType.replaceAll("_", " ")} for remnant #${remnant.moraware_remnant_id || remnant.id}`,
-            old_data: oldHold,
-            new_data: holdRow,
-            meta: {
-                source: "api",
-                override: isPrivilegedProfile(authed.profile) && String(requestedOwnerUserId) !== String(authed.profile.id),
-            },
-        });
-
         res.json({ hold: holdRow });
+
+        runBestEffort(async () => {
+            await cancelPendingHoldNotifications(writeClient, holdRow.id);
+            await scheduleHoldNotifications(writeClient, holdRow);
+            await writeAuditLog(writeClient, authed, {
+                event_type: eventType,
+                entity_type: "hold",
+                entity_id: holdRow.id,
+                remnant_id: remnantId,
+                company_id: remnant.company_id,
+                message: `${eventType.replaceAll("_", " ")} for remnant #${remnant.moraware_remnant_id || remnant.id}`,
+                old_data: oldHold,
+                new_data: holdRow,
+                meta: {
+                    source: "api",
+                    override: isPrivilegedProfile(authed.profile) && String(requestedOwnerUserId) !== String(authed.profile.id),
+                },
+            });
+        }, "Save hold sidecar");
     } catch (err) {
         console.error("Error saving hold:", err);
         res.status(500).json({ error: err.message || "Failed to save hold" });
@@ -1939,25 +1995,26 @@ router.post("/holds/:id/release", async (req, res) => {
         if (error) throw error;
 
         await writeClient.from("remnants").update({ status: "available" }).eq("id", holdRow.remnant_id);
-        await cancelPendingHoldNotifications(writeClient, holdId);
-
-        await writeAuditLog(writeClient, authed, {
-            event_type: "hold_released",
-            entity_type: "hold",
-            entity_id: holdId,
-            remnant_id: holdRow.remnant_id,
-            company_id: holdRow.company_id,
-            message: `Released hold for remnant #${remnant.moraware_remnant_id || remnant.id}`,
-            old_data: formatHold(holdRow),
-            new_data: formatHold(data),
-            meta: {
-                source: "api",
-                override: isPrivilegedProfile(authed.profile)
-                    && String(holdRow.hold_owner_user_id) !== String(authed.profile.id),
-            },
-        });
-
         res.json({ hold: formatHold(data) });
+
+        runBestEffort(async () => {
+            await cancelPendingHoldNotifications(writeClient, holdId);
+            await writeAuditLog(writeClient, authed, {
+                event_type: "hold_released",
+                entity_type: "hold",
+                entity_id: holdId,
+                remnant_id: holdRow.remnant_id,
+                company_id: holdRow.company_id,
+                message: `Released hold for remnant #${remnant.moraware_remnant_id || remnant.id}`,
+                old_data: formatHold(holdRow),
+                new_data: formatHold(data),
+                meta: {
+                    source: "api",
+                    override: isPrivilegedProfile(authed.profile)
+                        && String(holdRow.hold_owner_user_id) !== String(authed.profile.id),
+                },
+            });
+        }, "Release hold sidecar");
     } catch (err) {
         console.error("Error releasing hold:", err);
         res.status(500).json({ error: err.message || "Failed to release hold" });
@@ -1999,7 +2056,6 @@ router.post("/holds/process-expirations", async (req, res) => {
                 payload: {
                     remnant_id: holdRow.remnant_id,
                     expires_at: holdRow.expires_at,
-                    project_reference: holdRow.project_reference || null,
                     job_number: holdRow.job_number || null,
                 },
             });
@@ -2085,20 +2141,22 @@ router.post("/remnants", async (req, res) => {
             .single();
 
         if (error) throw error;
-        await writeAuditLog(writeClient, authed, {
-            event_type: "remnant_created",
-            entity_type: "remnant",
-            entity_id: data.id,
-            remnant_id: data.id,
-            company_id: data.company_id,
-            message: `Created remnant #${data.moraware_remnant_id || data.id}`,
-            new_data: data,
-            meta: {
-                source: "api",
-                action: "create",
-            },
-        });
         res.status(201).json(formatRemnant(data));
+        runBestEffort(async () => {
+            await writeAuditLog(writeClient, authed, {
+                event_type: "remnant_created",
+                entity_type: "remnant",
+                entity_id: data.id,
+                remnant_id: data.id,
+                company_id: data.company_id,
+                message: `Created remnant #${data.moraware_remnant_id || data.id}`,
+                new_data: data,
+                meta: {
+                    source: "api",
+                    action: "create",
+                },
+            });
+        }, "Create remnant audit");
     } catch (err) {
         console.error("Error creating remnant:", err);
         const isRlsError =
@@ -2183,21 +2241,23 @@ router.patch("/remnants/:id", async (req, res) => {
             });
         }
 
-        await writeAuditLog(writeClient, authed, {
-            event_type: "remnant_updated",
-            entity_type: "remnant",
-            entity_id: data.id,
-            remnant_id: data.id,
-            company_id: data.company_id,
-            message: `Updated remnant #${data.moraware_remnant_id || data.id}`,
-            old_data: existingRemnant,
-            new_data: data,
-            meta: {
-                source: "api",
-                action: "update",
-            },
-        });
         res.json(formatRemnant(data));
+        runBestEffort(async () => {
+            await writeAuditLog(writeClient, authed, {
+                event_type: "remnant_updated",
+                entity_type: "remnant",
+                entity_id: data.id,
+                remnant_id: data.id,
+                company_id: data.company_id,
+                message: `Updated remnant #${data.moraware_remnant_id || data.id}`,
+                old_data: existingRemnant,
+                new_data: data,
+                meta: {
+                    source: "api",
+                    action: "update",
+                },
+            });
+        }, "Update remnant audit");
     } catch (err) {
         console.error("Error updating remnant:", err);
         res.status(500).json({ error: err.message || "Failed to update remnant" });
@@ -2240,27 +2300,29 @@ router.patch("/remnants/:id/image", async (req, res) => {
             return res.status(404).json({ error: "Remnant not found" });
         }
 
-        await writeAuditLog(writeClient, authed, {
-            event_type: "remnant_image_updated",
-            entity_type: "remnant",
-            entity_id: data.id,
-            remnant_id: data.id,
-            company_id: data.company_id,
-            message: `Updated image for remnant #${data.moraware_remnant_id || data.id}`,
-            old_data: existingRemnant,
-            new_data: {
-                id: data.id,
-                moraware_remnant_id: data.moraware_remnant_id,
-                company_id: data.company_id,
-                image: data.image,
-                image_path: data.image_path,
-            },
-            meta: {
-                source: "api",
-                action: "image_update",
-            },
-        });
         res.json(formatRemnant(data));
+        runBestEffort(async () => {
+            await writeAuditLog(writeClient, authed, {
+                event_type: "remnant_image_updated",
+                entity_type: "remnant",
+                entity_id: data.id,
+                remnant_id: data.id,
+                company_id: data.company_id,
+                message: `Updated image for remnant #${data.moraware_remnant_id || data.id}`,
+                old_data: existingRemnant,
+                new_data: {
+                    id: data.id,
+                    moraware_remnant_id: data.moraware_remnant_id,
+                    company_id: data.company_id,
+                    image: data.image,
+                    image_path: data.image_path,
+                },
+                meta: {
+                    source: "api",
+                    action: "image_update",
+                },
+            });
+        }, "Update remnant image audit");
     } catch (err) {
         console.error("Error updating remnant image:", err);
         res.status(500).json({ error: err.message || "Failed to update remnant image" });
@@ -2282,6 +2344,7 @@ router.post("/remnants/:id/status", async (req, res) => {
         }
         const status = normalizeStatus(req.body.status);
         const soldJobNumber = String(req.body.sold_job_number || "").trim();
+        const soldNotes = String(req.body.sold_notes || "").trim() || null;
         if (status === "hold") {
             return res.status(400).json({ error: "Use the hold workflow to place or renew holds" });
         }
@@ -2306,6 +2369,7 @@ router.post("/remnants/:id/status", async (req, res) => {
         }
 
         let updatedHold = null;
+        let holdStatusAuditTask = null;
         if (status === "available" && currentHold?.status === "active") {
             // Moving back to available should release the underlying hold too,
             // otherwise the old hold would keep blocking future ownership checks.
@@ -2322,23 +2386,25 @@ router.post("/remnants/:id/status", async (req, res) => {
 
             if (holdError) throw holdError;
             updatedHold = formatHold(releasedHold);
-            await cancelPendingHoldNotifications(writeClient, currentHold.id);
-            await writeAuditLog(writeClient, authed, {
-                event_type: "hold_released",
-                entity_type: "hold",
-                entity_id: currentHold.id,
-                remnant_id: remnantId,
-                company_id: existingRemnant.company_id,
-                message: `Released hold for remnant #${existingRemnant.moraware_remnant_id || existingRemnant.id}`,
-                old_data: currentHold,
-                new_data: updatedHold,
-                meta: {
-                    source: "api",
-                    action: "status_release",
-                    override: isPrivilegedProfile(authed.profile)
-                        && String(currentHold.hold_owner_user_id) !== String(authed.profile.id),
-                },
-            });
+            holdStatusAuditTask = async () => {
+                await cancelPendingHoldNotifications(writeClient, currentHold.id);
+                await writeAuditLog(writeClient, authed, {
+                    event_type: "hold_released",
+                    entity_type: "hold",
+                    entity_id: currentHold.id,
+                    remnant_id: remnantId,
+                    company_id: existingRemnant.company_id,
+                    message: `Released hold for remnant #${existingRemnant.moraware_remnant_id || existingRemnant.id}`,
+                    old_data: currentHold,
+                    new_data: updatedHold,
+                    meta: {
+                        source: "api",
+                        action: "status_release",
+                        override: isPrivilegedProfile(authed.profile)
+                            && String(currentHold.hold_owner_user_id) !== String(authed.profile.id),
+                    },
+                });
+            };
         }
 
         if (status === "sold" && currentHold?.status && currentHold.status !== "sold") {
@@ -2357,23 +2423,25 @@ router.post("/remnants/:id/status", async (req, res) => {
 
             if (holdError) throw holdError;
             updatedHold = formatHold(soldHold);
-            await cancelPendingHoldNotifications(writeClient, currentHold.id);
-            await writeAuditLog(writeClient, authed, {
-                event_type: "hold_sold",
-                entity_type: "hold",
-                entity_id: currentHold.id,
-                remnant_id: remnantId,
-                company_id: existingRemnant.company_id,
-                message: `Marked held remnant #${existingRemnant.moraware_remnant_id || existingRemnant.id} as sold`,
-                old_data: currentHold,
-                new_data: updatedHold,
-                meta: {
-                    source: "api",
-                    action: "status_sold",
-                    override: isPrivilegedProfile(authed.profile)
-                        && String(currentHold.hold_owner_user_id) !== String(authed.profile.id),
-                },
-            });
+            holdStatusAuditTask = async () => {
+                await cancelPendingHoldNotifications(writeClient, currentHold.id);
+                await writeAuditLog(writeClient, authed, {
+                    event_type: "hold_sold",
+                    entity_type: "hold",
+                    entity_id: currentHold.id,
+                    remnant_id: remnantId,
+                    company_id: existingRemnant.company_id,
+                    message: `Marked held remnant #${existingRemnant.moraware_remnant_id || existingRemnant.id} as sold`,
+                    old_data: currentHold,
+                    new_data: updatedHold,
+                    meta: {
+                        source: "api",
+                        action: "status_sold",
+                        override: isPrivilegedProfile(authed.profile)
+                            && String(currentHold.hold_owner_user_id) !== String(authed.profile.id),
+                    },
+                });
+            };
         }
 
         const remnantUpdate = { status };
@@ -2381,15 +2449,30 @@ router.post("/remnants/:id/status", async (req, res) => {
         if (status === "sold") {
             // Sale details live in remnant_sales so the history survives even if
             // the remnant later moves back to available or is sold again.
+            const soldByUserId = req.body.sold_by_user_id
+                ? String(req.body.sold_by_user_id).trim()
+                : authed.profile.id;
+            if (!isPrivilegedProfile(authed.profile) && soldByUserId !== authed.profile.id) {
+                return res.status(403).json({ error: "You can only mark sales under your own user" });
+            }
+            const soldByProfile = await fetchProfile(writeClient, soldByUserId);
+            if (!soldByProfile || soldByProfile.active !== true) {
+                return res.status(400).json({ error: "Sold-by user is not active" });
+            }
+            if (soldByProfile.system_role !== "status_user") {
+                return res.status(400).json({ error: "Sold-by user must be a sales rep" });
+            }
+
             const saleTimestamp = new Date().toISOString();
             const { data: saleData, error: saleError } = await writeClient
                 .from("remnant_sales")
                 .insert({
                     remnant_id: remnantId,
                     company_id: existingRemnant.company_id,
-                    sold_by_user_id: authed.profile.id,
+                    sold_by_user_id: soldByUserId,
                     sold_at: saleTimestamp,
                     job_number: soldJobNumber,
+                    notes: soldNotes,
                 })
                 .select(SALE_SELECT)
                 .single();
@@ -2406,29 +2489,6 @@ router.post("/remnants/:id/status", async (req, res) => {
             .single();
 
         if (error) throw error;
-        await writeAuditLog(writeClient, authed, {
-            // This audit event tracks the lifecycle transition itself. The
-            // separate sale row already preserves the sale-specific details.
-            event_type: "remnant_status_changed",
-            entity_type: "remnant",
-            entity_id: data.id,
-            remnant_id: data.id,
-            company_id: data.company_id,
-            message: `Changed status for remnant #${data.moraware_remnant_id || data.id} to ${data.status}`,
-            old_data: existingRemnant,
-            new_data: {
-                id: data.id,
-                moraware_remnant_id: data.moraware_remnant_id,
-                company_id: data.company_id,
-                status: data.status,
-                current_sale: currentSale,
-            },
-            meta: {
-                source: "api",
-                action: "status_change",
-                hold_id: updatedHold?.id || currentHold?.id || null,
-            },
-        });
         if (!currentSale && data.status === "sold") {
             currentSale = await fetchLatestSaleForRemnant(writeClient, remnantId);
         }
@@ -2436,6 +2496,34 @@ router.post("/remnants/:id/status", async (req, res) => {
             ...attachSaleToRows([formatRemnant(data)], new Map([[data.id, currentSale]]))[0],
             current_hold: updatedHold || currentHold || null,
         });
+        if (holdStatusAuditTask) {
+            runBestEffort(holdStatusAuditTask, "Update hold state from remnant status");
+        }
+        runBestEffort(async () => {
+            await writeAuditLog(writeClient, authed, {
+                // This audit event tracks the lifecycle transition itself. The
+                // separate sale row already preserves the sale-specific details.
+                event_type: "remnant_status_changed",
+                entity_type: "remnant",
+                entity_id: data.id,
+                remnant_id: data.id,
+                company_id: data.company_id,
+                message: `Changed status for remnant #${data.moraware_remnant_id || data.id} to ${data.status}`,
+                old_data: existingRemnant,
+                new_data: {
+                    id: data.id,
+                    moraware_remnant_id: data.moraware_remnant_id,
+                    company_id: data.company_id,
+                    status: data.status,
+                    current_sale: currentSale,
+                },
+                meta: {
+                    source: "api",
+                    action: "status_change",
+                    hold_id: updatedHold?.id || currentHold?.id || null,
+                },
+            });
+        }, "Update remnant status audit");
     } catch (err) {
         console.error("Error updating remnant status:", err);
         res.status(500).json({ error: err.message || "Failed to update remnant status" });
@@ -2464,27 +2552,29 @@ router.delete("/remnants/:id", async (req, res) => {
         });
 
         if (error) throw error;
-        await writeAuditLog(writeClient, authed, {
-            event_type: "remnant_archived",
-            entity_type: "remnant",
-            entity_id: data.id,
-            remnant_id: data.id,
-            company_id: data.company_id,
-            message: `Archived remnant #${data.moraware_remnant_id || data.id}`,
-            old_data: existingRemnant,
-            new_data: {
-                id: data.id,
-                moraware_remnant_id: data.moraware_remnant_id,
-                company_id: data.company_id,
-                deleted_at: data.deleted_at,
-                status: data.status,
-            },
-            meta: {
-                source: "api",
-                action: "archive",
-            },
-        });
         res.json(formatRemnant(data));
+        runBestEffort(async () => {
+            await writeAuditLog(writeClient, authed, {
+                event_type: "remnant_archived",
+                entity_type: "remnant",
+                entity_id: data.id,
+                remnant_id: data.id,
+                company_id: data.company_id,
+                message: `Archived remnant #${data.moraware_remnant_id || data.id}`,
+                old_data: existingRemnant,
+                new_data: {
+                    id: data.id,
+                    moraware_remnant_id: data.moraware_remnant_id,
+                    company_id: data.company_id,
+                    deleted_at: data.deleted_at,
+                    status: data.status,
+                },
+                meta: {
+                    source: "api",
+                    action: "archive",
+                },
+            });
+        }, "Archive remnant audit");
     } catch (err) {
         console.error("Error deleting remnant:", err);
         res.status(500).json({ error: err.message || "Failed to delete remnant" });

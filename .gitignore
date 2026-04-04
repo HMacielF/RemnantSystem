@@ -138,3 +138,11 @@ dist
 # Python
 __pycache__/
 *.pyc
+.venv/
+
+# Local editor / MCP wiring
+.vscode/mcp.json
+
+# Local Codex / agent tooling
+.agents/
+skills-lock.json

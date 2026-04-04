@@ -187,8 +187,3 @@ Important behavior:
 - Last scraper issues report is written to `scraper/last_sync_issues.json`.
 - The scraper uses the service role so it can resolve lookups and sync rows without being blocked by RLS.
 - Status values in the app and database are lowercase: `available`, `hold`, `sold`.
-
-## Known Issues
-
-- Public hold requests still show a success message before the server confirms success.
-  The public hold-request form currently closes the modal and shows the success toast immediately on submit, so a backend failure can still look successful to the visitor.

@@ -1,10 +1,14 @@
 const LIVE_SEARCH_DELAY_MS = 300;
-window.__REMNANT_APP_VERSION__ = "2026-04-02-hold-request-fix-6";
+window.__REMNANT_APP_VERSION__ = "2026-04-03-ux-polish-1";
 window.__holdRequestNativePending = false;
+window.__holdRequestFallbackTimer = null;
 
 let allRemnants = [];
 let debounceTimer = null;
 let activeAbortController = null;
+let activeEnrichmentController = null;
+let activeLoadToken = 0;
+let isEnrichmentPending = false;
 const isManagementView = document.body?.dataset?.view === "management";
 let activeRemnantId = null;
 let lookupData = {
@@ -18,6 +22,7 @@ let nextStoneId = null;
 let activeHoldRequestRemnant = null;
 let salesRepLoadPromise = null;
 let holdRequestsData = [];
+let pendingHoldRequestReviewId = null;
 let activeQuickHoldRemnantId = null;
 let activeManageHoldRemnantId = null;
 let activeSoldRemnantId = null;
@@ -334,12 +339,13 @@ function renderHoldRequests() {
     }
 
     container.innerHTML = holdRequestsData.map((request) => {
+        const isPendingReview = String(pendingHoldRequestReviewId || "") === String(request.id);
         const repName = request.sales_rep?.full_name || request.sales_rep?.email || "Unassigned";
         const reviewedBy = request.reviewed_by?.full_name || request.reviewed_by?.email || "";
         const remnantId = request.remnant?.moraware_remnant_id || request.remnant?.id || request.remnant_id;
         const remnantName = request.remnant?.name || "Remnant";
         return `
-            <article class="rounded-[24px] border border-[#eadfd7] bg-[#fffaf6] p-5 shadow-sm">
+            <article class="rounded-[24px] border border-[#eadfd7] bg-[#fffaf6] p-5 shadow-sm transition-all ${isPendingReview ? "opacity-60 saturate-75" : ""}">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#9c7355]">${escapeHtml(request.status || "pending")}</p>
@@ -352,7 +358,6 @@ function renderHoldRequests() {
                 </div>
                 <div class="mt-4 grid gap-2 text-sm text-[#4d3d34] sm:grid-cols-2">
                     <p><strong>Sales Rep:</strong> ${escapeHtml(repName)}</p>
-                    <p><strong>Project:</strong> ${escapeHtml(request.project_reference || "Not provided")}</p>
                     <p><strong>Notes:</strong> ${escapeHtml(request.notes || "Not provided")}</p>
                     <label class="block">
                         <strong>Job Number:</strong>
@@ -371,17 +376,19 @@ function renderHoldRequests() {
                             type="button"
                             data-hold-request-action="approved"
                             data-hold-request-id="${request.id}"
-                            class="rounded-2xl bg-emerald-100 text-emerald-800 py-3 text-sm font-semibold border border-emerald-200 transition-colors active:bg-emerald-200"
+                            ${isPendingReview ? "disabled" : ""}
+                            class="rounded-2xl bg-emerald-100 text-emerald-800 py-3 text-sm font-semibold border border-emerald-200 transition-colors active:bg-emerald-200 disabled:cursor-wait disabled:opacity-60"
                         >
-                            Approve
+                            ${isPendingReview ? "Working..." : "Approve"}
                         </button>
                         <button
                             type="button"
                             data-hold-request-action="rejected"
                             data-hold-request-id="${request.id}"
-                            class="rounded-2xl bg-rose-100 text-rose-800 py-3 text-sm font-semibold border border-rose-200 transition-colors active:bg-rose-200"
+                            ${isPendingReview ? "disabled" : ""}
+                            class="rounded-2xl bg-rose-100 text-rose-800 py-3 text-sm font-semibold border border-rose-200 transition-colors active:bg-rose-200 disabled:cursor-wait disabled:opacity-60"
                         >
-                            Deny
+                            ${isPendingReview ? "Working..." : "Deny"}
                         </button>
                     </div>
                 ` : ""}
@@ -398,6 +405,67 @@ function renderHoldRequestCount() {
     const count = holdRequestsData.length;
     badge.textContent = String(count);
     badge.classList.toggle("hidden", count === 0);
+}
+
+function adjustInventorySummaryForStatusChange(fromStatus, toStatus) {
+    const fromKey = statusKey(fromStatus);
+    const toKey = statusKey(toStatus);
+    if (fromKey === toKey) return;
+
+    inventorySummary = {
+        ...defaultSummaryCounts(),
+        ...inventorySummary,
+    };
+    if (typeof inventorySummary[fromKey] === "number") {
+        inventorySummary[fromKey] = Math.max(0, inventorySummary[fromKey] - 1);
+    }
+    if (typeof inventorySummary[toKey] === "number") {
+        inventorySummary[toKey] += 1;
+    }
+    renderInventorySummary();
+    renderStatusSummary();
+}
+
+function applyHoldRequestReviewLocally(requestId, nextStatus, jobNumber) {
+    const reviewedRequest = holdRequestsData.find((request) => String(request.id) === String(requestId)) || null;
+    holdRequestsData = holdRequestsData.filter((request) => String(request.id) !== String(requestId));
+    renderHoldRequests();
+    renderHoldRequestCount();
+
+    if (!reviewedRequest) return false;
+    if (nextStatus !== "approved") return true;
+
+    const priorRemnantStatus = reviewedRequest.remnant?.status || "available";
+    adjustInventorySummaryForStatusChange(priorRemnantStatus, "hold");
+
+    const remnantId = Number(reviewedRequest.remnant_id);
+    const externalRemnantId = Number(reviewedRequest.remnant?.moraware_remnant_id);
+    const remnantIndex = allRemnants.findIndex((remnant) => {
+        const internalId = Number(remnant.internal_remnant_id ?? remnant.id);
+        const displayId = Number(remnant.display_id ?? remnant.moraware_remnant_id);
+        return internalId === remnantId || (externalRemnantId && displayId === externalRemnantId);
+    });
+
+    if (remnantIndex === -1) return false;
+
+    const existingRemnant = allRemnants[remnantIndex];
+    const ownerName = reviewedRequest.sales_rep?.full_name || reviewedRequest.sales_rep?.email || "";
+    allRemnants[remnantIndex] = {
+        ...existingRemnant,
+        status: "hold",
+        current_hold: {
+            ...(existingRemnant.current_hold || {}),
+            remnant_id: remnantId,
+            hold_owner_user_id: reviewedRequest.sales_rep_user_id || null,
+            owner_name: ownerName,
+            owner_email: reviewedRequest.sales_rep?.email || "",
+            job_number: jobNumber || reviewedRequest.job_number || "",
+            status: "active",
+            expires_at: defaultHoldExpirationInputValue(),
+        },
+    };
+    renderRemnants();
+    return true;
 }
 
 function cropCanvas() {
@@ -573,16 +641,16 @@ function renderStatusSummary() {
             type="button"
             data-status-chip="${key}"
             aria-pressed="${activeStatus === key}"
-            class="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm text-[#4d3d34] shadow-sm ring-1 transition-all ${
+            class="inline-flex items-center rounded-full px-1 py-1 text-sm transition-all ${
                 activeStatus === key
-                    ? "bg-[#232323] text-white ring-[#232323]"
-                    : "bg-white/80 ring-white/80 hover:-translate-y-0.5 hover:bg-white"
+                    ? "font-bold"
+                    : "font-medium hover:-translate-y-0.5"
             }"
         >
-            <span class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${meta.chipClass}">
-                ${meta.label}
+            <span class="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] ${meta.chipClass}">
+                <span class="font-semibold">${meta.label}</span>
+                <span class="${activeStatus === key ? "font-bold" : "font-medium"}">${counts[key]}</span>
             </span>
-            <span class="font-semibold">${counts[key]}</span>
         </button>
     `).join("");
 }
@@ -599,6 +667,19 @@ function loadingMarkup() {
             </div>
         </div>
     `).join("");
+}
+
+function detailsPendingBadge(remnant) {
+    if (!remnant?.__detailsPending) return "";
+
+    return `
+        <div class="px-2.5">
+            <div class="inline-flex items-center gap-2 rounded-full border border-[#ead8ca] bg-[#fff7f1] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8f5a36]">
+                <span class="inline-block h-2 w-2 animate-pulse rounded-full bg-[#E78B4B]"></span>
+                Updating details...
+            </div>
+        </div>
+    `;
 }
 
 function buildRemnantCardMarkup(remnant, status, index = 0) {
@@ -665,6 +746,7 @@ function buildRemnantCardMarkup(remnant, status, index = 0) {
                     ${escapeHtml(status)}
                 </span>
             </div>
+            ${detailsPendingBadge(remnant)}
             <div class="space-y-1.5 px-2.5">${detailLines}</div>
             ${statusUserCardActions(remnant)}
         </div>
@@ -1251,8 +1333,6 @@ function populateManageHoldModal(remnant) {
     const badge = document.getElementById("manage-hold-badge");
     const summary = document.getElementById("manage-hold-summary");
     const owner = document.getElementById("manage-hold-owner");
-    const expiresAt = document.getElementById("manage-hold-expires-at");
-    const project = document.getElementById("manage-hold-project-reference");
     const jobNumber = document.getElementById("manage-hold-job-number");
     const notes = document.getElementById("manage-hold-notes");
     const title = document.getElementById("manage-hold-title");
@@ -1280,8 +1360,6 @@ function populateManageHoldModal(remnant) {
     }
 
     if (owner) owner.value = hold?.hold_owner_user_id || currentProfile?.id || "";
-    if (expiresAt) expiresAt.value = hold?.expires_at ? String(hold.expires_at).slice(0, 10) : defaultHoldExpirationInputValue();
-    if (project) project.value = hold?.project_reference || "";
     if (jobNumber) jobNumber.value = hold?.job_number || "";
     if (notes) notes.value = hold?.notes || "";
 }
@@ -1475,10 +1553,9 @@ async function updateStatus(status, extraPayload = {}) {
 
     if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to update status"));
 
-    await loadRemnants();
-    await loadInventorySummary();
     closeModal("edit-remnant-modal");
     showActionMessage(`Status updated to ${normalizeStatus(status)}.`);
+    void refreshInventoryViews();
 }
 
 async function updateStatusFromCard(remnantId, status, extraPayload = {}) {
@@ -1492,9 +1569,8 @@ async function updateStatusFromCard(remnantId, status, extraPayload = {}) {
 
     if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to update status"));
 
-    await loadRemnants();
-    await loadInventorySummary();
     showActionMessage(`Status updated to ${normalizeStatus(status)}.`);
+    void refreshInventoryViews();
 }
 
 // Edit flow for manager/admin users.
@@ -1513,9 +1589,9 @@ async function modifyRemnant() {
 
     if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to modify remnant"));
 
-    await loadRemnants();
     closeModal("edit-remnant-modal");
     showActionMessage("Remnant updated.");
+    void refreshInventoryViews();
 }
 
 async function deleteRemnant() {
@@ -1527,10 +1603,9 @@ async function deleteRemnant() {
 
     if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to delete remnant"));
 
-    await loadRemnants();
-    await loadInventorySummary();
     closeModal("edit-remnant-modal");
     showActionMessage("Remnant archived.");
+    void refreshInventoryViews();
 }
 
 // Add flow for manager/admin users. After a successful create we also fetch the
@@ -1548,19 +1623,15 @@ async function createRemnant() {
 
     if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to create remnant"));
 
-    await loadRemnants();
-    await loadInventorySummary();
-    await loadNextStoneId();
     closeModal("add-remnant-modal");
     showActionMessage("Remnant created.");
+    void refreshInventoryViews({ includeNextStoneId: true });
 }
 
 async function saveHold() {
     const targetRemnantId = activeManageHoldRemnantId || activeRemnantId;
     if (!targetRemnantId) return;
     const ownerFieldId = activeManageHoldRemnantId ? "manage-hold-owner" : "edit-hold-owner";
-    const expiresFieldId = activeManageHoldRemnantId ? "manage-hold-expires-at" : "edit-hold-expires-at";
-    const projectFieldId = activeManageHoldRemnantId ? "manage-hold-project-reference" : "edit-hold-project-reference";
     const jobNumberFieldId = activeManageHoldRemnantId ? "manage-hold-job-number" : "edit-hold-job-number";
     const notesFieldId = activeManageHoldRemnantId ? "manage-hold-notes" : "edit-hold-notes";
     const jobNumber = document.getElementById(jobNumberFieldId)?.value.trim() || "";
@@ -1568,8 +1639,7 @@ async function saveHold() {
 
     const payload = {
         hold_owner_user_id: document.getElementById(ownerFieldId)?.value || currentProfile?.id || "",
-        expires_at: document.getElementById(expiresFieldId)?.value,
-        project_reference: document.getElementById(projectFieldId)?.value.trim(),
+        expires_at: defaultHoldExpirationInputValue(),
         job_number: jobNumber,
         notes: document.getElementById(notesFieldId)?.value.trim(),
     };
@@ -1582,8 +1652,6 @@ async function saveHold() {
 
     if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to save hold"));
 
-    await loadRemnants();
-    await loadInventorySummary();
     if (activeManageHoldRemnantId) {
         closeModal("manage-hold-modal");
         activeManageHoldRemnantId = null;
@@ -1591,6 +1659,7 @@ async function saveHold() {
         closeModal("edit-remnant-modal");
     }
     showActionMessage("Hold saved.");
+    void refreshInventoryViews();
 }
 
 async function quickCreateHold(remnantId, payload) {
@@ -1602,9 +1671,8 @@ async function quickCreateHold(remnantId, payload) {
 
     if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to create hold"));
 
-    await loadRemnants();
-    await loadInventorySummary();
     showActionMessage("Hold created for 7 days.");
+    void refreshInventoryViews();
 }
 
 function openQuickHoldModal(remnantId) {
@@ -1638,6 +1706,9 @@ function openSoldModal(remnantId, source = "card") {
     const title = document.getElementById("sold-project-title");
     const subtitle = document.getElementById("sold-project-subtitle");
     const input = document.getElementById("sold-job-number");
+    const notes = document.getElementById("sold-notes");
+    const ownerField = document.getElementById("sold-owner-field");
+    const ownerSelect = document.getElementById("sold-owner-user-id");
     const form = document.getElementById("sold-project-form");
 
     if (form) form.reset();
@@ -1648,6 +1719,21 @@ function openSoldModal(remnantId, source = "card") {
             : "This remnant will be marked sold to this project.";
     }
     if (input) input.value = "";
+    if (notes) notes.value = "";
+    if (ownerField) {
+        ownerField.classList.toggle("hidden", !isPrivilegedProfile(currentProfile));
+    }
+    if (ownerSelect instanceof HTMLSelectElement) {
+        renderSalesRepOptions("sold-owner-user-id", salesRepData, "Select sales rep");
+        if (currentProfile?.id && !salesRepData.some((row) => String(row.id) === String(currentProfile.id))) {
+            const option = document.createElement("option");
+            option.value = currentProfile.id;
+            option.textContent = currentProfile.full_name || currentProfile.email || "Current user";
+            ownerSelect.appendChild(option);
+        }
+        ownerSelect.value = currentProfile?.id || "";
+        ownerSelect.disabled = !isPrivilegedProfile(currentProfile);
+    }
 
     openModal("sold-project-modal");
 }
@@ -1659,14 +1745,22 @@ async function submitSoldStatus() {
     if (!activeSoldRemnantId) return;
 
     const soldJobNumber = document.getElementById("sold-job-number")?.value.trim() || "";
+    const soldNotes = document.getElementById("sold-notes")?.value.trim() || "";
+    const soldByUserId = document.getElementById("sold-owner-user-id")?.value.trim() || "";
     if (!soldJobNumber) {
         throw new Error("Sold job number is required");
     }
 
+    const payload = {
+        sold_job_number: soldJobNumber,
+        sold_notes: soldNotes,
+        ...(isPrivilegedProfile(currentProfile) && soldByUserId ? { sold_by_user_id: soldByUserId } : {}),
+    };
+
     if (activeSoldSource === "edit") {
-        await updateStatus("sold", { sold_job_number: soldJobNumber });
+        await updateStatus("sold", payload);
     } else {
-        await updateStatusFromCard(activeSoldRemnantId, "sold", { sold_job_number: soldJobNumber });
+        await updateStatusFromCard(activeSoldRemnantId, "sold", payload);
     }
 
     closeModal("sold-project-modal");
@@ -1689,8 +1783,6 @@ async function releaseHold() {
 
     if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to release hold"));
 
-    await loadRemnants();
-    await loadInventorySummary();
     if (activeManageHoldRemnantId) {
         closeModal("manage-hold-modal");
         activeManageHoldRemnantId = null;
@@ -1698,6 +1790,7 @@ async function releaseHold() {
         closeModal("edit-remnant-modal");
     }
     showActionMessage("Hold released.");
+    void refreshInventoryViews();
 }
 
 async function quickReleaseHold(remnantId) {
@@ -1712,9 +1805,8 @@ async function quickReleaseHold(remnantId) {
 
     if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to release hold"));
 
-    await loadRemnants();
-    await loadInventorySummary();
     showActionMessage("Hold released.");
+    void refreshInventoryViews();
 }
 
 async function openHoldRequestModal(remnantId) {
@@ -1722,10 +1814,6 @@ async function openHoldRequestModal(remnantId) {
     // being sent to a separate page, which keeps the experience lightweight.
     const remnant = allRemnants.find((item) => String(displayRemnantId(item)) === String(remnantId));
     if (!remnant) return;
-
-    if (!salesRepData.length) {
-        await loadSalesReps();
-    }
 
     activeHoldRequestRemnant = remnant;
     const form = document.getElementById("hold-request-form");
@@ -1738,7 +1826,23 @@ async function openHoldRequestModal(remnantId) {
         label.textContent = `Request a hold for Remnant #${displayRemnantId(remnant)}${remnant.name ? ` - ${remnant.name}` : ""}.`;
     }
 
+    const salesRepSelect = document.getElementById("hold-request-sales-rep");
+    if (salesRepSelect instanceof HTMLSelectElement && !salesRepData.length) {
+        salesRepSelect.disabled = true;
+        salesRepSelect.innerHTML = '<option value="">Loading sales reps...</option>';
+    }
+
     openModal("hold-request-modal");
+
+    if (!salesRepData.length) {
+        loadSalesReps().catch((error) => {
+            if (salesRepSelect instanceof HTMLSelectElement && !salesRepData.length) {
+                salesRepSelect.disabled = true;
+                salesRepSelect.innerHTML = '<option value="">Unable to load sales reps</option>';
+            }
+            showActionMessage(error.message, true);
+        });
+    }
 }
 
 // Load the lookup tables that feed filters and form selects.
@@ -1770,6 +1874,11 @@ async function loadSalesReps() {
         renderSalesRepOptions("edit-hold-owner", salesRepData, "Select hold owner");
         renderSalesRepOptions("manage-hold-owner", salesRepData, "Select hold owner");
         renderSalesRepOptions("hold-request-sales-rep", salesRepData, "Select sales rep");
+        renderSalesRepOptions("sold-owner-user-id", salesRepData, "Select sales rep");
+        const holdRequestSalesRep = document.getElementById("hold-request-sales-rep");
+        if (holdRequestSalesRep instanceof HTMLSelectElement) {
+            holdRequestSalesRep.disabled = false;
+        }
         return salesRepData;
     })();
 
@@ -1808,26 +1917,34 @@ async function loadHoldRequests() {
 }
 
 async function reviewHoldRequest(requestId, status) {
+    if (String(pendingHoldRequestReviewId || "") === String(requestId)) return;
+
     const jobNumberInput = document.querySelector(`[data-request-job-number="${requestId}"]`);
     const jobNumber = jobNumberInput instanceof HTMLInputElement ? jobNumberInput.value.trim() : "";
+    pendingHoldRequestReviewId = String(requestId);
+    renderHoldRequests();
 
-    const res = await fetch(`/api/hold-requests/${requestId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            status,
-            job_number: jobNumber,
-        }),
-    });
+    try {
+        const res = await fetch(`/api/hold-requests/${requestId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                status,
+                job_number: jobNumber,
+            }),
+        });
 
-    if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to update hold request"));
+        if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to update hold request"));
 
-    await Promise.all([
-        loadHoldRequests(),
-        loadRemnants(),
-        loadInventorySummary(),
-    ]);
-    showActionMessage(status === "approved" ? "Hold request approved." : "Hold request denied.");
+        const updatedLocally = applyHoldRequestReviewLocally(requestId, status, jobNumber);
+        showActionMessage(status === "approved" ? "Hold request approved." : "Hold request denied.");
+        if (!updatedLocally) {
+            void refreshInventoryViews({ includeHoldRequests: true });
+        }
+    } finally {
+        pendingHoldRequestReviewId = null;
+        renderHoldRequests();
+    }
 }
 
 // Load the current user's profile so the management UI can adapt itself by role.
@@ -1956,7 +2073,6 @@ function bindManagementActions() {
                 hold_owner_user_id: currentProfile?.id || "",
                 expires_at: defaultHoldExpirationInputValue(),
                 job_number: jobNumber,
-                project_reference: document.getElementById("quick-hold-project-reference")?.value.trim() || "",
                 notes: document.getElementById("quick-hold-notes")?.value.trim() || "",
             });
             closeModal("quick-hold-modal");
@@ -2171,9 +2287,28 @@ function bindManagementActions() {
         }
     });
 
-    document.getElementById("hold-request-form")?.addEventListener("submit", (event) => {
-        // Public hold requests still submit through a hidden iframe so the page
-        // can stay on the inventory view instead of navigating to raw API JSON.
+    document.getElementById("edit-modify")?.addEventListener("click", async () => {
+        try {
+            await modifyRemnant();
+        } catch (error) {
+            showActionMessage(error.message, true);
+        }
+    });
+
+    document.getElementById("add-create")?.addEventListener("click", async () => {
+        try {
+            await createRemnant();
+        } catch (error) {
+            showActionMessage(error.message, true);
+        }
+    });
+}
+
+function bindPublicHoldRequestActions() {
+    document.getElementById("hold-request-form")?.addEventListener("submit", async (event) => {
+        // Public hold requests use fetch so the UI can react immediately without
+        // paying the extra iframe/postMessage round trip.
+        event.preventDefault();
         const form = event.currentTarget;
         if (!(form instanceof HTMLFormElement)) return;
 
@@ -2190,46 +2325,70 @@ function bindManagementActions() {
             return;
         }
 
+        const submitButton = form.querySelector('button[type="submit"]');
         window.__holdRequestNativePending = true;
         closeModal("hold-request-modal");
-        activeHoldRequestRemnant = null;
-    });
+        if (window.__holdRequestFallbackTimer) {
+            window.clearTimeout(window.__holdRequestFallbackTimer);
+        }
+        if (submitButton instanceof HTMLButtonElement) {
+            submitButton.disabled = true;
+        }
+        showActionMessage("Sending hold request...");
+        window.__holdRequestFallbackTimer = window.setTimeout(() => {
+            if (!window.__holdRequestNativePending) return;
+            window.__holdRequestNativePending = false;
+            if (submitButton instanceof HTMLButtonElement) {
+                submitButton.disabled = false;
+            }
+            showActionMessage("Hold request timed out. Please try again.", true);
+        }, 15000);
 
-    window.addEventListener("message", (event) => {
-        // The iframe response posts a small payload back to the main window.
-        // We translate that into the visible success/error toast here.
-        if (event.origin !== window.location.origin) return;
-        if (!window.__holdRequestNativePending) return;
+        try {
+            const formData = new FormData(form);
+            formData.delete("response_mode");
 
-        const payload = event.data;
-        if (!payload || payload.type !== "hold-request") return;
+            const response = await fetch("/api/hold-requests", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+                },
+                body: new URLSearchParams(formData).toString(),
+            });
 
-        window.__holdRequestNativePending = false;
+            if (!response.ok) {
+                throw new Error(await readErrorMessage(response, "Failed to submit hold request"));
+            }
 
-        if (payload.success === true) {
-            closeModal("hold-request-modal");
-            activeHoldRequestRemnant = null;
-            showActionMessage("Hold request received. A sales rep will review it soon.");
+            const payload = await response.json().catch(() => ({ success: true }));
+            window.__holdRequestNativePending = false;
+            if (window.__holdRequestFallbackTimer) {
+                window.clearTimeout(window.__holdRequestFallbackTimer);
+                window.__holdRequestFallbackTimer = null;
+            }
+            if (submitButton instanceof HTMLButtonElement) {
+                submitButton.disabled = false;
+            }
+
+            if (payload?.success === true) {
+                activeHoldRequestRemnant = null;
+                form.reset();
+                showActionMessage("Hold request received. A sales rep will review it soon.");
+                return;
+            }
+
+            throw new Error(payload?.error || "Failed to submit hold request");
+        } catch (error) {
+            window.__holdRequestNativePending = false;
+            if (window.__holdRequestFallbackTimer) {
+                window.clearTimeout(window.__holdRequestFallbackTimer);
+                window.__holdRequestFallbackTimer = null;
+            }
+            if (submitButton instanceof HTMLButtonElement) {
+                submitButton.disabled = false;
+            }
+            showActionMessage(error.message || "Failed to submit hold request", true);
             return;
-        }
-
-        const errorMessage = payload.error || "Failed to submit hold request";
-        showActionMessage(errorMessage, true);
-    });
-
-    document.getElementById("edit-modify")?.addEventListener("click", async () => {
-        try {
-            await modifyRemnant();
-        } catch (error) {
-            showActionMessage(error.message, true);
-        }
-    });
-
-    document.getElementById("add-create")?.addEventListener("click", async () => {
-        try {
-            await createRemnant();
-        } catch (error) {
-            showActionMessage(error.message, true);
         }
     });
 }
@@ -2249,6 +2408,46 @@ async function readErrorMessage(response, fallbackMessage) {
     return text || fallbackMessage;
 }
 
+async function loadRemnantEnrichment(remnants, loadToken) {
+    const ids = [...new Set(
+        (remnants || [])
+            .map((remnant) => Number(remnant.internal_remnant_id ?? remnant.id))
+            .filter((value) => Number.isFinite(value) && value > 0)
+    )];
+    if (!ids.length) return;
+
+    if (activeEnrichmentController) activeEnrichmentController.abort();
+    activeEnrichmentController = new AbortController();
+
+    const res = await fetch("/api/remnants/enrichment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+        signal: activeEnrichmentController.signal,
+    });
+
+    if (!res.ok) {
+        throw new Error(await readErrorMessage(res, "Failed to load remnant enrichment"));
+    }
+
+    const enrichmentRows = await res.json();
+    if (loadToken !== activeLoadToken || !Array.isArray(enrichmentRows)) return;
+
+    const enrichmentMap = new Map(
+        enrichmentRows.map((row) => [Number(row.remnant_id), row])
+    );
+
+    allRemnants = allRemnants.map((remnant) => {
+        const remnantId = Number(remnant.internal_remnant_id ?? remnant.id);
+        const enrichment = enrichmentMap.get(remnantId);
+        return enrichment
+            ? { ...remnant, ...enrichment, __detailsPending: false }
+            : { ...remnant, __detailsPending: false };
+    });
+    isEnrichmentPending = false;
+    renderRemnants();
+}
+
 // Fetch the current remnant list from the API based on URL filters. Abort
 // previous in-flight requests so fast typing does not render stale results.
 async function loadRemnants() {
@@ -2259,11 +2458,14 @@ async function loadRemnants() {
     container.innerHTML = loadingMarkup();
 
     if (activeAbortController) activeAbortController.abort();
+    if (activeEnrichmentController) activeEnrichmentController.abort();
+    const loadToken = ++activeLoadToken;
     activeAbortController = new AbortController();
 
     try {
-        const query = currentParams().toString();
-        const res = await fetch(`/api/remnants?${query}`, {
+        const params = currentParams();
+        params.set("enrich", "0");
+        const res = await fetch(`/api/remnants?${params.toString()}`, {
             signal: activeAbortController.signal,
         });
 
@@ -2274,11 +2476,24 @@ async function loadRemnants() {
 
         const data = await res.json();
         if (!Array.isArray(data)) throw new TypeError("Expected array from /api/remnants");
+        if (loadToken !== activeLoadToken) return;
 
-        allRemnants = data;
+        isEnrichmentPending = data.length > 0;
+        allRemnants = data.map((remnant) => ({
+            ...remnant,
+            __detailsPending: isEnrichmentPending,
+        }));
         renderRemnants();
+        void loadRemnantEnrichment(data, loadToken).catch((err) => {
+            if (err.name === "AbortError") return;
+            isEnrichmentPending = false;
+            allRemnants = allRemnants.map((remnant) => ({ ...remnant, __detailsPending: false }));
+            renderRemnants();
+            console.error("Failed to load remnant enrichment:", err);
+        });
     } catch (err) {
         if (err.name === "AbortError") return;
+        isEnrichmentPending = false;
         console.error("Failed to load remnants:", err);
         container.innerHTML =
             `<div class="col-span-full rounded-[28px] border border-rose-200 bg-white/80 px-6 py-10 text-center text-rose-700 shadow-sm">
@@ -2335,6 +2550,24 @@ function bindSummaryActions() {
     });
 }
 
+function refreshInventoryViews(options = {}) {
+    const tasks = [loadRemnants(), loadInventorySummary()];
+    if (options.includeHoldRequests && isManagementView) {
+        tasks.push(loadHoldRequests());
+    }
+    if (options.includeNextStoneId && isManagementView && canManageStructure()) {
+        tasks.push(loadNextStoneId());
+    }
+
+    return Promise.allSettled(tasks).then((results) => {
+        const firstFailure = results.find((result) => result.status === "rejected");
+        if (firstFailure) {
+            console.error("Background refresh failed:", firstFailure.reason);
+        }
+        return results;
+    });
+}
+
 // Page bootstrap:
 // 1. hydrate form state from the URL
 // 2. attach shared interactions
@@ -2348,6 +2581,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         initFormFromURL();
         bindModalInteractions();
         bindManagementActions();
+        bindPublicHoldRequestActions();
         bindGlobalShortcuts();
         bindSummaryActions();
 

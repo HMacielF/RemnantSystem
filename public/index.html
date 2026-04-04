@@ -129,6 +129,13 @@
       </div>
     </div>
 
+    <footer class="px-4 pb-10 pt-2 md:px-6">
+      <div class="mx-auto max-w-[1680px] rounded-[28px] border border-white/70 bg-white/55 px-6 py-5 text-center shadow-sm backdrop-blur">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#9c7355]">Built by EndoMF14</p>
+        <p class="mt-2 text-sm text-[#6d584b]">Designed to keep stone inventory clear, fast, and easy to move.</p>
+      </div>
+    </footer>
+
     <div
       id="hold-request-modal"
       data-modal-overlay="hold-request-modal"
@@ -150,10 +157,9 @@
             ×
           </button>
         </div>
-        <form id="hold-request-form" action="/api/hold-requests" method="post" target="hold-request-target" class="grid gap-4 p-6" onsubmit="document.getElementById('hold-request-modal')?.classList.add('hidden');document.body.classList.remove('overflow-hidden');window.showActionMessage&&window.showActionMessage('Hold request received. A sales rep will review it soon.');">
+        <form id="hold-request-form" action="/api/hold-requests" method="post" class="grid gap-4 p-6">
           <input id="hold-request-internal-id" name="remnant_id" type="hidden" />
           <input id="hold-request-external-id" name="external_remnant_id" type="hidden" />
-          <input name="response_mode" type="hidden" value="iframe" />
           <label class="block text-sm font-medium text-gray-700">
             Name
             <input id="hold-request-name" name="requester_name" type="text" class="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm" required />
@@ -165,10 +171,6 @@
           <label class="block text-sm font-medium text-gray-700">
             Sales Rep
             <select id="hold-request-sales-rep" name="sales_rep_user_id" class="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"></select>
-          </label>
-          <label class="block text-sm font-medium text-gray-700">
-            Project Reference
-            <input id="hold-request-project-reference" name="project_reference" type="text" class="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm" placeholder="Project name, client, or address" />
           </label>
           <label class="block text-sm font-medium text-gray-700">
             Notes
@@ -184,7 +186,6 @@
             </button>
           </div>
         </form>
-        <iframe name="hold-request-target" class="hidden" tabindex="-1" aria-hidden="true"></iframe>
       </div>
     </div>
 
