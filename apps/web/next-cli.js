@@ -23,8 +23,8 @@ const unsupported =
 
 if (unsupported) {
   console.error(
-    `Unsupported Node.js version ${process.versions.node}. Use Node 20.9+ and stay below Node 25. ` +
-      "Node 22 LTS is recommended for this repo.",
+    `Unsupported Node.js version ${process.versions.node}. Use Node 24 and stay below Node 25. ` +
+      "Node 24 is required for this repo.",
   );
   process.exit(1);
 }

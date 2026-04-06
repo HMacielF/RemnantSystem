@@ -51,7 +51,7 @@
   "author": "Hugo Fraga",
   "license": "ISC",
   "engines": {
-    "node": ">=20.9 <25"
+    "node": ">=24 <25"
   },
   "bugs": {
     "url": "https://github.com/HugoMaciel/RemnantSystem/issues"

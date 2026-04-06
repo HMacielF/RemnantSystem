@@ -154,8 +154,8 @@ Management actions:
 
 Recommended runtime:
 
-- Node `22` LTS
-- Supported range for this repo: Node `20.9+` and below Node `25`
+- Node `24`
+- Supported range for this repo: Node `24.x`
 
 ### Next.js web app
 
@@ -186,7 +186,7 @@ Deploy the Next.js app from `apps/web`, not from the repo root.
 
 - Framework preset: `Next.js`
 - Root Directory: `apps/web`
-- Node version: `22.x`
+- Node version: `24.x`
 
 Environment variables to set in Vercel for the app:
 
