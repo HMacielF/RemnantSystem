@@ -557,7 +557,6 @@ export async function fetchLookupRows(tableName, client = getReadClient()) {
 }
 
 export async function fetchSalesRepRows(client = getReadClient(), options = {}) {
-  const quickCompanyId = Number(options.quickCompanyId || 1);
   const { data, error } = await client
     .from("profiles")
     .select("id,email,full_name,system_role,company_id")
@@ -566,11 +565,69 @@ export async function fetchSalesRepRows(client = getReadClient(), options = {}) 
 
   if (error) throw error;
   return (data || [])
-    .filter((row) => row.system_role === "status_user" || Number(row.company_id) === quickCompanyId)
+    .filter((row) => row.system_role === "status_user")
     .map((row) => ({
       ...row,
       display_name: row.full_name || row.email || "User",
     }));
+}
+
+export async function createAdminUser(client, rawValues, options = {}) {
+  const serviceClient = getServiceClient();
+  if (!serviceClient) {
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY is required to invite users");
+  }
+
+  const email = String(rawValues?.email || "").trim().toLowerCase();
+  const fullName = String(rawValues?.full_name || "").trim();
+  const systemRole = String(rawValues?.system_role || "").trim();
+  const companyId = asNumber(rawValues?.company_id);
+  const active = rawValues?.active === undefined ? true : Boolean(rawValues.active);
+
+  if (!email) {
+    throw new Error("Email is required");
+  }
+  if (!["super_admin", "manager", "status_user"].includes(systemRole)) {
+    throw new Error("A valid system role is required");
+  }
+
+  const redirectTo = options.origin ? `${options.origin}/set-password` : undefined;
+  const { data: invitedUser, error: inviteError } = await serviceClient.auth.admin.inviteUserByEmail(
+    email,
+    {
+      redirectTo,
+      data: fullName ? { full_name: fullName } : undefined,
+    },
+  );
+
+  if (inviteError) throw inviteError;
+  if (!invitedUser?.user?.id) {
+    throw new Error("Supabase did not return a user id for the invite");
+  }
+
+  const profilePayload = {
+    id: invitedUser.user.id,
+    email,
+    full_name: fullName || null,
+    system_role: systemRole,
+    company_id: companyId,
+    active,
+  };
+
+  const { data: profileRow, error: profileError } = await getWriteClient(client)
+    .from("profiles")
+    .upsert(profilePayload, { onConflict: "id" })
+    .select("*")
+    .single();
+
+  if (profileError) throw profileError;
+
+  return {
+    row: {
+      ...profileRow,
+      _identifier: formatAdminIdentifier(getAdminTableConfig("profiles"), profileRow),
+    },
+  };
 }
 
 export async function fetchNextStoneId(client = getReadClient()) {
@@ -617,10 +674,12 @@ export async function fetchLookupPayload(request, authContext = null) {
     throw error;
   }
 
+  const lookupClient = getWriteClient(requiredAuthed.client);
+
   const [companies, materials, thicknesses] = await Promise.all([
-    fetchLookupRows("companies", requiredAuthed.client),
-    fetchLookupRows("materials", requiredAuthed.client),
-    fetchLookupRows("thicknesses", requiredAuthed.client),
+    fetchLookupRows("companies", lookupClient),
+    fetchLookupRows("materials", lookupClient),
+    fetchLookupRows("thicknesses", lookupClient),
   ]);
 
   return {

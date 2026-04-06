@@ -773,9 +773,12 @@ export default function PublicInventoryClient() {
                 <select
                   value={holdForm.sales_rep_user_id}
                   onChange={(event) => setHoldForm((current) => ({ ...current, sales_rep_user_id: event.target.value }))}
+                  disabled={salesReps.length === 0}
                   className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
                 >
-                  <option value="">Select sales rep</option>
+                  <option value="">
+                    {salesReps.length === 0 ? "No active sales reps available" : "Select sales rep"}
+                  </option>
                   {salesReps.map((row) => (
                     <option key={row.id} value={row.id}>
                       {row.display_name || row.full_name || row.email || "User"}
@@ -794,10 +797,14 @@ export default function PublicInventoryClient() {
                 />
               </label>
               <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm text-[#6d584b]">A sales rep will review this request before any hold is approved.</p>
+                <p className="text-sm text-[#6d584b]">
+                  {salesReps.length === 0
+                    ? "No active sales reps are set up yet. Create one in the admin workspace first."
+                    : "A sales rep will review this request before any hold is approved."}
+                </p>
                 <button
                   type="submit"
-                  disabled={holdSubmitting}
+                  disabled={holdSubmitting || salesReps.length === 0}
                   className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-[#232323] px-6 text-sm font-semibold uppercase tracking-[0.16em] text-white shadow-lg shadow-[#232323]/15 transition-all hover:-translate-y-0.5 hover:bg-[#E78B4B] disabled:cursor-wait disabled:opacity-60 sm:w-auto"
                 >
                   {holdSubmitting ? "Sending..." : "Send Request"}

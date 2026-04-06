@@ -86,6 +86,13 @@ export default function AdminWorkspaceClient() {
   const [authState, setAuthState] = useState("loading");
   const [profile, setProfile] = useState(null);
   const [tables, setTables] = useState([]);
+  const [relationOptions, setRelationOptions] = useState({
+    companies: [],
+    materials: [],
+    thicknesses: [],
+    users: [],
+    salesReps: [],
+  });
   const [activeTable, setActiveTable] = useState("");
   const [rows, setRows] = useState([]);
   const [selectedIdentifier, setSelectedIdentifier] = useState(null);
@@ -122,6 +129,33 @@ export default function AdminWorkspaceClient() {
     return rows.find((row) => identifierKey(row._identifier) === identifierKey(selectedIdentifier)) || null;
   }, [isCreating, rows, selectedIdentifier]);
 
+  const activeTableName = activeTableMeta?.name || "";
+
+  function optionsForColumn(columnName) {
+    if (columnName === "company_id") return relationOptions.companies;
+    if (columnName === "material_id") return relationOptions.materials;
+    if (columnName === "thickness_id") return relationOptions.thicknesses;
+
+    if (["sales_rep_user_id", "hold_owner_user_id", "sold_by_user_id"].includes(columnName)) {
+      return relationOptions.salesReps;
+    }
+
+    if (/_user_id$/.test(columnName)) {
+      return relationOptions.users;
+    }
+
+    return null;
+  }
+
+  function relationEmptyMessage(columnName) {
+    if (columnName === "company_id") return "No active companies available";
+    if (["sales_rep_user_id", "hold_owner_user_id", "sold_by_user_id"].includes(columnName)) {
+      return "No active sales reps available";
+    }
+    if (/_user_id$/.test(columnName)) return "No users available";
+    return "No options available";
+  }
+
   useEffect(() => {
     let mounted = true;
 
@@ -141,9 +175,41 @@ export default function AdminWorkspaceClient() {
         }
         setProfile(nextProfile);
 
-        const metaPayload = await apiFetch("/api/admin/db/meta");
+        const [metaPayload, lookupPayload, profileRowsPayload] = await Promise.all([
+          apiFetch("/api/admin/db/meta", { cache: "no-store" }),
+          apiFetch("/api/lookups", { cache: "no-store" }),
+          apiFetch("/api/admin/db/profiles?limit=500", { cache: "no-store" }),
+        ]);
         if (!mounted) return;
         const nextTables = Array.isArray(metaPayload.tables) ? metaPayload.tables : [];
+        const userRows = Array.isArray(profileRowsPayload.rows) ? profileRowsPayload.rows : [];
+        const userOptions = userRows
+          .map((row) => ({
+            value: row.id,
+            label: row.full_name || row.email || row.id,
+          }))
+          .filter((row) => row.value);
+
+        const salesRepOptions = userRows
+          .filter((row) => row.active && row.system_role === "status_user")
+          .map((row) => ({
+            value: row.id,
+            label: row.full_name || row.email || row.id,
+          }));
+
+        setRelationOptions({
+          companies: Array.isArray(lookupPayload.companies)
+            ? lookupPayload.companies.map((row) => ({ value: String(row.id), label: row.name || String(row.id) }))
+            : [],
+          materials: Array.isArray(lookupPayload.materials)
+            ? lookupPayload.materials.map((row) => ({ value: String(row.id), label: row.name || String(row.id) }))
+            : [],
+          thicknesses: Array.isArray(lookupPayload.thicknesses)
+            ? lookupPayload.thicknesses.map((row) => ({ value: String(row.id), label: row.name || String(row.id) }))
+            : [],
+          users: userOptions,
+          salesReps: salesRepOptions,
+        });
         setTables(nextTables);
         setAuthState("ready");
         if (nextTables.length > 0) {
@@ -171,7 +237,7 @@ export default function AdminWorkspaceClient() {
     async function loadRows() {
       try {
         setError("");
-        const payload = await apiFetch(`/api/admin/db/${encodeURIComponent(activeTable)}?limit=150`);
+        const payload = await apiFetch(`/api/admin/db/${encodeURIComponent(activeTable)}?limit=150`, { cache: "no-store" });
         const nextRows = Array.isArray(payload.rows) ? payload.rows : [];
         setRows(nextRows);
         setSelectedIdentifier(null);
@@ -214,7 +280,7 @@ export default function AdminWorkspaceClient() {
 
   async function reloadMeta() {
     try {
-      const metaPayload = await apiFetch("/api/admin/db/meta");
+      const metaPayload = await apiFetch("/api/admin/db/meta", { cache: "no-store" });
       const nextTables = Array.isArray(metaPayload.tables) ? metaPayload.tables : [];
       setTables(nextTables);
       if (!nextTables.some((table) => table.name === activeTable) && nextTables.length > 0) {
@@ -229,7 +295,7 @@ export default function AdminWorkspaceClient() {
   async function reloadRows() {
     if (!activeTable) return;
     try {
-      const payload = await apiFetch(`/api/admin/db/${encodeURIComponent(activeTable)}?limit=150`);
+      const payload = await apiFetch(`/api/admin/db/${encodeURIComponent(activeTable)}?limit=150`, { cache: "no-store" });
       setRows(Array.isArray(payload.rows) ? payload.rows : []);
       setMessage("Rows reloaded.");
     } catch (loadError) {
@@ -250,7 +316,10 @@ export default function AdminWorkspaceClient() {
         return acc;
       }, {});
 
-      const endpoint = `/api/admin/db/${encodeURIComponent(activeTableMeta.name)}`;
+      const isProfileCreate = isCreating && activeTableMeta.name === "profiles";
+      const endpoint = isProfileCreate
+        ? "/api/admin/users"
+        : `/api/admin/db/${encodeURIComponent(activeTableMeta.name)}`;
       const payload = isCreating
         ? { values }
         : { identifier: selectedIdentifier, values };
@@ -272,7 +341,26 @@ export default function AdminWorkspaceClient() {
       setSelectedIdentifier(savedRow._identifier);
       setSelectedRow(JSON.parse(JSON.stringify(savedRow)));
       setIsCreating(false);
-      setMessage("Row saved successfully.");
+      setMessage(isProfileCreate ? "User invited successfully." : "Row saved successfully.");
+
+      if (activeTableMeta.name === "profiles") {
+        setRelationOptions((current) => {
+          const existingUsers = current.users.filter((row) => row.value !== savedRow.id);
+          const nextUser = {
+            value: savedRow.id,
+            label: savedRow.full_name || savedRow.email || savedRow.id,
+          };
+          const existingSalesReps = current.salesReps.filter((row) => row.value !== savedRow.id);
+          return {
+            ...current,
+            users: [nextUser, ...existingUsers].sort((a, b) => a.label.localeCompare(b.label)),
+            salesReps:
+              savedRow.active && savedRow.system_role === "status_user"
+                ? [nextUser, ...existingSalesReps].sort((a, b) => a.label.localeCompare(b.label))
+                : existingSalesReps,
+          };
+        });
+      }
     } catch (saveError) {
       setError(saveError.message);
     }
@@ -485,7 +573,9 @@ export default function AdminWorkspaceClient() {
                 {!activeTableMeta
                   ? "Select a row or create a new one to edit fields."
                   : isCreating
-                    ? "Fill in the fields below and save to create a new record."
+                    ? activeTableName === "profiles"
+                      ? "Saving here sends an invite email and creates the matching auth user and profile."
+                      : "Fill in the fields below and save to create a new record."
                     : `Primary key: ${activeTableMeta.primaryKey.map((key) => `${key}=${prettyCell(selectedRow?.[key])}`).join(", ")}`}
               </p>
             </div>
@@ -495,6 +585,7 @@ export default function AdminWorkspaceClient() {
                 {activeTableMeta?.columns.map((column) => {
                   const value = selectedRow?.[column.name];
                   const disabled = !activeTableMeta || !selectedRow || !column.editable;
+                  const selectOptions = optionsForColumn(column.name);
                   return (
                     <label key={column.name} className="block text-sm font-semibold text-[#233245]">
                       <span className="flex items-center justify-between gap-3">
@@ -522,6 +613,22 @@ export default function AdminWorkspaceClient() {
                           {(column.options || []).map((option) => (
                             <option key={option} value={option}>
                               {option}
+                            </option>
+                          ))}
+                        </select>
+                      ) : selectOptions ? (
+                        <select
+                          value={value ?? ""}
+                          disabled={disabled || selectOptions.length === 0}
+                          onChange={(event) => updateSelectedField(column, event.target.value)}
+                          className="mt-2 h-11 w-full rounded-2xl border border-[#d8e1ea] bg-[#f8fafc] px-4 text-sm text-[#172230] outline-none focus:border-[#f08b49] focus:ring-4 focus:ring-[#f08b49]/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <option value="">
+                            {selectOptions.length === 0 ? relationEmptyMessage(column.name) : "Select"}
+                          </option>
+                          {selectOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
                             </option>
                           ))}
                         </select>

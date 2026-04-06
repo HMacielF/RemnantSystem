@@ -37,8 +37,8 @@ const ADMIN_DB_TABLES = {
         primaryKey: ["id"],
         orderBy: "email",
         columns: {
-            id: { type: "uuid", required: true },
-            email: { type: "text" },
+            id: { type: "uuid", editable: false },
+            email: { type: "text", required: true },
             full_name: { type: "text" },
             system_role: { type: "enum", required: true, options: ["super_admin", "manager", "status_user"] },
             company_id: { type: "bigint" },

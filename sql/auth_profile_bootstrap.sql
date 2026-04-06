@@ -26,7 +26,7 @@ begin
     new.raw_app_meta_data ->> 'system_role'
   )), ''));
 
-  if next_system_role not in ('super_admin', 'manager', 'status_user') then
+  if next_system_role is null or next_system_role not in ('super_admin', 'manager', 'status_user') then
     next_system_role := 'status_user';
   end if;
 

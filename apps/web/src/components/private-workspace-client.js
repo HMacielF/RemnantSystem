@@ -726,12 +726,12 @@ export default function PrivateWorkspaceClient() {
         setAuthState("ready");
 
         const [requestsPayload, myHoldsPayload, lookupPayload, salesRepPayload, stonePayload, remnantRows] = await Promise.all([
-          apiFetch("/api/hold-requests?status=pending"),
-          apiFetch("/api/my-holds"),
-          apiFetch("/api/lookups"),
-          nextProfile.system_role === "status_user" ? Promise.resolve([]) : apiFetch("/api/sales-reps"),
-          canManageStructure(nextProfile) ? apiFetch("/api/next-stone-id") : Promise.resolve({ nextStoneId: null }),
-          apiFetch("/api/remnants?enrich=0"),
+          apiFetch("/api/hold-requests?status=pending", { cache: "no-store" }),
+          apiFetch("/api/my-holds", { cache: "no-store" }),
+          apiFetch("/api/lookups", { cache: "no-store" }),
+          nextProfile.system_role === "status_user" ? Promise.resolve([]) : apiFetch("/api/sales-reps", { cache: "no-store" }),
+          canManageStructure(nextProfile) ? apiFetch("/api/next-stone-id", { cache: "no-store" }) : Promise.resolve({ nextStoneId: null }),
+          apiFetch("/api/remnants?enrich=0", { cache: "no-store" }),
         ]);
 
         if (!mounted) return;
@@ -917,7 +917,7 @@ export default function PrivateWorkspaceClient() {
     setEditorForm({
       moraware_remnant_id: nextStoneId ?? "",
       name: "",
-      company_id: profile.system_role === "status_user" ? profile.company_id || "" : "",
+      company_id: profile.system_role === "status_user" ? String(profile.company_id || "") : "",
       material_id: "",
       thickness_id: "",
       width: "",
@@ -939,9 +939,9 @@ export default function PrivateWorkspaceClient() {
       id: remnant.id,
       moraware_remnant_id: remnant.moraware_remnant_id || "",
       name: remnant.name || "",
-      company_id: remnant.company_id || "",
-      material_id: remnant.material_id || "",
-      thickness_id: remnant.thickness_id || "",
+      company_id: String(remnant.company_id || ""),
+      material_id: String(remnant.material_id || ""),
+      thickness_id: String(remnant.thickness_id || ""),
       width: remnant.width || "",
       height: remnant.height || "",
       l_shape: Boolean(remnant.l_shape),
@@ -2312,26 +2312,26 @@ export default function PrivateWorkspaceClient() {
               <label className="block text-sm font-medium text-gray-700">
                 Company
                 <select
-                  value={editorForm.company_id}
+                  value={String(editorForm.company_id ?? "")}
                   onChange={(event) => updateEditorField("company_id", event.target.value)}
                   className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
                 >
                   <option value="">Select company</option>
                   {lookups.companies.map((row) => (
-                    <option key={row.id} value={row.id}>{row.name}</option>
+                    <option key={row.id} value={String(row.id)}>{row.name}</option>
                   ))}
                 </select>
               </label>
               <label className="block text-sm font-medium text-gray-700">
                 Material
                 <select
-                  value={editorForm.material_id}
+                  value={String(editorForm.material_id ?? "")}
                   onChange={(event) => updateEditorField("material_id", event.target.value)}
                   className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
                 >
                   <option value="">Select material</option>
                   {lookups.materials.map((row) => (
-                    <option key={row.id} value={row.id}>{row.name}</option>
+                    <option key={row.id} value={String(row.id)}>{row.name}</option>
                   ))}
                 </select>
               </label>
@@ -2356,13 +2356,13 @@ export default function PrivateWorkspaceClient() {
               <label className="block text-sm font-medium text-gray-700">
                 Thickness
                 <select
-                  value={editorForm.thickness_id}
+                  value={String(editorForm.thickness_id ?? "")}
                   onChange={(event) => updateEditorField("thickness_id", event.target.value)}
                   className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
                 >
                   <option value="">Select thickness</option>
                   {lookups.thicknesses.map((row) => (
-                    <option key={row.id} value={row.id}>{row.name}</option>
+                    <option key={row.id} value={String(row.id)}>{row.name}</option>
                   ))}
                 </select>
               </label>
@@ -2598,9 +2598,12 @@ export default function PrivateWorkspaceClient() {
                         <select
                           value={holdEditor.owner_user_id}
                           onChange={(event) => updateHoldField("owner_user_id", event.target.value)}
+                          disabled={salesReps.length === 0}
                           className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
                         >
-                          <option value="">Select sales rep</option>
+                          <option value="">
+                            {salesReps.length === 0 ? "No active sales reps available" : "Select sales rep"}
+                          </option>
                           {salesReps.map((row) => (
                             <option key={row.id} value={row.id}>{row.display_name || row.full_name || row.email || "User"}</option>
                           ))}
@@ -2713,9 +2716,12 @@ export default function PrivateWorkspaceClient() {
                       value={soldEditor.sold_by_user_id}
                       onChange={(event) => updateSoldField("sold_by_user_id", event.target.value)}
                       required
+                      disabled={salesReps.length === 0}
                       className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
                     >
-                      <option value="">Select sales rep</option>
+                      <option value="">
+                        {salesReps.length === 0 ? "No active sales reps available" : "Select sales rep"}
+                      </option>
                       {salesReps.map((row) => (
                         <option key={row.id} value={row.id}>{row.display_name || row.full_name || row.email || "User"}</option>
                       ))}
