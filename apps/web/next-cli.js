@@ -2,9 +2,16 @@ const path = require("path");
 const fs = require("fs");
 const net = require("net");
 const { spawn } = require("child_process");
-const dotenv = require("dotenv");
 
-dotenv.config({ path: path.resolve(__dirname, "..", "..", ".env") });
+function loadLocalEnv() {
+  try {
+    require("dotenv").config({ path: path.resolve(__dirname, "..", "..", ".env") });
+  } catch (error) {
+    if (error?.code !== "MODULE_NOT_FOUND") throw error;
+  }
+}
+
+loadLocalEnv();
 
 const [major, minor] = process.versions.node.split(".").map(Number);
 const unsupported =

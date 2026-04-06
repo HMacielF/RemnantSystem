@@ -1,9 +1,16 @@
 const path = require("path");
 const http = require("http");
-const dotenv = require("dotenv");
 const next = require("next");
 
-dotenv.config({ path: path.resolve(__dirname, "..", "..", ".env") });
+function loadLocalEnv() {
+    try {
+        require("dotenv").config({ path: path.resolve(__dirname, "..", "..", ".env") });
+    } catch (error) {
+        if (error?.code !== "MODULE_NOT_FOUND") throw error;
+    }
+}
+
+loadLocalEnv();
 
 function readCliPort() {
     const index = process.argv.findIndex((arg) => arg === "--port" || arg === "-p");
