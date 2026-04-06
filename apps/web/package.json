@@ -1,0 +1,29 @@
+{
+  "name": "web",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.9 <25"
+  },
+  "scripts": {
+    "dev": "node next-cli.js dev . --webpack",
+    "clean": "rm -rf .next",
+    "clean:deep": "rm -rf .next .next_stale_*",
+    "dev:clean": "npm run clean && npm run dev --",
+    "build": "node next-cli.js build",
+    "start": "NODE_ENV=production node next-cli.js start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.50.0",
+    "next": "16.2.2",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.2",
+    "tailwindcss": "^4"
+  }
+}

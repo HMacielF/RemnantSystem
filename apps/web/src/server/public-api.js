@@ -1,0 +1,539 @@
+import { createClient } from "@supabase/supabase-js";
+
+const ACTIVE_REMNANT_SELECT = "*";
+const HOLD_SELECT = `
+    id,
+    remnant_id,
+    company_id,
+    status,
+    created_at,
+    updated_at
+`;
+const SALE_SELECT = `
+    id,
+    remnant_id,
+    company_id,
+    sold_at,
+    created_at,
+    updated_at
+`;
+const VALID_STATUSES = new Set(["available", "hold", "sold"]);
+
+function envConfig() {
+  return {
+    url: process.env.SUPABASE_URL,
+    anonKey: process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY,
+    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  };
+}
+
+function createSupabaseClient(key) {
+  const { url } = envConfig();
+  if (!url || !key) {
+    throw new Error("SUPABASE_URL and SUPABASE_ANON_KEY/SUPABASE_KEY are required");
+  }
+
+  return createClient(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
+
+function getPublicReadClient() {
+  return createSupabaseClient(envConfig().anonKey);
+}
+
+function getTrustedReadClient() {
+  const { serviceRoleKey, anonKey } = envConfig();
+  return createSupabaseClient(serviceRoleKey || anonKey);
+}
+
+function getServiceClient() {
+  const { serviceRoleKey } = envConfig();
+  return serviceRoleKey ? createSupabaseClient(serviceRoleKey) : null;
+}
+
+function asNumber(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeStatus(value, fallback = "available") {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "on hold") return "hold";
+  if (VALID_STATUSES.has(normalized)) return normalized;
+  return fallback;
+}
+
+function escapeLikeValue(value) {
+  return String(value || "").replace(/[,%]/g, "");
+}
+
+function extractRemnantIdSearch(value) {
+  const trimmed = String(value || "").trim();
+  const match = /^#?\s*(\d+)$/.exec(trimmed);
+  return match ? Number(match[1]) : null;
+}
+
+function formatHold(row) {
+  if (!row) return null;
+  return row;
+}
+
+function formatSale(row) {
+  if (!row) return null;
+  return row;
+}
+
+function pickRelevantHold(rows) {
+  const candidates = Array.isArray(rows) ? rows : [];
+  const visibleCandidates = candidates.filter((row) =>
+    ["active", "expired"].includes(String(row?.status || "").toLowerCase()),
+  );
+  if (visibleCandidates.length === 0) return null;
+
+  const priority = { active: 0, expired: 1 };
+  return [...visibleCandidates].sort((a, b) => {
+    const aPriority = priority[a.status] ?? 99;
+    const bPriority = priority[b.status] ?? 99;
+    if (aPriority !== bPriority) return aPriority - bPriority;
+    return new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0);
+  })[0] || null;
+}
+
+function formatPublicRemnant(row) {
+  return {
+    ...row,
+    display_id: row.id,
+    internal_remnant_id: row.internal_remnant_id ?? null,
+    company_name: row.company || "",
+    material_name: row.material || "",
+    thickness_name: row.thickness || "",
+  };
+}
+
+async function fetchVisibleActiveRemnantRows({ internalIds = [], externalIds = [] } = {}) {
+  const normalizedInternalIds = [...new Set((internalIds || []).map((value) => Number(value)).filter(Boolean))];
+  const normalizedExternalIds = [...new Set((externalIds || []).map((value) => Number(value)).filter(Boolean))];
+  if (!normalizedInternalIds.length && !normalizedExternalIds.length) return [];
+
+  let query = getPublicReadClient()
+    .from("active_remnants")
+    .select("internal_remnant_id,id,status");
+
+  if (normalizedInternalIds.length && normalizedExternalIds.length) {
+    query = query.or(
+      `internal_remnant_id.in.(${normalizedInternalIds.join(",")}),id.in.(${normalizedExternalIds.join(",")})`,
+    );
+  } else if (normalizedInternalIds.length) {
+    query = query.in("internal_remnant_id", normalizedInternalIds);
+  } else {
+    query = query.in("id", normalizedExternalIds);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+async function resolveVisiblePublicRemnant({ internalRemnantId = null, externalRemnantId = null } = {}) {
+  const rows = await fetchVisibleActiveRemnantRows({
+    internalIds: internalRemnantId ? [internalRemnantId] : [],
+    externalIds: externalRemnantId ? [externalRemnantId] : [],
+  });
+
+  const byInternalId = internalRemnantId
+    ? rows.find((row) => Number(row.internal_remnant_id) === Number(internalRemnantId))
+    : null;
+  const byExternalId = externalRemnantId
+    ? rows.find((row) => Number(row.id) === Number(externalRemnantId))
+    : null;
+
+  if (internalRemnantId && externalRemnantId) {
+    if (
+      byInternalId &&
+      byExternalId &&
+      Number(byInternalId.internal_remnant_id) === Number(byExternalId.internal_remnant_id)
+    ) {
+      return byInternalId;
+    }
+    return null;
+  }
+
+  return byInternalId || byExternalId || null;
+}
+
+async function fetchRelevantHoldMap(client, remnantIds) {
+  const ids = [...new Set((remnantIds || []).map((value) => Number(value)).filter(Boolean))];
+  if (ids.length === 0) return new Map();
+
+  const { data, error } = await client
+    .from("holds")
+    .select(HOLD_SELECT)
+    .in("remnant_id", ids)
+    .in("status", ["active", "expired", "sold", "released"])
+    .order("updated_at", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  const grouped = new Map();
+  (data || []).forEach((row) => {
+    const list = grouped.get(row.remnant_id) || [];
+    list.push(formatHold(row));
+    grouped.set(row.remnant_id, list);
+  });
+
+  const result = new Map();
+  grouped.forEach((rows, remnantId) => {
+    result.set(remnantId, pickRelevantHold(rows));
+  });
+  return result;
+}
+
+async function fetchLatestSaleMap(client, remnantIds) {
+  const ids = [...new Set((remnantIds || []).map((value) => Number(value)).filter(Boolean))];
+  if (ids.length === 0) return new Map();
+
+  const { data, error } = await client
+    .from("remnant_sales")
+    .select(SALE_SELECT)
+    .in("remnant_id", ids)
+    .order("sold_at", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  const result = new Map();
+  (data || []).forEach((row) => {
+    const remnantId = Number(row.remnant_id);
+    if (!remnantId || result.has(remnantId)) return;
+    result.set(remnantId, formatSale(row));
+  });
+  return result;
+}
+
+export async function fetchPublicLookupRows() {
+  const { data, error } = await getPublicReadClient()
+    .from("active_remnants")
+    .select("company,material,thickness");
+
+  if (error) throw error;
+
+  const uniqueRows = (values) =>
+    Array.from(
+      new Set(
+        (values || [])
+          .map((value) => String(value || "").trim())
+          .filter(Boolean),
+      ),
+    ).map((name) => ({ id: name, name, active: true }));
+
+  const sortByName = (rows) => [...rows].sort((a, b) => a.name.localeCompare(b.name));
+
+  return {
+    companies: sortByName(uniqueRows((data || []).map((row) => row.company))),
+    materials: sortByName(uniqueRows((data || []).map((row) => row.material))),
+    thicknesses: sortByName(uniqueRows((data || []).map((row) => row.thickness))),
+  };
+}
+
+export async function fetchInventorySummary() {
+  const { data, error } = await getPublicReadClient()
+    .from("active_remnants")
+    .select("status");
+
+  if (error) throw error;
+
+  return (data || []).reduce(
+    (acc, row) => {
+      const status = normalizeStatus(row?.status, "available");
+      acc.total += 1;
+      acc[status] += 1;
+      return acc;
+    },
+    { total: 0, available: 0, hold: 0, sold: 0 },
+  );
+}
+
+export async function fetchSalesRepRows(options = {}) {
+  const companyId = Number(options.companyId || 0);
+  const { data, error } = await getTrustedReadClient()
+    .from("profiles")
+    .select("id,email,full_name,system_role,company_id")
+    .eq("active", true)
+    .order("full_name", { ascending: true });
+
+  if (error) throw error;
+
+  return (data || [])
+    .filter(
+      (row) =>
+        row.system_role === "status_user" &&
+        companyId > 0 &&
+        Number(row.company_id) === companyId,
+    )
+    .map((row) => ({
+      id: row.id,
+      full_name: row.full_name,
+      display_name: row.full_name || row.email || "User",
+      company_id: row.company_id,
+    }));
+}
+
+export async function fetchPublicSalesRepRows(options = {}) {
+  const internalRemnantId = asNumber(options.internalRemnantId ?? options.remnantId);
+  const externalRemnantId = asNumber(options.externalRemnantId ?? options.displayRemnantId);
+  const visibleRemnant = await resolveVisiblePublicRemnant({
+    internalRemnantId,
+    externalRemnantId,
+  });
+  if (!visibleRemnant) return [];
+
+  const trustedClient = getServiceClient() || getTrustedReadClient();
+  const { data, error } = await trustedClient
+    .from("remnants")
+    .select("id,company_id,deleted_at")
+    .eq("id", visibleRemnant.internal_remnant_id)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data || data.deleted_at) return [];
+
+  return fetchSalesRepRows({ companyId: data.company_id });
+}
+
+export function getPublicRemnantFilters(searchParams) {
+  const material = searchParams.getAll("material");
+  return {
+    materialNames: material.map((value) => String(value || "").trim()).filter(Boolean),
+    stone: String(searchParams.get("stone") || "").trim(),
+    status: normalizeStatus(searchParams.get("status"), ""),
+    minWidth: asNumber(searchParams.get("min-width") ?? searchParams.get("minWidth")),
+    minHeight: asNumber(searchParams.get("min-height") ?? searchParams.get("minHeight")),
+  };
+}
+
+export async function fetchPublicRemnants(filters) {
+  const stoneLike = escapeLikeValue(filters.stone);
+  const searchedRemnantId = extractRemnantIdSearch(filters.stone);
+
+  let query = getPublicReadClient()
+    .from("active_remnants")
+    .select(ACTIVE_REMNANT_SELECT)
+    .order("id", { ascending: true });
+
+  if (filters.materialNames.length > 0) {
+    query = query.in("material", filters.materialNames);
+  }
+  if (filters.stone && searchedRemnantId !== null) {
+    query = query.or(`name.ilike.%${stoneLike}%,id.eq.${searchedRemnantId}`);
+  } else if (filters.stone) {
+    query = query.ilike("name", `%${stoneLike}%`);
+  }
+  if (filters.status) query = query.eq("status", filters.status);
+  if (filters.minWidth !== null) query = query.gte("width", filters.minWidth);
+  if (filters.minHeight !== null) query = query.gte("height", filters.minHeight);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map(formatPublicRemnant);
+}
+
+export async function fetchPublicRemnantEnrichment(remnantIds) {
+  const numericIds = [...new Set((remnantIds || []).map((value) => Number(value)).filter(Boolean))];
+  if (numericIds.length === 0) return [];
+
+  const visibleRows = await fetchVisibleActiveRemnantRows({ internalIds: numericIds });
+  const visibleIds = visibleRows.map((row) => Number(row.internal_remnant_id)).filter(Boolean);
+  if (visibleIds.length === 0) return [];
+
+  const trustedClient = getTrustedReadClient();
+  const holdMap = await fetchRelevantHoldMap(trustedClient, visibleIds);
+  const saleMap = await fetchLatestSaleMap(trustedClient, visibleIds);
+
+  return visibleIds.map((remnantId) => {
+    const currentSale = saleMap.get(Number(remnantId)) || null;
+    return {
+      remnant_id: Number(remnantId),
+      current_hold: holdMap.get(Number(remnantId)) || null,
+      current_sale: currentSale,
+      sold_at: currentSale?.sold_at || null,
+    };
+  });
+}
+
+async function writeAuditLog(client, entry) {
+  const { error } = await client.from("audit_logs").insert({
+    actor_user_id: null,
+    actor_email: null,
+    actor_role: null,
+    actor_company_id: null,
+    event_type: entry.event_type,
+    entity_type: entry.entity_type,
+    entity_id: entry.entity_id ?? null,
+    remnant_id: entry.remnant_id ?? null,
+    company_id: entry.company_id ?? null,
+    message: entry.message ?? null,
+    old_data: entry.old_data ?? null,
+    new_data: entry.new_data ?? null,
+    meta: entry.meta ?? null,
+  });
+
+  if (error) {
+    console.error("Audit log write failed:", error);
+  }
+}
+
+async function queueNotification(client, entry) {
+  const { error } = await client.from("notification_queue").insert({
+    notification_type: entry.notification_type,
+    target_user_id: entry.target_user_id ?? null,
+    target_email: entry.target_email ?? null,
+    remnant_id: entry.remnant_id ?? null,
+    hold_id: entry.hold_id ?? null,
+    hold_request_id: entry.hold_request_id ?? null,
+    payload: entry.payload ?? {},
+    scheduled_for: entry.scheduled_for ?? new Date().toISOString(),
+    status: entry.status ?? "pending",
+  });
+
+  if (error) {
+    console.error("Notification queue write failed:", error);
+  }
+}
+
+function runBestEffort(task, label) {
+  void (async () => {
+    try {
+      await task();
+    } catch (error) {
+      console.error(`${label} failed:`, error);
+    }
+  })();
+}
+
+export async function createPublicHoldRequest(body) {
+  const serviceSupabase = getServiceClient();
+  if (!serviceSupabase) {
+    const error = new Error("Public hold requests require SUPABASE_SERVICE_ROLE_KEY on the server");
+    error.statusCode = 500;
+    throw error;
+  }
+
+  const internalRemnantId = asNumber(body.remnant_id ?? body.internal_remnant_id);
+  const externalRemnantId = asNumber(body.external_remnant_id ?? body.remnant_id);
+  const requesterName = String(body.requester_name || body.name || "").trim();
+  const requesterEmail = String(body.requester_email || body.email || "").trim();
+  const salesRepUserId = body.sales_rep_user_id ? String(body.sales_rep_user_id).trim() : null;
+  const salesRepName = String(body.sales_rep_name || "").trim();
+
+  const missingFields = [];
+  if (!externalRemnantId) missingFields.push("external_remnant_id (or remnant_id)");
+  if (!requesterName) missingFields.push("requester_name");
+  if (!requesterEmail) missingFields.push("requester_email");
+
+  if (missingFields.length > 0) {
+    const error = new Error("Missing required fields");
+    error.statusCode = 400;
+    error.payload = { error: "Missing required fields", missing_fields: missingFields };
+    throw error;
+  }
+
+  const visibleRemnant = await resolveVisiblePublicRemnant({
+    internalRemnantId,
+    externalRemnantId,
+  });
+  if (!visibleRemnant) {
+    const error = new Error("Remnant not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const { data: resolvedRemnant, error: remnantError } = await serviceSupabase
+    .from("remnants")
+    .select("id,moraware_remnant_id,company_id,status,deleted_at")
+    .eq("id", visibleRemnant.internal_remnant_id)
+    .maybeSingle();
+
+  if (remnantError) throw remnantError;
+
+  if (!resolvedRemnant || resolvedRemnant.deleted_at) {
+    const error = new Error("Remnant not found");
+    error.statusCode = 404;
+    throw error;
+  }
+  if (resolvedRemnant.status === "sold") {
+    const error = new Error("Sold remnants cannot receive hold requests");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (salesRepUserId) {
+    const validSalesReps = await fetchSalesRepRows({
+      companyId: Number(resolvedRemnant.company_id || 1),
+    });
+    const isValidSalesRep = validSalesReps.some((row) => String(row.id) === salesRepUserId);
+    if (!isValidSalesRep) {
+      const error = new Error("Selected sales rep is not available for this remnant");
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+
+  const insertPayload = {
+    remnant_id: resolvedRemnant.id,
+    company_id: resolvedRemnant.company_id || null,
+    requester_name: requesterName,
+    requester_email: requesterEmail,
+    sales_rep_user_id: salesRepUserId || null,
+    sales_rep_name: salesRepName || null,
+    notes: String(body.notes || "").trim() || null,
+    job_number: String(body.job_number || "").trim() || null,
+    status: "pending",
+  };
+
+  const { data: createdRequest, error } = await serviceSupabase
+    .from("hold_requests")
+    .insert(insertPayload)
+    .select("id")
+    .single();
+
+  if (error) throw error;
+
+  runBestEffort(async () => {
+    await queueNotification(serviceSupabase, {
+      notification_type: "hold_request_created",
+      target_user_id: salesRepUserId || null,
+      remnant_id: resolvedRemnant.id,
+      hold_request_id: createdRequest?.id || null,
+      payload: {
+        requester_name: requesterName,
+        requester_email: requesterEmail,
+        job_number: insertPayload.job_number,
+      },
+    });
+
+    await writeAuditLog(serviceSupabase, {
+      event_type: "hold_request_created",
+      entity_type: "hold_request",
+      entity_id: createdRequest?.id || null,
+      remnant_id: resolvedRemnant.id,
+      company_id: resolvedRemnant.company_id || null,
+      message: `Created public hold request for remnant #${externalRemnantId}`,
+      new_data: insertPayload,
+      meta: {
+        source: "public",
+        hold_request_id: createdRequest?.id || null,
+        external_remnant_id: externalRemnantId,
+        requester_name: requesterName,
+        requester_email: requesterEmail,
+      },
+    });
+  }, "Hold request sidecar");
+
+  return { success: true };
+}

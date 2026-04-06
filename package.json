@@ -1,19 +1,48 @@
 {
   "dependencies": {
     "@supabase/supabase-js": "^2.50.0",
-    "body-parser": "^2.2.0",
-    "cookie-parser": "^1.4.7",
     "dotenv": "^16.5.0",
-    "express": "^5.1.0",
-    "nodemon": "^3.1.10"
+    "pg": "^8.16.3",
+    "xlsx": "^0.18.5"
   },
   "name": "remnantsystem",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "apps/web/server.js",
   "scripts": {
-    "start": "nodemon index.js",
-    "scraper:run": "python3 -m scraper",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "postinstall": "npm --prefix apps/web install",
+    "start": "npm run web:start",
+    "dev": "npm run web:dev",
+    "web:dev": "npm --prefix apps/web run dev -- --port 3001",
+    "web:dev:lan": "npm --prefix apps/web run dev -- --hostname 0.0.0.0 --port 3001",
+    "web:clean": "npm --prefix apps/web run clean",
+    "web:clean:deep": "npm --prefix apps/web run clean:deep",
+    "web:dev:clean": "npm --prefix apps/web run dev:clean -- --port 3001",
+    "web:build": "npm --prefix apps/web run build",
+    "web:start": "npm --prefix apps/web run start -- --port 3001",
+    "web:start:lan": "npm --prefix apps/web run start -- --hostname 0.0.0.0 --port 3001",
+    "web:lint": "npm --prefix apps/web run lint",
+    "slabs:import": "node scripts/import_slab_catalog.js",
+    "pricing:msi-import": "node scripts/import_msi_pricing.js",
+    "slabs:analyze-colors": "python3 scripts/analyze_slab_colors.py",
+    "scraper:run": "python3 -m scrapers.remnant_scraper",
+    "scraper:venezia": "python3 -m scrapers.slab_scraper.venezia_scraper",
+    "scraper:msi": "python3 -m scrapers.slab_scraper.msi_scraper",
+    "scraper:emerstone": "python3 -m scrapers.slab_scraper.emerstone_scraper",
+    "scraper:blue-planet": "python3 -m scrapers.slab_scraper.blue_planet_scraper",
+    "scraper:bramati": "python3 -m scrapers.slab_scraper.bramati_scraper",
+    "scraper:gramaco": "python3 -m scrapers.slab_scraper.gramaco_scraper",
+    "scraper:caesarstone": "python3 -m scrapers.slab_scraper.caesarstone_scraper",
+    "scraper:cambria": "python3 -m scrapers.slab_scraper.cambria_scraper",
+    "scraper:cosentino": "python3 -m scrapers.slab_scraper.cosentino_scraper",
+    "scraper:hanstone": "python3 -m scrapers.slab_scraper.hanstone_scraper",
+    "scraper:marble-systems": "python3 -m scrapers.slab_scraper.marble_systems_scraper",
+    "scraper:east-west-marble": "python3 -m scrapers.slab_scraper.east_west_marble_scraper",
+    "scraper:vadara": "python3 -m scrapers.slab_scraper.vadara_scraper",
+    "scraper:daltile": "python3 -m scrapers.slab_scraper.daltile_scraper",
+    "scraper:raphael-stones": "python3 -m scrapers.slab_scraper.raphael_stones_scraper",
+    "scraper:reliance": "python3 -m scrapers.slab_scraper.reliance_scraper",
+    "scraper:umi-vicostone": "python3 -m scrapers.slab_scraper.umi_vicostone_scraper",
+    "test": "npm run web:lint && npm run web:build"
   },
   "repository": {
     "type": "git",
@@ -21,6 +50,9 @@
   },
   "author": "Hugo Fraga",
   "license": "ISC",
+  "engines": {
+    "node": ">=20.9 <25"
+  },
   "bugs": {
     "url": "https://github.com/HugoMaciel/RemnantSystem/issues"
   },

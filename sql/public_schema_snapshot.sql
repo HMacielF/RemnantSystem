@@ -1,7 +1,9 @@
--- Snapshot of the current public schema in Supabase project gixklwrdzrwojqoddehn.
--- This is intended as a copyable reference for recreating the public-side database
--- structure used by this app. It does not include seed data, auth configuration,
--- storage buckets, or Edge Functions.
+-- Reference snapshot of the current public schema in Supabase project
+-- gixklwrdzrwojqoddehn as of 2026-04-05.
+--
+-- This is a compact repo-side schema reference. It is intentionally more
+-- readable than a raw dump and excludes seed data, auth setup, storage, and
+-- Edge Functions.
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -23,119 +25,76 @@ begin
 end;
 $$;
 
-create or replace function public.approve_hold_request(
-  p_request_id bigint,
-  p_hold_owner_user_id uuid,
-  p_reviewed_by_user_id uuid,
-  p_expires_at timestamptz,
-  p_job_number text default null,
-  p_notes text default null
-)
-returns table (
-  hold_request_id bigint,
-  hold_id bigint,
-  remnant_id bigint,
-  company_id bigint
-)
+create schema if not exists private;
+
+revoke all on schema private from public;
+
+create or replace function private.handle_new_auth_user()
+returns trigger
 language plpgsql
-set search_path = public, pg_temp
+security definer
+set search_path = ''
 as $$
 declare
-  v_request public.hold_requests%rowtype;
-  v_remnant public.remnants%rowtype;
-  v_hold_id bigint;
-  v_job_number text;
-  v_notes text;
+  next_email text;
+  next_full_name text;
+  next_system_role text;
+  next_company_id bigint;
 begin
-  select *
-  into v_request
-  from public.hold_requests
-  where id = p_request_id
-  for update;
+  next_email := lower(nullif(trim(new.email), ''));
+  next_full_name := nullif(trim(coalesce(
+    new.raw_user_meta_data ->> 'full_name',
+    new.raw_user_meta_data ->> 'name',
+    new.raw_app_meta_data ->> 'full_name',
+    new.raw_app_meta_data ->> 'name'
+  )), '');
 
-  if not found then
-    raise exception 'Hold request not found';
+  next_system_role := lower(nullif(trim(coalesce(
+    new.raw_app_meta_data ->> 'system_role'
+  )), ''));
+
+  if next_system_role not in ('super_admin', 'manager', 'status_user') then
+    next_system_role := 'status_user';
   end if;
 
-  if v_request.status <> 'pending' then
-    raise exception 'Only pending hold requests can be approved';
+  if coalesce(
+    new.raw_app_meta_data ->> 'company_id',
+    ''
+  ) ~ '^\d+$' then
+    next_company_id := coalesce(
+      new.raw_app_meta_data ->> 'company_id'
+    )::bigint;
+  else
+    next_company_id := null;
   end if;
 
-  select *
-  into v_remnant
-  from public.remnants
-  where id = v_request.remnant_id
-  for update;
-
-  if not found or v_remnant.deleted_at is not null then
-    raise exception 'Remnant not found';
-  end if;
-
-  if coalesce(v_remnant.status, '') = 'sold' then
-    raise exception 'Sold remnants cannot be placed on hold';
-  end if;
-
-  if exists (
-    select 1
-    from public.holds h
-    where h.remnant_id = v_request.remnant_id
-      and h.status in ('active', 'expired')
-    for update
-  ) then
-    raise exception 'This remnant already has a hold';
-  end if;
-
-  v_job_number := nullif(btrim(coalesce(p_job_number, v_request.job_number, '')), '');
-  v_notes := nullif(btrim(coalesce(p_notes, v_request.notes, '')), '');
-
-  if v_job_number is null then
-    raise exception 'Job number is required to approve a hold request';
-  end if;
-
-  insert into public.holds (
-    remnant_id,
+  insert into public.profiles (
+    id,
+    email,
+    full_name,
+    system_role,
     company_id,
-    hold_owner_user_id,
-    hold_started_at,
-    expires_at,
-    status,
-    notes,
-    job_number
+    active
   )
   values (
-    v_request.remnant_id,
-    v_request.company_id,
-    p_hold_owner_user_id,
-    now(),
-    p_expires_at,
-    'active',
-    v_notes,
-    v_job_number
+    new.id,
+    next_email,
+    next_full_name,
+    next_system_role,
+    next_company_id,
+    true
   )
-  returning id into v_hold_id;
+  on conflict (id) do update
+  set email = excluded.email,
+      full_name = coalesce(excluded.full_name, public.profiles.full_name),
+      system_role = coalesce(public.profiles.system_role, excluded.system_role),
+      company_id = coalesce(public.profiles.company_id, excluded.company_id);
 
-  update public.remnants
-  set status = 'hold'
-  where id = v_request.remnant_id;
-
-  update public.hold_requests
-  set
-    status = 'approved',
-    reviewed_at = now(),
-    reviewed_by_user_id = p_reviewed_by_user_id,
-    job_number = v_job_number,
-    notes = v_notes,
-    updated_at = now()
-  where id = v_request.id;
-
-  return query
-  select
-    v_request.id,
-    v_hold_id,
-    v_request.remnant_id,
-    v_request.company_id;
+  return new;
 end;
 $$;
+
+-- See sql/approve_hold_request.sql for the operational hold approval function.
 
 create table if not exists public.companies (
   id bigint generated always as identity primary key,
@@ -274,6 +233,132 @@ create table if not exists public.remnant_sales (
   job_number text not null
 );
 
+create table if not exists public.suppliers (
+  id bigint generated always as identity primary key,
+  name text not null unique,
+  website_url text,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  inventory_url text,
+  notes text
+);
+
+create table if not exists public.colors (
+  id bigint generated always as identity primary key,
+  name text not null unique,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.finishes (
+  id bigint generated always as identity primary key,
+  name text not null unique,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.slabs (
+  id bigint generated always as identity primary key,
+  supplier_id bigint not null references public.suppliers(id) on delete cascade,
+  material_id bigint not null references public.materials(id) on delete restrict,
+  name text not null,
+  color_tone text,
+  detail_url text not null,
+  image_url text,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  width text,
+  height text
+);
+
+create table if not exists public.slab_colors (
+  slab_id bigint not null references public.slabs(id) on delete cascade,
+  color_id bigint not null references public.colors(id) on delete restrict,
+  role text not null check (role in ('primary', 'accent')),
+  created_at timestamptz not null default now(),
+  primary key (slab_id, color_id, role)
+);
+
+create table if not exists public.slab_finishes (
+  slab_id bigint not null references public.slabs(id) on delete cascade,
+  finish_id bigint not null references public.finishes(id) on delete restrict,
+  created_at timestamptz not null default now(),
+  primary key (slab_id, finish_id)
+);
+
+create table if not exists public.slab_thicknesses (
+  slab_id bigint not null references public.slabs(id) on delete cascade,
+  thickness_id bigint not null references public.thicknesses(id) on delete restrict,
+  created_at timestamptz not null default now(),
+  primary key (slab_id, thickness_id)
+);
+
+create table if not exists public.supplier_brands (
+  id bigint generated by default as identity primary key,
+  supplier_id bigint not null references public.suppliers(id) on delete cascade,
+  brand_name text not null,
+  material_id bigint references public.materials(id) on delete set null,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint supplier_brands_unique unique (supplier_id, brand_name)
+);
+
+create table if not exists public.supplier_contacts (
+  id bigint generated by default as identity primary key,
+  supplier_id bigint not null references public.suppliers(id) on delete cascade,
+  name text not null,
+  phone_office text,
+  phone_mobile text,
+  email text,
+  is_primary boolean not null default false,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.supplier_locations (
+  id bigint generated by default as identity primary key,
+  supplier_id bigint not null references public.suppliers(id) on delete cascade,
+  address_line_1 text,
+  city text,
+  state text,
+  postal_code text,
+  hours text,
+  appointment_notes text,
+  is_primary boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.supplier_terms (
+  id bigint generated by default as identity primary key,
+  supplier_id bigint not null unique references public.suppliers(id) on delete cascade,
+  sample_fee_text text,
+  tax_text text,
+  payment_terms text,
+  credit_terms text,
+  min_slab_purchase_text text,
+  ordering_method text,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.supplier_materials (
+  id bigint generated by default as identity primary key,
+  supplier_id bigint not null references public.suppliers(id) on delete cascade,
+  material_id bigint not null references public.materials(id) on delete restrict,
+  available boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint supplier_materials_unique unique (supplier_id, material_id)
+);
+
 create index if not exists idx_companies_name
   on public.companies(name);
 
@@ -359,6 +444,48 @@ create index if not exists idx_remnant_sales_sold_at
 create index if not exists idx_remnant_sales_sold_by_user_id
   on public.remnant_sales(sold_by_user_id);
 
+create index if not exists slabs_active_idx
+  on public.slabs(active);
+
+create index if not exists slabs_material_id_idx
+  on public.slabs(material_id);
+
+create index if not exists slabs_supplier_id_idx
+  on public.slabs(supplier_id);
+
+create index if not exists slabs_supplier_material_name_idx
+  on public.slabs(supplier_id, material_id, name);
+
+create index if not exists slab_colors_color_id_idx
+  on public.slab_colors(color_id);
+
+create index if not exists slab_colors_role_idx
+  on public.slab_colors(role);
+
+create index if not exists slab_finishes_finish_id_idx
+  on public.slab_finishes(finish_id);
+
+create index if not exists slab_thicknesses_thickness_id_idx
+  on public.slab_thicknesses(thickness_id);
+
+create index if not exists supplier_brands_supplier_id_idx
+  on public.supplier_brands(supplier_id);
+
+create index if not exists supplier_brands_material_id_idx
+  on public.supplier_brands(material_id);
+
+create index if not exists supplier_contacts_supplier_id_idx
+  on public.supplier_contacts(supplier_id);
+
+create index if not exists supplier_locations_supplier_id_idx
+  on public.supplier_locations(supplier_id);
+
+create index if not exists supplier_materials_supplier_id_idx
+  on public.supplier_materials(supplier_id);
+
+create index if not exists supplier_materials_material_id_idx
+  on public.supplier_materials(material_id);
+
 drop trigger if exists set_remnants_updated_at on public.remnants;
 create trigger set_remnants_updated_at
 before update on public.remnants
@@ -383,6 +510,60 @@ before update on public.remnant_sales
 for each row
 execute function public.set_remnant_sales_updated_at();
 
+drop trigger if exists set_suppliers_updated_at on public.suppliers;
+create trigger set_suppliers_updated_at
+before update on public.suppliers
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists set_colors_updated_at on public.colors;
+create trigger set_colors_updated_at
+before update on public.colors
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists set_finishes_updated_at on public.finishes;
+create trigger set_finishes_updated_at
+before update on public.finishes
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists set_slabs_updated_at on public.slabs;
+create trigger set_slabs_updated_at
+before update on public.slabs
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists supplier_brands_set_updated_at on public.supplier_brands;
+create trigger supplier_brands_set_updated_at
+before update on public.supplier_brands
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists supplier_contacts_set_updated_at on public.supplier_contacts;
+create trigger supplier_contacts_set_updated_at
+before update on public.supplier_contacts
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists supplier_locations_set_updated_at on public.supplier_locations;
+create trigger supplier_locations_set_updated_at
+before update on public.supplier_locations
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists supplier_materials_set_updated_at on public.supplier_materials;
+create trigger supplier_materials_set_updated_at
+before update on public.supplier_materials
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists supplier_terms_set_updated_at on public.supplier_terms;
+create trigger supplier_terms_set_updated_at
+before update on public.supplier_terms
+for each row
+execute function public.set_updated_at();
+
 alter table public.companies enable row level security;
 alter table public.materials enable row level security;
 alter table public.thicknesses enable row level security;
@@ -393,417 +574,27 @@ alter table public.holds enable row level security;
 alter table public.hold_requests enable row level security;
 alter table public.notification_queue enable row level security;
 alter table public.remnant_sales enable row level security;
+alter table public.suppliers enable row level security;
+alter table public.colors enable row level security;
+alter table public.finishes enable row level security;
+alter table public.slabs enable row level security;
+alter table public.slab_colors enable row level security;
+alter table public.slab_finishes enable row level security;
+alter table public.slab_thicknesses enable row level security;
+alter table public.supplier_brands enable row level security;
+alter table public.supplier_contacts enable row level security;
+alter table public.supplier_locations enable row level security;
+alter table public.supplier_terms enable row level security;
+alter table public.supplier_materials enable row level security;
 
-drop policy if exists "authenticated users can view companies" on public.companies;
-create policy "authenticated users can view companies"
-on public.companies
-for select
-to authenticated
-using (true);
-
-drop policy if exists "super_admin can insert companies" on public.companies;
-create policy "super_admin can insert companies"
-on public.companies
-for insert
-to authenticated
-with check (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role = 'super_admin'
-  )
-);
-
-drop policy if exists "super_admin can update companies" on public.companies;
-create policy "super_admin can update companies"
-on public.companies
-for update
-to authenticated
-using (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role = 'super_admin'
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role = 'super_admin'
-  )
-);
-
-drop policy if exists "authenticated users can view materials" on public.materials;
-create policy "authenticated users can view materials"
-on public.materials
-for select
-to authenticated
-using (true);
-
-drop policy if exists "super_admin and manager can insert materials" on public.materials;
-create policy "super_admin and manager can insert materials"
-on public.materials
-for insert
-to authenticated
-with check (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role in ('super_admin', 'manager')
-  )
-);
-
-drop policy if exists "super_admin and manager can update materials" on public.materials;
-create policy "super_admin and manager can update materials"
-on public.materials
-for update
-to authenticated
-using (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role in ('super_admin', 'manager')
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role in ('super_admin', 'manager')
-  )
-);
-
-drop policy if exists "authenticated users can view thicknesses" on public.thicknesses;
-create policy "authenticated users can view thicknesses"
-on public.thicknesses
-for select
-to authenticated
-using (true);
-
-drop policy if exists "super_admin and manager can insert thicknesses" on public.thicknesses;
-create policy "super_admin and manager can insert thicknesses"
-on public.thicknesses
-for insert
-to authenticated
-with check (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role in ('super_admin', 'manager')
-  )
-);
-
-drop policy if exists "super_admin and manager can update thicknesses" on public.thicknesses;
-create policy "super_admin and manager can update thicknesses"
-on public.thicknesses
-for update
-to authenticated
-using (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role in ('super_admin', 'manager')
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role in ('super_admin', 'manager')
-  )
-);
-
-drop policy if exists "authenticated users can view profiles" on public.profiles;
-create policy "authenticated users can view profiles"
+drop policy if exists "authenticated users can view own profile" on public.profiles;
+create policy "authenticated users can view own profile"
 on public.profiles
 for select
 to authenticated
-using (true);
+using ((select auth.uid()) = id);
 
-drop policy if exists "super_admin can insert profiles" on public.profiles;
-create policy "super_admin can insert profiles"
-on public.profiles
-for insert
-to authenticated
-with check (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role = 'super_admin'
-  )
-);
-
-drop policy if exists "super_admin can update profiles" on public.profiles;
-create policy "super_admin can update profiles"
-on public.profiles
-for update
-to authenticated
-using (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role = 'super_admin'
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role = 'super_admin'
-  )
-);
-
-drop policy if exists "authenticated users can view remnants" on public.remnants;
-create policy "authenticated users can view remnants"
-on public.remnants
-for select
-to authenticated
-using (true);
-
-drop policy if exists "super_admin and manager can insert remnants" on public.remnants;
-create policy "super_admin and manager can insert remnants"
-on public.remnants
-for insert
-to authenticated
-with check (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role in ('super_admin', 'manager')
-  )
-);
-
-drop policy if exists "super_admin and manager can update all remnants" on public.remnants;
-create policy "super_admin and manager can update all remnants"
-on public.remnants
-for update
-to authenticated
-using (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role in ('super_admin', 'manager')
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role in ('super_admin', 'manager')
-  )
-);
-
-drop policy if exists "manager can view audit logs" on public.audit_logs;
-create policy "manager can view audit logs"
-on public.audit_logs
-for select
-to authenticated
-using (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role = 'manager'
-  )
-);
-
-drop policy if exists "super_admin can view audit logs" on public.audit_logs;
-create policy "super_admin can view audit logs"
-on public.audit_logs
-for select
-to authenticated
-using (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role = 'super_admin'
-  )
-);
-
-drop policy if exists "authenticated users can view holds" on public.holds;
-create policy "authenticated users can view holds"
-on public.holds
-for select
-to authenticated
-using (true);
-
-drop policy if exists "super_admin and manager can insert holds" on public.holds;
-create policy "super_admin and manager can insert holds"
-on public.holds
-for insert
-to authenticated
-with check (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role in ('super_admin', 'manager')
-  )
-);
-
-drop policy if exists "super_admin and manager can update holds" on public.holds;
-create policy "super_admin and manager can update holds"
-on public.holds
-for update
-to authenticated
-using (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role in ('super_admin', 'manager')
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role in ('super_admin', 'manager')
-  )
-);
-
-drop policy if exists "public users can create hold requests" on public.hold_requests;
-create policy "public users can create hold requests"
-on public.hold_requests
-for insert
-to anon, authenticated
-with check (status = 'pending');
-
-drop policy if exists "super_admin and manager can view hold requests" on public.hold_requests;
-create policy "super_admin and manager can view hold requests"
-on public.hold_requests
-for select
-to authenticated
-using (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role in ('super_admin', 'manager')
-  )
-);
-
-drop policy if exists "super_admin and manager can update hold requests" on public.hold_requests;
-create policy "super_admin and manager can update hold requests"
-on public.hold_requests
-for update
-to authenticated
-using (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role in ('super_admin', 'manager')
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role in ('super_admin', 'manager')
-  )
-);
-
-drop policy if exists "super_admin can view notification queue" on public.notification_queue;
-create policy "super_admin can view notification queue"
-on public.notification_queue
-for select
-to authenticated
-using (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role = 'super_admin'
-  )
-);
-
-drop policy if exists "authenticated users can view remnant sales" on public.remnant_sales;
-create policy "authenticated users can view remnant sales"
-on public.remnant_sales
-for select
-to authenticated
-using (true);
-
-drop policy if exists "super_admin manager and status_user can insert remnant sales" on public.remnant_sales;
-create policy "super_admin manager and status_user can insert remnant sales"
-on public.remnant_sales
-for insert
-to authenticated
-with check (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid()
-      and p.active = true
-      and p.system_role in ('super_admin', 'manager', 'status_user')
-  )
-);
-
-create or replace view public.active_remnants as
-select
-  r.id as internal_remnant_id,
-  coalesce(r.moraware_remnant_id, r.id) as id,
-  c.name as company,
-  m.name as material,
-  t.name as thickness,
-  r.name,
-  r.width,
-  r.height,
-  r.l_shape,
-  r.l_width,
-  r.l_height,
-  r.status,
-  coalesce(r.image, r.source_image_url) as image
-from public.remnants r
-left join public.companies c on c.id = r.company_id
-left join public.materials m on m.id = r.material_id
-left join public.thicknesses t on t.id = r.thickness_id
-where r.deleted_at is null;
-
-grant select on public.active_remnants to anon, authenticated;
-grant insert on public.hold_requests to anon, authenticated;
-revoke insert, update, delete on public.notification_queue from anon, authenticated;
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute function private.handle_new_auth_user();

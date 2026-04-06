@@ -85,6 +85,8 @@ web_modules/
 
 # Next.js build output
 .next
+**/.next
+**/.next_stale_*
 out
 
 # Nuxt.js build / generate output
@@ -139,6 +141,10 @@ dist
 __pycache__/
 *.pyc
 .venv/
+.DS_Store
+
+# Python package caches in nested scraper modules
+scrapers/**/__pycache__/
 
 # Local editor / MCP wiring
 .vscode/mcp.json
@@ -146,3 +152,10 @@ __pycache__/
 # Local Codex / agent tooling
 .agents/
 skills-lock.json
+
+# Generated scraper exports
+scrapers/slab_scraper/output/
+scrapers/remnant_scraper/last_sync_issues.json
+
+# Local backups
+.backups/
