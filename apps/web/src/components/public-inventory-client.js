@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import useBodyScrollLock from "@/components/use-body-scroll-lock";
 
 function imageSrc(remnant) {
   return remnant.image || remnant.source_image_url || "";
@@ -101,6 +102,26 @@ function buildSearchQuery(filters) {
   if (filters.minHeight.trim()) params.set("min-height", filters.minHeight.trim());
   if (filters.status.trim()) params.set("status", filters.status.trim());
   return params;
+}
+
+function PublicInventorySkeletonCard() {
+  return (
+    <div className="overflow-hidden rounded-[24px] border border-white/80 bg-white/92 shadow-[0_14px_30px_rgba(58,37,22,0.07)] sm:rounded-[26px]">
+      <div className="relative aspect-[4/3] overflow-hidden bg-[linear-gradient(180deg,#f7efe6_0%,#efe4d7_100%)]">
+        <div className="absolute inset-0 animate-pulse bg-[linear-gradient(90deg,rgba(243,235,228,0.92),rgba(234,223,211,0.88),rgba(243,235,228,0.92))]" />
+        <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
+          <div className="h-6 w-20 animate-pulse rounded-full bg-white/75" />
+          <div className="h-6 w-24 animate-pulse rounded-full bg-white/70" />
+        </div>
+      </div>
+      <div className="space-y-2.5 p-3.5 sm:p-4">
+        <div className="rounded-[22px] bg-[#fbf8f4] px-3 py-3">
+          <div className="h-4 w-3/5 animate-pulse rounded-full bg-[#eaded3]" />
+          <div className="mt-3 h-4 w-2/3 animate-pulse rounded-full bg-[#f0e6dd]" />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function PublicInventoryClient() {
@@ -341,6 +362,9 @@ export default function PublicInventoryClient() {
     selectedImageIndex !== null && selectedImageIndex >= 0 && selectedImageIndex < modalImageItems.length
       ? modalImageItems[selectedImageIndex]
       : null;
+  const isModalOpen = Boolean(selectedImageRemnant || holdRemnant);
+
+  useBodyScrollLock(isModalOpen);
 
   function openImageViewer(remnant) {
     const nextIndex = modalImageItems.findIndex(
@@ -505,14 +529,7 @@ export default function PublicInventoryClient() {
           {loading ? (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
               {Array.from({ length: 6 }).map((_, index) => (
-                <div key={index} className="overflow-hidden rounded-[24px] border border-white/80 bg-white/70 shadow-[0_18px_40px_rgba(58,37,22,0.07)] sm:rounded-[26px]">
-                  <div className="h-48 animate-pulse bg-[linear-gradient(90deg,#f3ebe4,#ece1d7,#f3ebe4)] sm:h-52" />
-                  <div className="space-y-3 p-4">
-                    <div className="h-4 w-24 animate-pulse rounded-full bg-[#efe2d7]" />
-                    <div className="h-4 w-3/4 animate-pulse rounded-full bg-[#f4e9df]" />
-                    <div className="h-4 w-2/3 animate-pulse rounded-full bg-[#f4e9df]" />
-                  </div>
-                </div>
+                <PublicInventorySkeletonCard key={index} />
               ))}
             </div>
           ) : error ? (
@@ -535,7 +552,7 @@ export default function PublicInventoryClient() {
                 return (
                   <article
                     key={`${displayRemnantId(remnant)}-${index}`}
-                    className="group relative overflow-hidden rounded-[24px] border border-white/80 bg-white/92 shadow-[0_20px_45px_rgba(58,37,22,0.08)] backdrop-blur transition-transform hover:-translate-y-1 sm:rounded-[26px]"
+                    className="group relative overflow-hidden rounded-[24px] border border-white/80 bg-white/94 shadow-[0_14px_30px_rgba(58,37,22,0.07)] transition-transform [contain-intrinsic-size:420px] [content-visibility:auto] hover:-translate-y-1 sm:rounded-[26px]"
                   >
                     <div className="relative">
                       {String(remnant.status || "").toLowerCase() === "available" ? (
@@ -571,7 +588,7 @@ export default function PublicInventoryClient() {
                                 <circle cx="13.2" cy="13.3" r=".72" />
                               </svg>
                             </button>
-                            <div className="pointer-events-none absolute bottom-full left-0 mb-2 hidden h-9 translate-y-1 items-center whitespace-nowrap rounded-full bg-[#2c211c]/92 px-3 text-[11px] font-semibold text-white opacity-0 shadow-lg backdrop-blur-sm transition-all peer-hover:translate-y-0 peer-hover:opacity-100 peer-focus-visible:translate-y-0 peer-focus-visible:opacity-100 md:inline-flex">
+                            <div className="pointer-events-none absolute left-full top-1/2 z-10 ml-2 hidden h-9 -translate-x-2 -translate-y-1/2 items-center whitespace-nowrap rounded-full bg-[#2c211c]/92 px-3 text-[11px] font-semibold text-white opacity-0 shadow-lg backdrop-blur-sm transition-all peer-hover:translate-x-0 peer-hover:opacity-100 peer-focus-visible:translate-x-0 peer-focus-visible:opacity-100 md:inline-flex">
                               Request a hold
                             </div>
                           </div>
@@ -583,7 +600,7 @@ export default function PublicInventoryClient() {
                         className="block w-full overflow-hidden text-left"
                         onClick={() => image && openImageViewer(remnant)}
                       >
-                        <div className="relative overflow-hidden bg-[linear-gradient(180deg,#f7efe6_0%,#efe4d7_100%)]">
+                        <div className="relative aspect-[4/3] overflow-hidden bg-[linear-gradient(180deg,#f7efe6_0%,#efe4d7_100%)]">
                           <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-24 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.45),transparent_72%)]" />
                           <div className="pointer-events-none absolute inset-x-0 top-0 z-[2] flex items-start justify-between gap-2 p-3">
                             <span className="inline-flex items-center rounded-full border border-white/70 bg-white/88 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8c6040] shadow-sm backdrop-blur">
@@ -599,11 +616,12 @@ export default function PublicInventoryClient() {
                           <img
                             src={image}
                             alt={`Remnant ${displayRemnantId(remnant)}`}
-                            className="h-44 w-full object-cover transition-transform duration-300 motion-safe:md:group-hover:scale-[1.03] sm:h-48"
+                            className="h-full w-full object-cover transition-transform duration-300 motion-safe:md:group-hover:scale-[1.02]"
+                            decoding="async"
                             loading={index < 8 ? "eager" : "lazy"}
                           />
                         ) : (
-                          <div className="flex h-44 w-full items-center justify-center bg-[#f4ece4] text-sm font-semibold uppercase tracking-[0.16em] text-[#9c7355] sm:h-48">
+                          <div className="flex h-full w-full items-center justify-center bg-[#f4ece4] text-sm font-semibold uppercase tracking-[0.16em] text-[#9c7355]">
                             No Image
                           </div>
                         )}

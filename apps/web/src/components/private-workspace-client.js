@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import useBodyScrollLock from "@/components/use-body-scroll-lock";
 
 const MAX_BROWSER_IMAGE_PIXELS = 16_000_000;
 const CROP_CANVAS_WIDTH = 960;
@@ -279,6 +280,35 @@ function normalizeCropDraft(draft, image, canvasWidth = CROP_CANVAS_WIDTH, canva
   return next;
 }
 
+function PrivateWorkspaceSkeletonCard({ showActions = false }) {
+  return (
+    <div className="overflow-hidden rounded-[26px] border border-white/20 bg-white/16 shadow-[0_14px_30px_rgba(15,23,39,0.14)]">
+      <div className="relative aspect-[4/3] overflow-hidden bg-[linear-gradient(180deg,rgba(247,239,230,0.16)_0%,rgba(239,228,215,0.10)_100%)]">
+        <div className="absolute inset-0 animate-pulse bg-[linear-gradient(90deg,rgba(75,104,138,0.58),rgba(57,85,123,0.48),rgba(75,104,138,0.58))]" />
+        <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
+          <div className="h-6 w-20 animate-pulse rounded-full bg-white/22" />
+          <div className="h-6 w-28 animate-pulse rounded-full bg-white/18" />
+        </div>
+      </div>
+      <div className="space-y-2.5 p-3.5 text-sm">
+        <div className={`gap-3 ${showActions ? "grid grid-cols-[minmax(0,1fr)_108px] items-start" : ""}`}>
+          <div className="space-y-3 rounded-[22px] bg-white/85 px-3 py-3">
+            <div className="h-4 w-3/5 animate-pulse rounded-full bg-[#dbe3ec]" />
+            <div className="h-4 w-2/3 animate-pulse rounded-full bg-[#e7edf4]" />
+          </div>
+          {showActions ? (
+            <div className="grid gap-2 self-stretch">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="h-11 animate-pulse rounded-[18px] bg-white/18" />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function cropGeometry(cropModal, image) {
   if (!cropModal || !image) return null;
   const drawWidth = image.width * cropModal.scale;
@@ -550,6 +580,15 @@ export default function PrivateWorkspaceClient() {
     selectedImageIndex !== null && selectedImageIndex >= 0 && selectedImageIndex < modalImageItems.length
       ? modalImageItems[selectedImageIndex]
       : null;
+  const isModalOpen = Boolean(
+    selectedImageRemnant ||
+      queueOpen ||
+      myHoldsOpen ||
+      (editorMode && editorForm) ||
+      holdEditor ||
+      soldEditor ||
+      cropModal,
+  );
   const workspaceCopy = isStatusUser
     ? {
         eyebrow: "Status Workspace",
@@ -571,6 +610,8 @@ export default function PrivateWorkspaceClient() {
         queueTitle: "Pending hold requests",
         queueDescription: "Review incoming requests without leaving the management workspace.",
       };
+
+  useBodyScrollLock(isModalOpen);
 
   function clearMessage() {
     setMessage("");
@@ -1642,13 +1683,7 @@ export default function PrivateWorkspaceClient() {
             {loading ? (
               <div className={boardGridClass}>
                 {Array.from({ length: 6 }).map((_, index) => (
-                  <div key={index} className="overflow-hidden rounded-[26px] border border-white/15 bg-white/15 shadow-[0_18px_40px_rgba(15,23,39,0.18)]">
-                    <div className="h-40 animate-pulse bg-[linear-gradient(90deg,#294261,#37557b,#294261)]" />
-                    <div className="space-y-3 p-3.5">
-                      <div className="h-4 w-24 animate-pulse rounded-full bg-white/20" />
-                      <div className="h-4 w-3/4 animate-pulse rounded-full bg-white/15" />
-                    </div>
-                  </div>
+                  <PrivateWorkspaceSkeletonCard key={index} showActions={isStatusUser} />
                 ))}
               </div>
             ) : error ? (
@@ -1692,10 +1727,10 @@ export default function PrivateWorkspaceClient() {
                   return (
                     <article
                       key={String(remnant.id)}
-                      className="group overflow-hidden rounded-[26px] border border-white/30 bg-white/96 shadow-[0_20px_45px_rgba(15,23,39,0.12)] transition-transform hover:-translate-y-1"
+                      className="group overflow-hidden rounded-[26px] border border-white/30 bg-white/96 shadow-[0_14px_30px_rgba(15,23,39,0.10)] transition-transform [contain-intrinsic-size:430px] [content-visibility:auto] hover:-translate-y-1"
                     >
                       <button type="button" className="block w-full text-left" onClick={() => imageSrc(remnant) && openImageViewer(remnant)}>
-                        <div className="relative overflow-hidden bg-[linear-gradient(180deg,#f7efe6_0%,#efe4d7_100%)]">
+                        <div className="relative aspect-[4/3] overflow-hidden bg-[linear-gradient(180deg,#f7efe6_0%,#efe4d7_100%)]">
                           <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-24 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.45),transparent_72%)]" />
                           <div className="pointer-events-none absolute inset-x-0 top-0 z-[2] flex items-start justify-between gap-2 p-3">
                             <span className="inline-flex items-center rounded-full border border-white/70 bg-white/88 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8c6040] shadow-sm backdrop-blur">
@@ -1711,10 +1746,11 @@ export default function PrivateWorkspaceClient() {
                             <img
                               src={imageSrc(remnant)}
                               alt={`Remnant ${displayRemnantId(remnant)}`}
-                              className="h-44 w-full object-cover transition-transform duration-300 motion-safe:md:group-hover:scale-[1.03]"
+                              className="h-full w-full object-cover transition-transform duration-300 motion-safe:md:group-hover:scale-[1.02]"
+                              decoding="async"
                             />
                           ) : (
-                            <div className="flex h-44 w-full items-center justify-center bg-[#f4ece4] text-sm font-semibold uppercase tracking-[0.16em] text-[#9c7355]">
+                            <div className="flex h-full w-full items-center justify-center bg-[#f4ece4] text-sm font-semibold uppercase tracking-[0.16em] text-[#9c7355]">
                               No Image
                             </div>
                           )}

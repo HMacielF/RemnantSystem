@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import useBodyScrollLock from "@/components/use-body-scroll-lock";
 
 const FILTER_LABEL_CLASS =
   "block text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]";
@@ -34,6 +35,36 @@ function SlabBadge({ label, tone = "neutral" }) {
     >
       {label}
     </span>
+  );
+}
+
+function SlabCatalogSkeletonCard() {
+  return (
+    <div className="overflow-hidden rounded-[28px] border border-white/70 bg-white/92 shadow-[0_12px_28px_rgba(58,37,22,0.07)]">
+      <div className="relative aspect-[16/10] overflow-hidden bg-[#f2ebe3]">
+        <div className="absolute inset-0 animate-pulse bg-[linear-gradient(90deg,#f3ebe4,#ece1d7,#f3ebe4)]" />
+        <div className="absolute inset-x-0 bottom-0 h-16 bg-[linear-gradient(180deg,transparent,rgba(26,18,13,0.10))]" />
+      </div>
+      <div className="space-y-4 p-5">
+        <div className="flex flex-wrap gap-2">
+          <div className="h-7 w-20 animate-pulse rounded-full bg-[#f1e4d8]" />
+          <div className="h-7 w-24 animate-pulse rounded-full bg-[#f6ece4]" />
+          <div className="h-7 w-18 animate-pulse rounded-full bg-[#eef4ee]" />
+        </div>
+        <div>
+          <div className="h-5 w-2/3 animate-pulse rounded-full bg-[#eadfd7]" />
+          <div className="mt-2 h-4 w-1/3 animate-pulse rounded-full bg-[#f1e7df]" />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {Array.from({ length: 2 }).map((_, index) => (
+            <div key={index} className="rounded-2xl border border-[#eadfd7] bg-[#fbf7f2] px-4 py-3">
+              <div className="h-3 w-16 animate-pulse rounded-full bg-[#ecdccc]" />
+              <div className="mt-2 h-4 w-12 animate-pulse rounded-full bg-[#e8ddd2]" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -78,6 +109,8 @@ export default function SlabCatalogClient() {
   const [finish, setFinish] = useState("");
   const [thickness, setThickness] = useState("");
 
+  useBodyScrollLock(Boolean(lightbox));
+
   useEffect(() => {
     let active = true;
 
@@ -119,14 +152,6 @@ export default function SlabCatalogClient() {
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
   }, []);
-
-  useEffect(() => {
-    if (!lightbox) return undefined;
-    document.body.classList.add("overflow-hidden");
-    return () => {
-      document.body.classList.remove("overflow-hidden");
-    };
-  }, [lightbox]);
 
   const options = useMemo(
     () => ({
@@ -279,8 +304,14 @@ export default function SlabCatalogClient() {
                 {error}
               </div>
             ) : loading ? (
-              <div className="rounded-[28px] border border-[#d8c7b8] bg-white/88 p-8 text-center text-[#6d584b] shadow-sm">
-                Loading slab catalog...
+              <div
+                className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                aria-live="polite"
+                aria-busy="true"
+              >
+                {Array.from({ length: 8 }).map((_, index) => (
+                  <SlabCatalogSkeletonCard key={index} />
+                ))}
               </div>
             ) : filteredRows.length === 0 ? (
               <div className="rounded-[28px] border border-[#d8c7b8] bg-white/88 p-8 text-center text-[#6d584b] shadow-sm">
@@ -300,7 +331,7 @@ export default function SlabCatalogClient() {
                   return (
                     <article
                       key={row.id}
-                      className="overflow-hidden rounded-[28px] border border-white/70 bg-white/92 shadow-sm backdrop-blur"
+                      className="overflow-hidden rounded-[28px] border border-white/70 bg-white/94 shadow-[0_12px_28px_rgba(58,37,22,0.07)] [contain-intrinsic-size:440px] [content-visibility:auto]"
                     >
                       <div className="aspect-[16/10] bg-[#f2ebe3]">
                         {row.image_url ? (
@@ -320,6 +351,7 @@ export default function SlabCatalogClient() {
                               src={row.image_url}
                               alt={row.name}
                               className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                              decoding="async"
                               loading="lazy"
                             />
                             <span className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,transparent,rgba(26,18,13,0.68))] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-white">
