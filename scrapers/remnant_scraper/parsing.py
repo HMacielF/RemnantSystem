@@ -3,6 +3,11 @@ import re
 
 BRAND_PREFIX_RULES = [
     {
+        "pattern": re.compile(r"^(quick)\s+(.+)$", re.IGNORECASE),
+        "brand_name": "Quick Color",
+        "supplier_name": "Quick Countertop",
+    },
+    {
         "pattern": re.compile(r"^(one\s*quartz)\s+by\s+(daltile)\s+(.+)$", re.IGNORECASE),
         "brand_name": "One Quartz",
         "supplier_name": "Daltile",
@@ -38,6 +43,14 @@ BRAND_PREFIX_RULES = [
         "supplier_name": "Cosmos",
     },
 ]
+
+FINISH_KEYWORDS = {
+    "polished": "Polished",
+    "honed": "Honed",
+    "matte": "Matte",
+    "concrete": "Concrete",
+    "brushed": "Brushed",
+}
 
 
 def parse_line(description: str):
@@ -106,6 +119,18 @@ def parse_thickness(text: str) -> str:
     return "unknown"
 
 
+def parse_finish(text: str) -> str | None:
+    cleaned = re.sub(r"\s+", " ", (text or "").strip()).lower()
+    if not cleaned:
+        return None
+
+    for keyword, finish_name in FINISH_KEYWORDS.items():
+        if f"{keyword} finish" in cleaned or re.search(rf"\\b{re.escape(keyword)}\\b", cleaned):
+            return finish_name
+
+    return None
+
+
 def get_page_material_and_name(title: str):
     """
     Example title:
@@ -120,7 +145,7 @@ def get_page_material_and_name(title: str):
         material = left.strip()
         name = right.removesuffix("- Job Detail - Moraware Systemize")
     elif title.strip().lower().startswith("quick "):
-        material = "Quick Quartz"
+        material = "Quartz"
         name = title.split(" - ")[0]
 
     return material, name

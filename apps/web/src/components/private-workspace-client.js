@@ -119,6 +119,37 @@ function materialOptionsFromRows(rows) {
   );
 }
 
+function normalizeStoneLookupName(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function colorListIncludes(values, target) {
+  const normalizedTarget = normalizeStoneLookupName(target);
+  return (Array.isArray(values) ? values : []).some((value) => normalizeStoneLookupName(value) === normalizedTarget);
+}
+
+function stoneLookupMatchesName(row, stoneName) {
+  const normalizedName = normalizeStoneLookupName(stoneName);
+  if (!normalizedName || !row) return false;
+
+  return [row.display_name, row.stone_name, row.name].some(
+    (value) => normalizeStoneLookupName(value) === normalizedName,
+  );
+}
+
+function sharedStoneColorsForEditor(stoneProducts, materialId, stoneName) {
+  const numericMaterialId = Number(materialId);
+  const match = (Array.isArray(stoneProducts) ? stoneProducts : []).find((row) => {
+    return Number(row?.material_id) === numericMaterialId && stoneLookupMatchesName(row, stoneName);
+  });
+
+  if (!match) {
+    return [];
+  }
+
+  return Array.isArray(match.colors) ? match.colors : [];
+}
+
 function sizeText(remnant) {
   if (remnant.l_shape) {
     return `${remnant.width} x ${remnant.height} + ${remnant.l_width} x ${remnant.l_height}`;
@@ -138,6 +169,60 @@ function cardTitleText(remnant) {
   const stone = String(remnant.name || "").trim();
   if (material && stone) return `${material} | ${stone}`;
   return material || stone || "Unnamed";
+}
+
+function brandText(remnant) {
+  return String(remnant?.brand_name || "").trim();
+}
+
+function remnantColors(remnant) {
+  return Array.isArray(remnant?.colors) ? remnant.colors.filter(Boolean) : [];
+}
+
+function colorSwatchStyle(colorName) {
+  const normalized = normalizeStoneLookupName(colorName);
+  const palette = {
+    beige: { backgroundColor: "#d9c3a5" },
+    black: { backgroundColor: "#2b2928" },
+    blonde: { backgroundColor: "#e8d8b4" },
+    blue: { backgroundColor: "#7d9dbf" },
+    brown: { backgroundColor: "#8b5e3c" },
+    cream: { backgroundColor: "#efe2c7" },
+    gold: { backgroundColor: "#c8a14e" },
+    gray: { backgroundColor: "#8e9096" },
+    "gray-dark": { backgroundColor: "#575b63" },
+    "gray-light": { backgroundColor: "#c9ced6" },
+    green: { backgroundColor: "#758c75" },
+    navy: { backgroundColor: "#2f4a6d" },
+    taupe: { backgroundColor: "#a9927b" },
+    white: { backgroundColor: "#f4f1ea" },
+  };
+  return palette[normalized] || { backgroundColor: "#d6ccc2" };
+}
+
+function SelectField({ wrapperClassName = "relative mt-2", className = "", children, ...props }) {
+  return (
+    <div className={wrapperClassName}>
+      <select
+        {...props}
+        className={`h-12 w-full appearance-none rounded-2xl border border-[#d8c7b8] bg-[linear-gradient(180deg,#ffffff_0%,#fbf6f1_100%)] px-4 pr-10 text-sm font-medium text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10 ${className}`}
+      >
+        {children}
+      </select>
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 20 20"
+        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#a17b63]"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="m5 7.5 5 5 5-5" />
+      </svg>
+    </div>
+  );
 }
 
 function compactSizeText(remnant) {
@@ -517,7 +602,7 @@ export default function PrivateWorkspaceClient() {
   const [availableMaterialOptions, setAvailableMaterialOptions] = useState([]);
   const [holdRequests, setHoldRequests] = useState([]);
   const [myHolds, setMyHolds] = useState([]);
-  const [lookups, setLookups] = useState({ companies: [], materials: [], thicknesses: [] });
+  const [lookups, setLookups] = useState({ companies: [], materials: [], thicknesses: [], finishes: [], colors: [], stone_products: [] });
   const [salesReps, setSalesReps] = useState([]);
   const [nextStoneId, setNextStoneId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -560,8 +645,8 @@ export default function PrivateWorkspaceClient() {
     return uniqueMaterialOptions([...availableMaterialOptions, ...filters.materials]);
   }, [availableMaterialOptions, filters.materials]);
   const filterGridClass = canStructure
-    ? "mt-2 grid grid-cols-2 gap-3 lg:grid-cols-[fit-content(44rem)_minmax(240px,1fr)_110px_110px_140px_56px] lg:items-end"
-    : "mt-2 grid grid-cols-2 gap-3 lg:grid-cols-[fit-content(44rem)_minmax(280px,1fr)_110px_110px_140px] lg:items-end";
+    ? "mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] 2xl:grid-cols-[fit-content(29rem)_minmax(360px,1fr)_110px_110px_140px_56px] 2xl:items-end"
+    : "mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] 2xl:grid-cols-[fit-content(29rem)_minmax(360px,1fr)_110px_110px_140px] 2xl:items-end";
   const activeFilterCount = useMemo(() => {
     let total = 0;
     if (filters.materials.length) total += 1;
@@ -572,6 +657,22 @@ export default function PrivateWorkspaceClient() {
     return total;
   }, [filters]);
   const boardGridClass = "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+  const editorStoneSuggestions = useMemo(() => {
+    if (!editorForm?.material_id) return [];
+    const materialId = Number(editorForm.material_id);
+    if (!Number.isFinite(materialId)) return [];
+
+    return (Array.isArray(lookups.stone_products) ? lookups.stone_products : [])
+      .filter((row) => Number(row.material_id) === materialId)
+      .sort((a, b) => String(a.display_name || "").localeCompare(String(b.display_name || "")));
+  }, [editorForm?.material_id, lookups.stone_products]);
+  const matchedEditorStone = useMemo(() => {
+    if (!editorForm?.material_id || !editorForm?.name) return null;
+    const materialId = Number(editorForm.material_id);
+    if (!Number.isFinite(materialId) || !normalizeStoneLookupName(editorForm.name)) return null;
+
+    return editorStoneSuggestions.find((row) => stoneLookupMatchesName(row, editorForm.name)) || null;
+  }, [editorForm?.material_id, editorForm?.name, editorStoneSuggestions]);
   const modalImageItems = useMemo(
     () => remnants.filter((remnant) => Boolean(imageSrc(remnant))),
     [remnants],
@@ -741,6 +842,9 @@ export default function PrivateWorkspaceClient() {
           companies: Array.isArray(lookupPayload.companies) ? lookupPayload.companies : [],
           materials: Array.isArray(lookupPayload.materials) ? lookupPayload.materials : [],
           thicknesses: Array.isArray(lookupPayload.thicknesses) ? lookupPayload.thicknesses : [],
+          finishes: Array.isArray(lookupPayload.finishes) ? lookupPayload.finishes : [],
+          colors: Array.isArray(lookupPayload.colors) ? lookupPayload.colors : [],
+          stone_products: Array.isArray(lookupPayload.stone_products) ? lookupPayload.stone_products : [],
         });
         setSalesReps(Array.isArray(salesRepPayload) ? salesRepPayload : []);
         setNextStoneId(stonePayload?.nextStoneId ?? null);
@@ -821,6 +925,24 @@ export default function PrivateWorkspaceClient() {
     if (!canvas || !image || !cropModal) return;
     renderCropCanvas(canvas, image, cropModal);
   }, [cropModal]);
+
+  useEffect(() => {
+    if (!matchedEditorStone) return;
+    setEditorForm((current) => {
+      if (!current) return current;
+      const currentColors = Array.isArray(current.colors) ? current.colors : [];
+      const nextColors = currentColors.length
+        ? currentColors
+        : Array.isArray(matchedEditorStone.colors) ? matchedEditorStone.colors : [];
+      const sameColors = JSON.stringify(currentColors) === JSON.stringify(nextColors);
+      if (sameColors) return current;
+
+      return {
+        ...current,
+        colors: nextColors,
+      };
+    });
+  }, [matchedEditorStone]);
 
   async function reloadHoldRequests() {
     const requestsPayload = await apiFetch("/api/hold-requests?status=pending");
@@ -920,6 +1042,8 @@ export default function PrivateWorkspaceClient() {
       company_id: profile.system_role === "status_user" ? String(profile.company_id || "") : "",
       material_id: "",
       thickness_id: "",
+      finish_id: "",
+      colors: [],
       width: "",
       height: "",
       l_shape: false,
@@ -934,6 +1058,14 @@ export default function PrivateWorkspaceClient() {
 
   function openEditEditor(remnant) {
     if (!profile || !canManageStructure(profile)) return;
+    const fallbackColors = sharedStoneColorsForEditor(
+      lookups.stone_products,
+      remnant.material_id,
+      remnant.name,
+    );
+    const remnantColors = Array.isArray(remnant.colors) ? remnant.colors : [];
+    const colors = remnantColors.length ? remnantColors : fallbackColors;
+
     setEditorMode("edit");
     setEditorForm({
       id: remnant.id,
@@ -942,6 +1074,8 @@ export default function PrivateWorkspaceClient() {
       company_id: String(remnant.company_id || ""),
       material_id: String(remnant.material_id || ""),
       thickness_id: String(remnant.thickness_id || ""),
+      finish_id: String(remnant.finish_id || ""),
+      colors,
       width: remnant.width || "",
       height: remnant.height || "",
       l_shape: Boolean(remnant.l_shape),
@@ -970,6 +1104,21 @@ export default function PrivateWorkspaceClient() {
     }));
   }
 
+  function toggleEditorColor(colorName) {
+    setEditorForm((current) => {
+      if (!current) return current;
+      const currentValues = Array.isArray(current.colors) ? current.colors : [];
+      const nextValues = colorListIncludes(currentValues, colorName)
+        ? currentValues.filter((value) => normalizeStoneLookupName(value) !== normalizeStoneLookupName(colorName))
+        : [...currentValues, colorName];
+
+      return {
+        ...current,
+        colors: nextValues,
+      };
+    });
+  }
+
   async function saveEditor(event) {
     event.preventDefault();
     if (!editorForm) return;
@@ -983,6 +1132,8 @@ export default function PrivateWorkspaceClient() {
         company_id: editorForm.company_id,
         material_id: editorForm.material_id,
         thickness_id: editorForm.thickness_id,
+        finish_id: editorForm.finish_id,
+        colors: editorForm.colors,
         width: editorForm.width,
         height: editorForm.height,
         l_shape: Boolean(editorForm.l_shape),
@@ -1447,9 +1598,9 @@ export default function PrivateWorkspaceClient() {
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#0f1727_0%,#152238_18%,#203454_36%,#eaf0f6_36%,#edf1f6_100%)] text-[#172230]">
-      <div className="mx-auto max-w-[1800px] px-6 py-5">
+      <div className="mx-auto w-full max-w-[1800px] px-3 py-5 sm:px-4 md:px-6 2xl:px-8">
         <section className="mb-4 overflow-hidden rounded-[32px] border border-white/15 bg-[linear-gradient(135deg,rgba(12,23,43,0.92),rgba(23,40,69,0.84))] px-6 py-5 text-white shadow-[0_28px_90px_rgba(8,15,32,0.18)]">
-          <div className={`grid gap-5 lg:items-start ${isStatusUser ? "lg:grid-cols-[minmax(0,1fr)_520px]" : "lg:grid-cols-[minmax(0,1.1fr)_640px]"}`}>
+          <div className={`grid gap-5 lg:items-start ${isStatusUser ? "xl:grid-cols-[minmax(0,1fr)_520px]" : "xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,640px)]"}`}>
             <div className={`${isStatusUser ? "max-w-3xl" : "max-w-4xl"}`}>
               <h1 className={`mt-3 font-semibold leading-tight text-white ${isStatusUser ? "max-w-2xl text-[1.7rem] md:text-[2.05rem]" : "max-w-3xl text-[1.9rem] md:text-[2.35rem]"}`}>
                 {workspaceCopy.title}
@@ -1478,7 +1629,7 @@ export default function PrivateWorkspaceClient() {
                     setQueueOpen(true);
                   }}
                   className={`inline-flex h-10 items-center justify-between gap-3 rounded-2xl border border-white/15 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/16 ${
-                    isStatusUser ? "min-w-0 flex-1 whitespace-nowrap" : "whitespace-nowrap"
+                    isStatusUser ? "min-w-0 flex-1" : ""
                   }`}
                 >
                   <span className={isStatusUser ? "truncate" : ""}>Request Queue</span>
@@ -1490,7 +1641,7 @@ export default function PrivateWorkspaceClient() {
                   type="button"
                   onClick={openMyHoldsPanel}
                   className={`inline-flex h-10 items-center justify-between gap-3 rounded-2xl border border-white/15 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/16 ${
-                    isStatusUser ? "min-w-0 flex-1 whitespace-nowrap" : "whitespace-nowrap"
+                    isStatusUser ? "min-w-0 flex-1" : ""
                   }`}
                 >
                   <span className={isStatusUser ? "truncate" : ""}>My Holds</span>
@@ -1503,7 +1654,7 @@ export default function PrivateWorkspaceClient() {
                     <Link
                       href="/admin"
                       className={`inline-flex h-10 items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/16 ${
-                        isStatusUser ? "shrink-0 whitespace-nowrap px-3.5" : "whitespace-nowrap"
+                        isStatusUser ? "shrink-0 px-3.5" : ""
                       }`}
                     >
                       Admin
@@ -1511,7 +1662,7 @@ export default function PrivateWorkspaceClient() {
                     <Link
                       href="/slabs"
                       className={`inline-flex h-10 items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/16 ${
-                        isStatusUser ? "shrink-0 whitespace-nowrap px-3.5" : "whitespace-nowrap"
+                        isStatusUser ? "shrink-0 px-3.5" : ""
                       }`}
                     >
                       Slabs
@@ -1521,7 +1672,7 @@ export default function PrivateWorkspaceClient() {
                 <form method="POST" action="/api/auth/logout" className="shrink-0">
                   <button
                     type="submit"
-                    className="inline-flex h-10 items-center justify-center rounded-2xl border border-white/12 bg-white/5 px-3.5 text-sm font-semibold text-slate-100 transition hover:bg-white/12 whitespace-nowrap"
+                    className="inline-flex h-10 items-center justify-center rounded-2xl border border-white/12 bg-white/5 px-3.5 text-center text-sm font-semibold text-slate-100 transition hover:bg-white/12"
                   >
                     Log Out
                   </button>
@@ -1548,11 +1699,11 @@ export default function PrivateWorkspaceClient() {
               ) : null}
 
               <div className={filterGridClass}>
-                <div className="col-span-2 min-w-0 lg:col-span-1 lg:max-w-[44rem]">
+                <div className="min-w-0 sm:col-span-2 2xl:col-span-1 2xl:max-w-[29rem]">
                   <p className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
                     Material Types
                   </p>
-                  <div className="flex h-12 snap-x snap-mandatory items-center gap-2 overflow-x-auto whitespace-nowrap rounded-2xl border border-[#d8c7b8] bg-white px-3 py-2 text-sm text-[#2d2623] shadow-sm xl:w-fit [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
+                  <div className="flex h-12 w-full max-w-full snap-x snap-mandatory items-center gap-2 overflow-x-auto whitespace-nowrap rounded-2xl border border-[#d8c7b8] bg-white px-3 py-2 text-sm text-[#2d2623] shadow-sm [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
                     {materialFilterOptions.map((material) => {
                       const checked = filters.materials.includes(material);
                       return (
@@ -1581,8 +1732,8 @@ export default function PrivateWorkspaceClient() {
                   </div>
                 </div>
 
-                <label className="col-span-2 block min-w-0 lg:col-span-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
-                  Stone / ID #
+                <label className="block min-w-0 sm:col-span-2 2xl:col-span-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+                  Stone / Brand / Color / Finish / ID #
                   <div className="relative mt-2">
                     <svg
                       aria-hidden="true"
@@ -1601,7 +1752,7 @@ export default function PrivateWorkspaceClient() {
                       type="text"
                       value={filters.stone}
                       onChange={(event) => setFilters((current) => ({ ...current, stone: event.target.value }))}
-                      placeholder="Stone name or #741"
+                      placeholder="Stone, brand, color, finish or #741"
                       className="h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white pl-10 pr-4 text-sm font-medium text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
                     />
                   </div>
@@ -1631,20 +1782,21 @@ export default function PrivateWorkspaceClient() {
 
                 <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
                   Status
-                  <select
+                  <SelectField
                     value={filters.status}
                     onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-3 text-sm font-medium text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                    wrapperClassName="relative mt-2"
+                    className="px-3"
                   >
                     <option value="">All</option>
                     <option value="available">Available</option>
                     <option value="hold">On Hold</option>
                     <option value="sold">Sold</option>
-                  </select>
+                  </SelectField>
                 </label>
 
                 {canStructure ? (
-                  <div className="flex items-end justify-center lg:col-span-1">
+                  <div className="flex items-end justify-start sm:col-span-2 2xl:col-span-1 2xl:justify-center">
                     <div className="flex w-12 flex-col items-center">
                       <p className="mb-2 hidden w-full text-center text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355] lg:block">
                         Add
@@ -1727,10 +1879,10 @@ export default function PrivateWorkspaceClient() {
                   return (
                     <article
                       key={String(remnant.id)}
-                      className="group overflow-hidden rounded-[26px] border border-white/30 bg-white/96 shadow-[0_14px_30px_rgba(15,23,39,0.10)] transition-transform [contain-intrinsic-size:430px] [content-visibility:auto] hover:-translate-y-1"
+                      className="group overflow-hidden rounded-[28px] border border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(250,246,241,0.96))] shadow-[0_18px_38px_rgba(15,23,39,0.10)] transition-transform [contain-intrinsic-size:430px] [content-visibility:auto] hover:-translate-y-1"
                     >
                       <button type="button" className="block w-full text-left" onClick={() => imageSrc(remnant) && openImageViewer(remnant)}>
-                        <div className="relative aspect-[4/3] overflow-hidden bg-[linear-gradient(180deg,#f7efe6_0%,#efe4d7_100%)]">
+                        <div className="relative aspect-[4/3] overflow-hidden bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.45),transparent_32%),linear-gradient(180deg,#f7efe6_0%,#efe4d7_100%)]">
                           <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-24 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.45),transparent_72%)]" />
                           <div className="pointer-events-none absolute inset-x-0 top-0 z-[2] flex items-start justify-between gap-2 p-3">
                             <span className="inline-flex items-center rounded-full border border-white/70 bg-white/88 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8c6040] shadow-sm backdrop-blur">
@@ -1743,12 +1895,14 @@ export default function PrivateWorkspaceClient() {
                             </span>
                           </div>
                           {imageSrc(remnant) ? (
-                            <img
-                              src={imageSrc(remnant)}
-                              alt={`Remnant ${displayRemnantId(remnant)}`}
-                              className="h-full w-full object-cover transition-transform duration-300 motion-safe:md:group-hover:scale-[1.02]"
-                              decoding="async"
-                            />
+                            <div className="flex h-full w-full items-center justify-center p-2.5">
+                              <img
+                                src={imageSrc(remnant)}
+                                alt={`Remnant ${displayRemnantId(remnant)}`}
+                                className="h-full w-full rounded-[20px] object-contain object-center transition-transform duration-300 motion-safe:md:group-hover:scale-[1.02]"
+                                decoding="async"
+                              />
+                            </div>
                           ) : (
                             <div className="flex h-full w-full items-center justify-center bg-[#f4ece4] text-sm font-semibold uppercase tracking-[0.16em] text-[#9c7355]">
                               No Image
@@ -1756,15 +1910,61 @@ export default function PrivateWorkspaceClient() {
                           )}
                         </div>
                       </button>
-                      <div className="space-y-2.5 p-3.5 text-sm text-[#232323]">
+                      <div className="space-y-3 p-4 text-sm text-[#232323]">
                         <div className={`gap-3 ${useSideActions ? "grid grid-cols-[minmax(0,1fr)_108px] items-start" : ""}`}>
-                          <div className="space-y-2 rounded-[22px] bg-[#fbf8f4] px-3 py-3 text-[#4d3d34]">
-                            <h3 className="text-[15px] font-semibold leading-snug text-[#2d2623]">
-                              {cardTitleText(remnant)}
-                            </h3>
-                            <p className="text-[13px] font-medium text-[#5f4c42]">
-                              Size: {cardSizeText(remnant)}
-                            </p>
+                          <div className="space-y-3 rounded-[24px] border border-[#efe5dc] bg-[#fbf8f4] px-4 py-3.5 text-[#4d3d34]">
+                            <div>
+                              <h3 className="text-[15px] font-semibold leading-snug text-[#2d2623]">
+                                {cardTitleText(remnant)}
+                              </h3>
+                              <div className="mt-1 flex flex-wrap items-center gap-2 text-[13px] font-medium text-[#5f4c42]">
+                                <span>ID #{displayRemnantId(remnant)}</span>
+                                {brandText(remnant) ? (
+                                  <span className="inline-flex items-center rounded-full border border-[#eadfd7] bg-white/88 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#8f5b35]">
+                                    {brandText(remnant)}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <div className="rounded-[18px] border border-[#eee2d8] bg-white/85 px-3 py-2">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9c7355]">Size</p>
+                                <p className="mt-1 text-[13px] font-semibold text-[#2d2623]">
+                                  {cardSizeText(remnant)}
+                                </p>
+                              </div>
+                              <div className="rounded-[18px] border border-[#eee2d8] bg-white/85 px-3 py-2">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9c7355]">Status</p>
+                                <p className="mt-1 text-[13px] font-semibold text-[#2d2623]">
+                                  {status}
+                                </p>
+                              </div>
+                            </div>
+                            {remnantColors(remnant).length ? (
+                              <div className="rounded-[18px] border border-[#eee2d8] bg-white/85 px-3 py-2">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9c7355]">Colors</p>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {remnantColors(remnant).map((color) => (
+                                    <span
+                                      key={`${remnant.id}-${color}`}
+                                      className="inline-flex items-center gap-2 rounded-full border border-[#eadfd7] bg-[#fffaf6] px-2.5 py-1 text-[11px] font-semibold text-[#5f4c42]"
+                                    >
+                                      <span
+                                        aria-hidden="true"
+                                        className="h-3 w-3 rounded-full border border-black/10 shadow-inner"
+                                        style={colorSwatchStyle(color)}
+                                      />
+                                      {color}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
+                            {statusOwnedByProfile(profile, remnant) && isStatusUser ? (
+                              <div className="rounded-[18px] border border-[#efe2d6] bg-white/80 px-3 py-2 text-[12px] font-medium text-[#6f594a]">
+                                Assigned to you
+                              </div>
+                            ) : null}
                           </div>
                           {useSideActions ? (
                             <div className="grid gap-2 self-stretch">
@@ -1801,7 +2001,7 @@ export default function PrivateWorkspaceClient() {
                           ) : null}
                         </div>
                         {showStatusActions && !useSideActions ? (
-                          <div className={`grid gap-2 pt-2 ${actionColumns}`}>
+                          <div className={`grid gap-2 pt-1 ${actionColumns}`}>
                             {showAvailableAction ? (
                               <button
                                 type="button"
@@ -2224,13 +2424,10 @@ export default function PrivateWorkspaceClient() {
           <div className="mx-auto max-w-5xl overflow-hidden rounded-[32px] border border-white/70 bg-white shadow-[0_24px_70px_rgba(44,29,18,0.10)]">
             <div className="flex items-center justify-between border-b border-[#eadfd7] bg-[linear-gradient(135deg,#fffaf6_0%,#f7efe8_100%)] px-6 py-5">
               <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-[#8a6a54]">Inventory</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#8a6a54]">Inventory</p>
                 <h2 className="text-2xl font-semibold text-[#2c211c]">{editorMode === "create" ? "Add Remnant" : "Edit Remnant"}</h2>
-                <p className="mt-1 text-sm text-[#7d6759]">
-                  Upload, crop, and save the remnant image alongside the core dimensions.
-                </p>
               </div>
-              <button type="button" onClick={closeEditor} className="h-10 w-10 rounded-full border border-gray-300 text-xl transition-colors active:bg-gray-200">
+              <button type="button" onClick={closeEditor} className="h-10 w-10 rounded-full border border-[#d8c7b8] bg-white text-xl text-[#6d584b] transition hover:bg-[#fff7f1] active:bg-[#f6ede6]">
                 {"\u00D7"}
               </button>
             </div>
@@ -2252,12 +2449,6 @@ export default function PrivateWorkspaceClient() {
                 <div className="flex flex-col justify-between gap-4 rounded-[24px] border border-[#eadfd7] bg-white/80 p-5">
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#9c7355]">Image Tools</p>
-                    <h3 className="mt-2 text-xl font-semibold text-[#2c211c]">
-                      {editorMode === "create" ? "Prepare the new card image" : "Refresh the card image"}
-                    </h3>
-                    <p className="mt-2 text-sm leading-6 text-[#6d584b]">
-                      Load a photo, crop the clean frame you want, then save the remnant when everything looks right.
-                    </p>
                   </div>
                   <div className="space-y-3">
                     <label className="block text-sm font-medium text-gray-700">
@@ -2291,111 +2482,177 @@ export default function PrivateWorkspaceClient() {
                   </div>
                 </div>
               </div>
-              <label className="block text-sm font-medium text-gray-700">
-                Stone ID #
-                <input
-                  type="number"
-                  value={editorForm.moraware_remnant_id}
-                  onChange={(event) => updateEditorField("moraware_remnant_id", event.target.value)}
-                  className="mt-1 w-full rounded-2xl border border-gray-300 px-4 py-3 text-sm"
-                />
-              </label>
-              <label className="block text-sm font-medium text-gray-700">
-                Stone Name
-                <input
-                  type="text"
-                  value={editorForm.name}
-                  onChange={(event) => updateEditorField("name", event.target.value)}
-                  className="mt-1 w-full rounded-2xl border border-gray-300 px-4 py-3 text-sm"
-                />
-              </label>
-              <label className="block text-sm font-medium text-gray-700">
-                Company
-                <select
-                  value={String(editorForm.company_id ?? "")}
-                  onChange={(event) => updateEditorField("company_id", event.target.value)}
-                  className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
-                >
-                  <option value="">Select company</option>
-                  {lookups.companies.map((row) => (
-                    <option key={row.id} value={String(row.id)}>{row.name}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-sm font-medium text-gray-700">
-                Material
-                <select
-                  value={String(editorForm.material_id ?? "")}
-                  onChange={(event) => updateEditorField("material_id", event.target.value)}
-                  className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
-                >
-                  <option value="">Select material</option>
-                  {lookups.materials.map((row) => (
-                    <option key={row.id} value={String(row.id)}>{row.name}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-sm font-medium text-gray-700">
-                Width
-                <input
-                  type="number"
-                  value={editorForm.width}
-                  onChange={(event) => updateEditorField("width", event.target.value)}
-                  className="mt-1 w-full rounded-2xl border border-gray-300 px-4 py-3 text-sm"
-                />
-              </label>
-              <label className="block text-sm font-medium text-gray-700">
-                Height
-                <input
-                  type="number"
-                  value={editorForm.height}
-                  onChange={(event) => updateEditorField("height", event.target.value)}
-                  className="mt-1 w-full rounded-2xl border border-gray-300 px-4 py-3 text-sm"
-                />
-              </label>
-              <label className="block text-sm font-medium text-gray-700">
-                Thickness
-                <select
-                  value={String(editorForm.thickness_id ?? "")}
-                  onChange={(event) => updateEditorField("thickness_id", event.target.value)}
-                  className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
-                >
-                  <option value="">Select thickness</option>
-                  {lookups.thicknesses.map((row) => (
-                    <option key={row.id} value={String(row.id)}>{row.name}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex items-center gap-3 rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={Boolean(editorForm.l_shape)}
-                  onChange={(event) => updateEditorField("l_shape", event.target.checked)}
-                />
-                L-Shape
-              </label>
-              {editorForm.l_shape ? (
-                <>
+              <section className="rounded-[26px] border border-[#eadfd7] bg-white p-5 shadow-[0_12px_28px_rgba(44,29,18,0.05)] md:col-span-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#9c7355]">Stone Details</p>
+                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                   <label className="block text-sm font-medium text-gray-700">
-                    L Width
+                    Company
+                    <SelectField
+                      value={String(editorForm.company_id ?? "")}
+                      onChange={(event) => updateEditorField("company_id", event.target.value)}
+                      wrapperClassName="relative mt-2"
+                    >
+                      <option value="">Select company</option>
+                      {lookups.companies.map((row) => (
+                        <option key={row.id} value={String(row.id)}>{row.name}</option>
+                      ))}
+                    </SelectField>
+                  </label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Stone ID #
                     <input
                       type="number"
-                      value={editorForm.l_width}
-                      onChange={(event) => updateEditorField("l_width", event.target.value)}
-                      className="mt-1 w-full rounded-2xl border border-gray-300 px-4 py-3 text-sm"
+                      value={editorForm.moraware_remnant_id}
+                      onChange={(event) => updateEditorField("moraware_remnant_id", event.target.value)}
+                      className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
                     />
                   </label>
                   <label className="block text-sm font-medium text-gray-700">
-                    L Height
+                    Material
+                    <SelectField
+                      value={String(editorForm.material_id ?? "")}
+                      onChange={(event) => updateEditorField("material_id", event.target.value)}
+                      wrapperClassName="relative mt-2"
+                    >
+                      <option value="">Select material</option>
+                      {lookups.materials.map((row) => (
+                        <option key={row.id} value={String(row.id)}>{row.name}</option>
+                      ))}
+                    </SelectField>
+                  </label>
+                  <label className="block text-sm font-medium text-gray-700 md:col-span-2 xl:col-span-1">
+                    Stone Name
+                    <input
+                      type="text"
+                      value={editorForm.name}
+                      onChange={(event) => updateEditorField("name", event.target.value)}
+                      list="stone-product-name-suggestions"
+                      className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                    />
+                    <p className="mt-2 text-xs leading-5 text-[#7d6759]">
+                      Choose a material first. Existing stone names will appear here, and selecting a shared stone will prefill its saved colors.
+                    </p>
+                  </label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Thickness
+                    <SelectField
+                      value={String(editorForm.thickness_id ?? "")}
+                      onChange={(event) => updateEditorField("thickness_id", event.target.value)}
+                      wrapperClassName="relative mt-2"
+                    >
+                      <option value="">Select thickness</option>
+                      {lookups.thicknesses.map((row) => (
+                        <option key={row.id} value={String(row.id)}>{row.name}</option>
+                      ))}
+                    </SelectField>
+                  </label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Finish
+                    <SelectField
+                      value={String(editorForm.finish_id ?? "")}
+                      onChange={(event) => updateEditorField("finish_id", event.target.value)}
+                      wrapperClassName="relative mt-2"
+                    >
+                      <option value="">Select finish</option>
+                      {lookups.finishes.map((row) => (
+                        <option key={row.id} value={String(row.id)}>{row.name}</option>
+                      ))}
+                    </SelectField>
+                  </label>
+                </div>
+              </section>
+              <section className="rounded-[26px] border border-[#eadfd7] bg-white p-5 shadow-[0_12px_28px_rgba(44,29,18,0.05)] md:col-span-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#9c7355]">Dimensions</p>
+                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Width
                     <input
                       type="number"
-                      value={editorForm.l_height}
-                      onChange={(event) => updateEditorField("l_height", event.target.value)}
-                      className="mt-1 w-full rounded-2xl border border-gray-300 px-4 py-3 text-sm"
+                      value={editorForm.width}
+                      onChange={(event) => updateEditorField("width", event.target.value)}
+                      className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
                     />
                   </label>
-                </>
-              ) : null}
+                  <label className="block text-sm font-medium text-gray-700">
+                    Height
+                    <input
+                      type="number"
+                      value={editorForm.height}
+                      onChange={(event) => updateEditorField("height", event.target.value)}
+                      className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                    />
+                  </label>
+                  <label className="inline-flex w-fit items-center gap-2 rounded-xl border border-[#d8c7b8] bg-[#fffaf6] px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-[#6d584b]">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(editorForm.l_shape)}
+                      onChange={(event) => updateEditorField("l_shape", event.target.checked)}
+                    />
+                    L-Shape
+                  </label>
+                  {editorForm.l_shape ? (
+                    <>
+                      <label className="block text-sm font-medium text-gray-700">
+                        L Width
+                        <input
+                          type="number"
+                          value={editorForm.l_width}
+                          onChange={(event) => updateEditorField("l_width", event.target.value)}
+                          className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                        />
+                      </label>
+                      <label className="block text-sm font-medium text-gray-700">
+                        L Height
+                        <input
+                          type="number"
+                          value={editorForm.l_height}
+                          onChange={(event) => updateEditorField("l_height", event.target.value)}
+                          className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                        />
+                      </label>
+                    </>
+                  ) : null}
+                </div>
+              </section>
+              <section className="rounded-[26px] border border-[#eadfd7] bg-white p-5 shadow-[0_12px_28px_rgba(44,29,18,0.05)] md:col-span-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#9c7355]">Colors</p>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-[22px] border border-[#eadfd7] bg-[#fffaf6] p-4">
+                  <div className="flex flex-wrap gap-2">
+                    {lookups.colors.map((row) => {
+                      const selected = colorListIncludes(editorForm.colors, row.name);
+                      return (
+                        <button
+                          key={`color-${row.id}`}
+                          type="button"
+                          onClick={() => toggleEditorColor(row.name)}
+                          className={`inline-flex h-10 w-10 items-center justify-center rounded-full border transition ${
+                            selected
+                              ? "border-[#d89462] ring-4 ring-[#f5d6bd] shadow-sm"
+                              : "border-[#e4d7cb] hover:border-[#d9c2af] hover:scale-[1.03]"
+                          }`}
+                          style={colorSwatchStyle(row.name)}
+                          title={row.name}
+                          aria-label={row.name}
+                          aria-pressed={selected}
+                        >
+                          {selected ? (
+                            <span className="h-3.5 w-3.5 rounded-full border border-white/75 bg-white/90 shadow-sm" />
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </section>
+              <datalist id="stone-product-name-suggestions">
+                {editorStoneSuggestions.map((row) => (
+                  <option key={`stone-product-${row.id}`} value={row.display_name || row.stone_name || ""} />
+                ))}
+              </datalist>
               <div className="md:col-span-2 flex flex-wrap gap-3 pt-2">
                 <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-[#152238] px-6 text-sm font-semibold text-white transition hover:bg-[#f08b49]">
                   {editorMode === "create" ? "Create Remnant" : "Save Changes"}
@@ -2595,11 +2852,12 @@ export default function PrivateWorkspaceClient() {
                     ) : (
                       <label className="block text-sm font-medium text-gray-700 lg:col-span-2">
                         Sales Rep
-                        <select
+                        <SelectField
                           value={holdEditor.owner_user_id}
                           onChange={(event) => updateHoldField("owner_user_id", event.target.value)}
                           disabled={salesReps.length === 0}
-                          className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
+                          wrapperClassName="relative mt-1"
+                          className="border-gray-300"
                         >
                           <option value="">
                             {salesReps.length === 0 ? "No active sales reps available" : "Select sales rep"}
@@ -2607,7 +2865,7 @@ export default function PrivateWorkspaceClient() {
                           {salesReps.map((row) => (
                             <option key={row.id} value={row.id}>{row.display_name || row.full_name || row.email || "User"}</option>
                           ))}
-                        </select>
+                        </SelectField>
                       </label>
                     )}
                     <label className="block text-sm font-medium text-gray-700">
@@ -2712,12 +2970,13 @@ export default function PrivateWorkspaceClient() {
                 ) : (
                   <label className="block text-sm font-medium text-gray-700">
                     Sales Rep
-                    <select
+                    <SelectField
                       value={soldEditor.sold_by_user_id}
                       onChange={(event) => updateSoldField("sold_by_user_id", event.target.value)}
                       required
                       disabled={salesReps.length === 0}
-                      className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
+                      wrapperClassName="relative mt-1"
+                      className="border-gray-300"
                     >
                       <option value="">
                         {salesReps.length === 0 ? "No active sales reps available" : "Select sales rep"}
@@ -2725,7 +2984,7 @@ export default function PrivateWorkspaceClient() {
                       {salesReps.map((row) => (
                         <option key={row.id} value={row.id}>{row.display_name || row.full_name || row.email || "User"}</option>
                       ))}
-                    </select>
+                    </SelectField>
                   </label>
                 )}
                 <label className="block text-sm font-medium text-gray-700">

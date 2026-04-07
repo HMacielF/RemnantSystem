@@ -52,6 +52,105 @@ function cardTitleText(remnant) {
   return material || stone || "Unnamed";
 }
 
+function stoneNameText(remnant) {
+  return String(remnant?.name || "").trim();
+}
+
+function brandText(remnant) {
+  return String(remnant?.brand_name || "").trim();
+}
+
+function thicknessText(remnant) {
+  const value = String(remnant?.thickness_name || remnant?.thickness || "").trim();
+  if (!value) return "";
+  const normalized = value.toLowerCase();
+  if (normalized === "unknown" || normalized === "n/a" || normalized === "na") return "";
+  return value;
+}
+
+function companyText(remnant) {
+  return String(remnant?.company_name || remnant?.company || "").trim();
+}
+
+function finishText(remnant) {
+  return String(remnant?.finish_name || "").trim();
+}
+
+function publicCardHeading(remnant) {
+  const brand = brandText(remnant);
+  const stone = stoneNameText(remnant);
+  if (brand && stone) {
+    const normalizedBrand = normalizeStoneLookupName(brand);
+    const normalizedStone = normalizeStoneLookupName(stone);
+    const brandLead = normalizedBrand.split(/\s+/)[0] || "";
+    if (brandLead && normalizedStone.startsWith(`${brandLead} `)) {
+      return stone;
+    }
+    return `${brand} ${stone}`;
+  }
+  return stone || cardTitleText(remnant);
+}
+
+function publicCardSubheading(remnant) {
+  const material = String(remnant?.material_name || remnant?.material || "").trim();
+  const company = companyText(remnant);
+  return [material, company].filter(Boolean).join(" · ");
+}
+
+function normalizeStoneLookupName(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function remnantColors(remnant) {
+  return Array.isArray(remnant?.colors) ? remnant.colors.filter(Boolean) : [];
+}
+
+function colorSwatchStyle(colorName) {
+  const normalized = normalizeStoneLookupName(colorName);
+  const palette = {
+    beige: { backgroundColor: "#d9c3a5" },
+    black: { backgroundColor: "#2b2928" },
+    blonde: { backgroundColor: "#e8d8b4" },
+    blue: { backgroundColor: "#7d9dbf" },
+    brown: { backgroundColor: "#8b5e3c" },
+    cream: { backgroundColor: "#efe2c7" },
+    gold: { backgroundColor: "#c8a14e" },
+    gray: { backgroundColor: "#8e9096" },
+    "gray-dark": { backgroundColor: "#575b63" },
+    "gray-light": { backgroundColor: "#c9ced6" },
+    green: { backgroundColor: "#758c75" },
+    navy: { backgroundColor: "#2f4a6d" },
+    taupe: { backgroundColor: "#a9927b" },
+    white: { backgroundColor: "#f4f1ea" },
+  };
+  return palette[normalized] || { backgroundColor: "#d6ccc2" };
+}
+
+function SelectField({ wrapperClassName = "relative mt-2", className = "", children, ...props }) {
+  return (
+    <div className={wrapperClassName}>
+      <select
+        {...props}
+        className={`h-12 w-full appearance-none rounded-2xl border border-[#d8c7b8] bg-[linear-gradient(180deg,#ffffff_0%,#fbf6f1_100%)] px-4 pr-10 text-sm font-medium text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10 ${className}`}
+      >
+        {children}
+      </select>
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 20 20"
+        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#a17b63]"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="m5 7.5 5 5 5-5" />
+      </svg>
+    </div>
+  );
+}
+
 function statusText(remnant) {
   const normalized = String(remnant?.status || "").trim().toLowerCase();
   if (!normalized || normalized === "available") return "Available";
@@ -432,14 +531,14 @@ export default function PublicInventoryClient() {
         <div className="pointer-events-none absolute left-[-120px] top-[120px] h-[260px] w-[260px] rounded-full bg-[#e7c3a9]/20 blur-3xl" />
         <div className="pointer-events-none absolute right-[-60px] top-[40px] h-[220px] w-[220px] rounded-full bg-[#b7d1c6]/20 blur-3xl" />
 
-        <div className="relative mx-auto max-w-[1680px] px-3 py-3 md:px-6 md:py-5">
-          <section className="mb-4 overflow-hidden rounded-[28px] border border-white/70 bg-[linear-gradient(135deg,rgba(255,250,246,0.96),rgba(248,240,233,0.88))] px-4 py-5 shadow-[0_24px_70px_rgba(44,29,18,0.10)] backdrop-blur sm:rounded-[32px] sm:px-6">
+        <div className="relative mx-auto w-full max-w-[1680px] px-3 py-3 sm:px-4 md:px-6 md:py-5 2xl:px-8">
+          <section className="mb-4 overflow-hidden rounded-[28px] border border-white/70 bg-[linear-gradient(135deg,rgba(255,250,246,0.96),rgba(248,240,233,0.88))] px-4 py-5 shadow-[0_24px_70px_rgba(44,29,18,0.10)] backdrop-blur sm:rounded-[32px] sm:px-6 lg:px-8">
             <div className="flex justify-center">
               <div className="mx-auto flex max-w-4xl flex-col items-center text-center">
                 <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-[#9d6f4c] md:text-[15px]">
                   Remnant Inventory System
                 </p>
-                <h1 className="mt-2 font-sans text-[1.9rem] font-semibold leading-tight text-[#2c211c] md:text-[2.35rem] lg:whitespace-nowrap lg:text-[2.55rem]">
+                <h1 className="mt-2 text-balance font-sans text-[1.9rem] font-semibold leading-tight text-[#2c211c] md:text-[2.35rem] lg:text-[2.55rem]">
                   Find your remnant before someone else does.
                 </h1>
               </div>
@@ -450,40 +549,42 @@ export default function PublicInventoryClient() {
             id="filter_menu"
             className="mb-4 rounded-[28px] border border-[#ead9cb] bg-[linear-gradient(135deg,rgba(255,250,245,0.98),rgba(249,242,234,0.94))] p-4 shadow-[0_24px_70px_rgba(44,29,18,0.10)] backdrop-blur sm:rounded-[30px] sm:p-5"
           >
-            <div className="grid grid-cols-3 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_110px_110px_140px] xl:grid-cols-[max-content_minmax(340px,1fr)_110px_110px_140px] xl:items-end">
-              <div className="col-span-3 min-w-0 lg:col-span-1 xl:max-w-[44rem]">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:grid-cols-[fit-content(30rem)_minmax(260px,1fr)_110px_110px_140px] xl:items-end">
+              <div className="min-w-0 sm:col-span-2 lg:col-span-1 xl:max-w-[30rem]">
                 <p className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
                   Material Types
                 </p>
-                <div className="flex h-12 snap-x snap-mandatory items-center gap-2 overflow-x-auto whitespace-nowrap rounded-2xl border border-[#d8c7b8] bg-white px-3 py-2 text-sm text-[#2d2623] shadow-sm [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
-                  {materialOptions.map((material) => {
-                    const checked = filters.materials.includes(material);
-                    return (
-                      <button
-                        key={material}
-                        type="button"
-                        aria-pressed={checked}
-                        onClick={() => toggleMaterialFilter(material)}
-                        className={`inline-flex shrink-0 snap-start items-center rounded-xl border px-3 py-2 text-[13px] font-medium transition-all ${
-                          checked
-                            ? "border-[#d89462] bg-[#fff1e3] text-[#8c4c1c] shadow-sm"
-                            : "border-[#efe2d6] bg-[#fffdfb] text-gray-700 hover:border-[#ead8ca] hover:bg-[#fff7f1]"
-                        }`}
-                      >
-                        {material}
-                      </button>
-                    );
-                  })}
+                <div className="rounded-2xl border border-[#d8c7b8] bg-white p-1.5 shadow-sm">
+                  <div className="flex h-9 w-full max-w-full snap-x snap-mandatory items-center gap-2 overflow-x-auto whitespace-nowrap px-1 text-sm text-[#2d2623] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
+                    {materialOptions.map((material) => {
+                      const checked = filters.materials.includes(material);
+                      return (
+                        <button
+                          key={material}
+                          type="button"
+                          aria-pressed={checked}
+                          onClick={() => toggleMaterialFilter(material)}
+                          className={`inline-flex shrink-0 snap-start items-center rounded-xl border px-3 py-2 text-[13px] font-medium transition-all ${
+                            checked
+                              ? "border-[#d89462] bg-[#fff1e3] text-[#8c4c1c] shadow-sm"
+                              : "border-[#efe2d6] bg-[#fffdfb] text-gray-700 hover:border-[#ead8ca] hover:bg-[#fff7f1]"
+                          }`}
+                        >
+                          {material}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
-              <label className="col-span-3 block min-w-0 lg:col-span-1 xl:col-span-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
-                Stone / ID #
+              <label className="block min-w-0 sm:col-span-2 lg:col-span-1 xl:col-span-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+                Stone / Brand / Color / Finish / ID #
                 <input
                   type="text"
                   value={filters.stone}
                   onChange={(event) => setFilters((current) => ({ ...current, stone: event.target.value }))}
-                  placeholder="Search by stone name or #741"
+                  placeholder="Search by stone, brand, color, finish or #741"
                   className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
                 />
               </label>
@@ -512,16 +613,17 @@ export default function PublicInventoryClient() {
 
               <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
                 Status
-                <select
+                <SelectField
                   value={filters.status}
                   onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
-                  className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-3 text-sm font-medium text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                  wrapperClassName="relative mt-2"
+                  className="px-3"
                 >
                   <option value="">All</option>
                   <option value="available">Available</option>
                   <option value="hold">On Hold</option>
                   <option value="sold">Sold</option>
-                </select>
+                </SelectField>
               </label>
             </div>
           </section>
@@ -542,7 +644,7 @@ export default function PublicInventoryClient() {
             <div className="rounded-[28px] border border-dashed border-[#d7c4b6] bg-white/75 px-6 py-12 text-center text-[#6d584b] shadow-sm">
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#9c7355]">No Matches</p>
               <h3 className="mt-2 text-2xl font-semibold text-[#2d2623]">No remnants match these filters.</h3>
-              <p className="mt-2 text-sm">Try changing the stone name, ID, material, or size filters to widen the search.</p>
+              <p className="mt-2 text-sm">Try changing the stone, brand, color, finish, ID, material, or size filters to widen the search.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
@@ -613,13 +715,15 @@ export default function PublicInventoryClient() {
                           </span>
                         </div>
                         {image ? (
-                          <img
-                            src={image}
-                            alt={`Remnant ${displayRemnantId(remnant)}`}
-                            className="h-full w-full object-cover transition-transform duration-300 motion-safe:md:group-hover:scale-[1.02]"
-                            decoding="async"
-                            loading={index < 8 ? "eager" : "lazy"}
-                          />
+                          <div className="flex h-full w-full items-center justify-center overflow-hidden p-1.5 sm:p-2">
+                            <img
+                              src={image}
+                              alt={`Remnant ${displayRemnantId(remnant)}`}
+                              className="h-full w-full scale-[1.05] object-contain object-center transition-transform duration-300 motion-safe:md:group-hover:scale-[1.08]"
+                              decoding="async"
+                              loading={index < 8 ? "eager" : "lazy"}
+                            />
+                          </div>
                         ) : (
                           <div className="flex h-full w-full items-center justify-center bg-[#f4ece4] text-sm font-semibold uppercase tracking-[0.16em] text-[#9c7355]">
                             No Image
@@ -629,14 +733,72 @@ export default function PublicInventoryClient() {
                       </button>
                     </div>
 
-                    <div className="space-y-2.5 p-3.5 text-sm text-[#232323] sm:p-4">
-                      <div className="space-y-2 rounded-[22px] bg-[#fbf8f4] px-3 py-3 text-[#4d3d34]">
-                        <h3 className="text-[15px] font-semibold leading-snug text-[#2d2623]">
-                          {cardTitleText(remnant)}
-                        </h3>
-                        <p className="text-[13px] font-medium text-[#5f4c42]">
-                          Size: {cardSizeText(remnant)}
-                        </p>
+                    <div className="p-3 text-sm text-[#232323] sm:p-3.5">
+                      <div className="rounded-[22px] border border-[#efe5dc] bg-[linear-gradient(180deg,#fcfaf7_0%,#f7f1eb_100%)] px-3.5 py-3 text-[#4d3d34] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="text-[15px] font-semibold leading-snug text-[#2d2623]">
+                              {publicCardHeading(remnant)}
+                            </h3>
+                            {publicCardSubheading(remnant) ? (
+                              <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[#7b6759]">
+                                {publicCardSubheading(remnant)}
+                              </p>
+                            ) : null}
+                          </div>
+                          <span className="inline-flex shrink-0 items-center rounded-full border border-[#eadfd7] bg-white/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8c6040]">
+                            #{displayRemnantId(remnant)}
+                          </span>
+                        </div>
+                        <div
+                          className={`mt-3 grid gap-2 ${
+                            thicknessText(remnant) && finishText(remnant)
+                              ? "sm:grid-cols-3"
+                              : thicknessText(remnant) || finishText(remnant)
+                                ? "sm:grid-cols-2"
+                                : "sm:grid-cols-1"
+                          }`}
+                        >
+                          <div className="rounded-[16px] border border-[#eadfd7] bg-white/88 px-3 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9c7355]">Size</p>
+                            <p className="mt-1 text-[13px] font-semibold text-[#2d2623]">
+                              {cardSizeText(remnant)}
+                            </p>
+                          </div>
+                          {thicknessText(remnant) ? (
+                            <div className="rounded-[16px] border border-[#eadfd7] bg-white/88 px-3 py-2">
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9c7355]">Thickness</p>
+                              <p className="mt-1 text-[13px] font-semibold text-[#2d2623]">
+                                {thicknessText(remnant)}
+                              </p>
+                            </div>
+                          ) : null}
+                          {finishText(remnant) ? (
+                            <div className="rounded-[16px] border border-[#eadfd7] bg-white/88 px-3 py-2">
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9c7355]">Finish</p>
+                              <p className="mt-1 text-[13px] font-semibold text-[#2d2623]">
+                                {finishText(remnant)}
+                              </p>
+                            </div>
+                          ) : null}
+                        </div>
+                        {remnantColors(remnant).length ? (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {remnantColors(remnant).map((color) => (
+                              <span
+                                key={`${displayRemnantId(remnant)}-${color}`}
+                                className="inline-flex items-center gap-2 rounded-full border border-[#eadfd7] bg-white/92 px-2.5 py-1 text-[11px] font-semibold text-[#5f4c42]"
+                              >
+                                <span
+                                  aria-hidden="true"
+                                  className="h-3 w-3 rounded-full border border-black/10 shadow-inner"
+                                  style={colorSwatchStyle(color)}
+                                />
+                                {color}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </article>
@@ -656,28 +818,28 @@ export default function PublicInventoryClient() {
 
       {selectedImageRemnant ? (
         <div
-          className="fixed inset-0 z-[70] bg-black/75 px-4 py-6"
+          className="fixed inset-0 z-[70] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_24%),linear-gradient(180deg,rgba(12,12,12,0.86),rgba(8,8,8,0.92))] px-3 py-4 sm:px-4 sm:py-6"
           onClick={closeImageViewer}
         >
-          <div className="mx-auto flex h-full max-w-6xl flex-col">
+          <div className="mx-auto flex h-full max-w-7xl flex-col">
             <div
-              className="mb-4 flex flex-wrap items-start justify-between gap-3 rounded-[28px] border border-white/15 bg-white/10 px-4 py-4 text-white backdrop-blur"
+              className="mb-4 flex flex-wrap items-start justify-between gap-3 rounded-[30px] border border-white/10 bg-[linear-gradient(135deg,rgba(28,28,28,0.82),rgba(44,44,44,0.58))] px-4 py-4 text-white shadow-[0_24px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:px-5"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85">
+                  <span className="inline-flex items-center rounded-full border border-white/15 bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85">
                     ID #{displayRemnantId(selectedImageRemnant)}
                   </span>
-                  <span className="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
+                  <span className="inline-flex items-center rounded-full border border-white/15 bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
                     {selectedImageIndex + 1} / {modalImageItems.length}
                   </span>
                 </div>
-                <h2 className="mt-3 text-xl font-semibold text-white sm:text-2xl">
-                  {selectedImageRemnant.name || "Unnamed"}
+                <h2 className="mt-3 text-xl font-semibold text-white sm:text-[2rem]">
+                  {cardTitleText(selectedImageRemnant)}
                 </h2>
-                <p className="mt-1 text-sm text-white/75">
-                  {selectedImageRemnant.material_name || selectedImageRemnant.material || "Unknown"} · {sizeText(selectedImageRemnant)}
+                <p className="mt-1 text-sm text-white/72">
+                  {cardSizeText(selectedImageRemnant)}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -686,14 +848,14 @@ export default function PublicInventoryClient() {
                     <button
                       type="button"
                       onClick={showPreviousImage}
-                      className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/20 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/18"
+                      className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/15 bg-white/8 px-4 text-sm font-semibold text-white transition hover:border-white/25 hover:bg-white/14"
                     >
                       Previous
                     </button>
                     <button
                       type="button"
                       onClick={showNextImage}
-                      className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/20 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/18"
+                      className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/15 bg-white/8 px-4 text-sm font-semibold text-white transition hover:border-white/25 hover:bg-white/14"
                     >
                       Next
                     </button>
@@ -702,7 +864,7 @@ export default function PublicInventoryClient() {
                 <button
                   type="button"
                   onClick={closeImageViewer}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-white/10 text-2xl text-white transition-colors hover:bg-white/20"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/8 text-2xl text-white transition-colors hover:border-white/25 hover:bg-white/16"
                   aria-label="Close image preview"
                 >
                   {"\u00D7"}
@@ -713,11 +875,15 @@ export default function PublicInventoryClient() {
               className="flex min-h-0 flex-1 items-center justify-center"
               onClick={(event) => event.stopPropagation()}
             >
-              <img
-                src={imageSrc(selectedImageRemnant)}
-                alt={`Remnant ${displayRemnantId(selectedImageRemnant)}`}
-                className="max-h-full max-w-full rounded-[28px] border border-white/15 bg-white/5 object-contain shadow-[0_30px_80px_rgba(0,0,0,0.35)]"
-              />
+              <div className="flex h-full w-full max-w-[1180px] items-center justify-center rounded-[34px] border border-white/10 bg-[linear-gradient(180deg,rgba(30,30,30,0.8),rgba(16,16,16,0.84))] p-3 shadow-[0_32px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-4">
+                <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-[28px] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_26%),linear-gradient(180deg,#1a1a1a_0%,#111111_100%)] p-2 sm:p-3">
+                  <img
+                    src={imageSrc(selectedImageRemnant)}
+                    alt={`Remnant ${displayRemnantId(selectedImageRemnant)}`}
+                    className="max-h-full max-w-full rounded-[24px] object-contain shadow-[0_24px_60px_rgba(0,0,0,0.3)]"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -728,80 +894,158 @@ export default function PublicInventoryClient() {
           <div className="mx-auto max-w-2xl overflow-hidden rounded-[28px] border border-white/70 bg-white shadow-[0_24px_70px_rgba(44,29,18,0.10)] sm:rounded-[32px]">
             <div className="flex items-start justify-between gap-4 border-b border-[#eadfd7] bg-[linear-gradient(135deg,#fffaf6_0%,#f7efe8_100%)] px-4 py-5 sm:px-6">
               <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-[#8a6a54]">Hold Request</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#8a6a54]">Hold Request</p>
                 <h2 className="text-xl font-semibold text-[#2c211c] sm:text-2xl">Request a hold</h2>
                 <p className="mt-1 text-sm text-[#7d6759]">
-                  Submit a request for remnant #{displayRemnantId(holdRemnant)}.
+                  Send your request and the team will review availability before confirming anything.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setHoldRemnant(null)}
-                className="h-10 w-10 rounded-full border border-gray-300 text-xl transition-colors active:bg-gray-200"
+                className="h-10 w-10 rounded-full border border-[#d8c7b8] bg-white text-xl text-[#5e4b40] transition hover:border-[#c9b39f] hover:bg-[#fff8f2] active:bg-[#f6ede6]"
                 aria-label="Close hold request form"
               >
                 {"\u00D7"}
               </button>
             </div>
             <form onSubmit={submitHoldRequest} className="grid gap-4 p-4 sm:p-6">
+              <section className="rounded-[26px] border border-[#eadfd7] bg-[linear-gradient(135deg,#fffaf6_0%,#fff4ea_100%)] p-4 shadow-[0_16px_38px_rgba(44,29,18,0.06)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9c7355]">
+                  Remnant Summary
+                </p>
+                <div className="mt-3 grid gap-4 sm:grid-cols-[minmax(0,1fr)_240px] sm:items-start">
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-semibold text-[#2c211c] sm:text-xl">
+                      {cardTitleText(holdRemnant)}
+                    </h3>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex rounded-full border border-[#ead3c3] bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8f5b35]">
+                        ID #{displayRemnantId(holdRemnant)}
+                      </span>
+                      <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${statusBadgeClass(statusText(holdRemnant))}`}>
+                        {statusText(holdRemnant)}
+                      </span>
+                    </div>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-[20px] border border-[#eadfd7] bg-white/80 px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+                          Material
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-[#2c211c]">
+                          {holdRemnant.material_name || holdRemnant.material || "Not listed"}
+                        </p>
+                      </div>
+                      <div className="rounded-[20px] border border-[#eadfd7] bg-white/80 px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+                          Size
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-[#2c211c]">{cardSizeText(holdRemnant)}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid gap-3">
+                    {imageSrc(holdRemnant) ? (
+                      <div className="overflow-hidden rounded-[22px] border border-white/80 bg-white shadow-[0_12px_24px_rgba(44,29,18,0.08)]">
+                        <img
+                          src={imageSrc(holdRemnant)}
+                          alt={`Remnant ${displayRemnantId(holdRemnant)}`}
+                          className="h-36 w-full object-cover object-center"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex h-36 items-center justify-center rounded-[22px] border border-dashed border-[#dccabd] bg-white/70 text-center text-sm text-[#8a6a54]">
+                        No image available
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </section>
+
               {holdFormMessage ? (
-                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
                   {holdFormMessage}
                 </div>
               ) : null}
-              <label className="block text-sm font-medium text-gray-700">
-                Name
-                <input
-                  required
-                  value={holdForm.requester_name}
-                  onChange={(event) => setHoldForm((current) => ({ ...current, requester_name: event.target.value }))}
-                  className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
-                />
-              </label>
-              <label className="block text-sm font-medium text-gray-700">
-                Email
-                <input
-                  required
-                  type="email"
-                  value={holdForm.requester_email}
-                  onChange={(event) => setHoldForm((current) => ({ ...current, requester_email: event.target.value }))}
-                  className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
-                />
-              </label>
-              <label className="block text-sm font-medium text-gray-700">
-                Sales Rep
-                <select
-                  value={holdForm.sales_rep_user_id}
-                  onChange={(event) => setHoldForm((current) => ({ ...current, sales_rep_user_id: event.target.value }))}
-                  disabled={salesReps.length === 0}
-                  className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
-                >
-                  <option value="">
-                    {salesReps.length === 0 ? "No active sales reps available" : "Select sales rep"}
-                  </option>
-                  {salesReps.map((row) => (
-                    <option key={row.id} value={row.id}>
-                      {row.display_name || row.full_name || row.email || "User"}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-sm font-medium text-gray-700">
-                Notes
-                <textarea
-                  rows="3"
-                  value={holdForm.notes}
-                  onChange={(event) => setHoldForm((current) => ({ ...current, notes: event.target.value }))}
-                  className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
-                  placeholder="Anything the sales rep should know"
-                />
-              </label>
-              <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm text-[#6d584b]">
+
+              <section className="rounded-[26px] border border-[#eadfd7] bg-white p-4 shadow-[0_12px_28px_rgba(44,29,18,0.05)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9c7355]">
+                  Your Contact
+                </p>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Name
+                    <input
+                      required
+                      value={holdForm.requester_name}
+                      onChange={(event) => setHoldForm((current) => ({ ...current, requester_name: event.target.value }))}
+                      className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                      placeholder="Your full name"
+                    />
+                  </label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Email
+                    <input
+                      required
+                      type="email"
+                      value={holdForm.requester_email}
+                      onChange={(event) => setHoldForm((current) => ({ ...current, requester_email: event.target.value }))}
+                      className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                      placeholder="you@example.com"
+                    />
+                  </label>
+                </div>
+              </section>
+
+              <section className="rounded-[26px] border border-[#eadfd7] bg-white p-4 shadow-[0_12px_28px_rgba(44,29,18,0.05)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9c7355]">
+                  Request Details
+                </p>
+                <div className="mt-4 grid gap-4">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Sales Rep
+                    <SelectField
+                      value={holdForm.sales_rep_user_id}
+                      onChange={(event) => setHoldForm((current) => ({ ...current, sales_rep_user_id: event.target.value }))}
+                      disabled={salesReps.length === 0}
+                      wrapperClassName="relative mt-2"
+                      className="disabled:bg-[#f8f2ec] disabled:text-[#9d8b7f]"
+                    >
+                      <option value="">
+                        {salesReps.length === 0 ? "No active sales reps available" : "Select sales rep"}
+                      </option>
+                      {salesReps.map((row) => (
+                        <option key={row.id} value={row.id}>
+                          {row.display_name || row.full_name || row.email || "User"}
+                        </option>
+                      ))}
+                    </SelectField>
+                  </label>
+
+                  <label className="block text-sm font-medium text-gray-700">
+                    Notes
+                    <textarea
+                      rows="4"
+                      value={holdForm.notes}
+                      onChange={(event) => setHoldForm((current) => ({ ...current, notes: event.target.value }))}
+                      className="mt-2 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 py-3 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                      placeholder="Anything the sales rep should know about timing, pickup, or questions"
+                    />
+                  </label>
+                </div>
+              </section>
+
+              <div className="flex flex-col gap-3 rounded-[24px] border border-[#eadfd7] bg-[#fffaf6] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm leading-6 text-[#6d584b]">
                   {salesReps.length === 0
                     ? "No active sales reps are set up yet. Create one in the admin workspace first."
-                    : "A sales rep will review this request before any hold is approved."}
+                    : "You’re sending a request only. A sales rep will review it and follow up before any hold is approved."}
                 </p>
+                <input
+                  type="hidden"
+                  name="remnant_id"
+                  value={internalRemnantId(holdRemnant) || ""}
+                />
                 <button
                   type="submit"
                   disabled={holdSubmitting || salesReps.length === 0}

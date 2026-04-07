@@ -410,7 +410,7 @@ export default function AdminWorkspaceClient() {
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,#1f3657_0%,#15263f_28%,#0f1727_58%,#edf2f7_58%,#edf2f7_100%)] font-sans text-[#18212d]">
-      <div className="mx-auto max-w-[1800px] px-4 py-4 md:px-6 md:py-6">
+      <div className="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 md:px-6 md:py-6 2xl:px-8">
         <section className="mb-4 overflow-hidden rounded-[32px] border border-white/15 bg-[linear-gradient(135deg,rgba(11,18,32,0.92),rgba(27,43,69,0.86))] px-6 py-6 text-white shadow-[0_28px_90px_rgba(11,18,32,0.18)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
@@ -438,7 +438,7 @@ export default function AdminWorkspaceClient() {
           <div className="mb-4 rounded-2xl bg-[#fff1f1] px-4 py-3 text-sm font-medium text-[#b42318]">{error}</div>
         ) : null}
 
-        <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_420px]">
+        <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)_380px]">
           <aside className="rounded-[28px] border border-[#d8e1ea] bg-white/94 p-4 shadow-[0_28px_90px_rgba(11,18,32,0.18)]">
             <div className="flex items-center justify-between gap-3">
               <div>

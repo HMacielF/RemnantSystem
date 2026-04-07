@@ -11,6 +11,7 @@ const REMNANT_SELECT = `
   company_id,
   material_id,
   thickness_id,
+  finish_id,
   name,
   width,
   height,
@@ -22,9 +23,11 @@ const REMNANT_SELECT = `
   source_image_url,
   updated_at,
   created_at,
+  stone_product_id,
   company:companies(id,name),
   material:materials(id,name),
-  thickness:thicknesses(id,name)
+  thickness:thicknesses(id,name),
+  finish:finishes(id,name)
 `;
 const HOLD_SELECT = `
   id,
@@ -180,12 +183,22 @@ function extractRemnantIdSearch(value) {
 
 function formatRemnant(row) {
   if (!row) return row;
+  const normalizedColors = dedupeColorList([
+    ...(Array.isArray(row.colors) ? row.colors : []),
+    ...(Array.isArray(row.primary_colors) ? row.primary_colors : []),
+    ...(Array.isArray(row.accent_colors) ? row.accent_colors : []),
+  ]);
   return {
     ...row,
     display_id: row.moraware_remnant_id || row.id,
     company_name: row.company?.name || "",
     material_name: row.material?.name || "",
     thickness_name: row.thickness?.name || "",
+    finish_name: row.finish?.name || row.finish_name || "",
+    brand_name: row.stone_product?.brand_name || row.brand_name || "",
+    colors: normalizedColors,
+    primary_colors: normalizedColors,
+    accent_colors: [],
   };
 }
 
@@ -553,7 +566,96 @@ export async function fetchLookupRows(tableName, client = getReadClient()) {
     .order("name", { ascending: true });
 
   if (error) throw error;
+  if (tableName === "colors") {
+    const seen = new Set();
+    return (data || []).reduce((rows, row) => {
+      const normalizedName = normalizeColorName(row?.name);
+      const key = normalizedName.toLowerCase();
+      if (!normalizedName || seen.has(key)) return rows;
+      seen.add(key);
+      rows.push({
+        ...row,
+        name: normalizedName,
+      });
+      return rows;
+    }, []);
+  }
   return data || [];
+}
+
+export async function fetchStoneProductLookupRows(client = getReadClient()) {
+  const { data, error } = await client
+    .from("stone_products")
+    .select(`
+      id,
+      material_id,
+      display_name,
+      stone_name,
+      brand_name,
+      active,
+      stone_product_colors(
+        role,
+        color:colors(id,name)
+      )
+    `)
+    .eq("active", true)
+    .order("display_name", { ascending: true });
+
+  if (error) throw error;
+
+  return (data || []).map((row) => ({
+    id: row.id,
+    material_id: row.material_id,
+    display_name: row.display_name,
+    stone_name: row.stone_name,
+    brand_name: row.brand_name || "",
+    colors: dedupeColorList(extractStoneProductColors(row).colors),
+    ...extractStoneProductColors(row),
+  }));
+}
+
+async function fetchStoneProductIdsByBrandSearch(client, search) {
+  const brandSearch = String(search || "").trim();
+  if (!brandSearch) return [];
+
+  const { data, error } = await client
+    .from("stone_products")
+    .select("id")
+    .ilike("brand_name", `%${escapeLikeValue(brandSearch)}%`)
+    .eq("active", true)
+    .limit(200);
+
+  if (error) throw error;
+  return [...new Set((data || []).map((row) => Number(row.id)).filter(Boolean))];
+}
+
+async function fetchStoneProductIdsByColorSearch(client, search) {
+  const colorSearch = String(search || "").trim();
+  if (!colorSearch) return [];
+
+  const { data, error } = await client
+    .from("stone_product_colors")
+    .select("stone_product_id,color:colors!inner(name)")
+    .ilike("color.name", `%${escapeLikeValue(colorSearch)}%`)
+    .limit(200);
+
+  if (error) throw error;
+  return [...new Set((data || []).map((row) => Number(row.stone_product_id)).filter(Boolean))];
+}
+
+async function fetchRemnantIdsByFinishSearch(client, search) {
+  const finishSearch = String(search || "").trim();
+  if (!finishSearch) return [];
+
+  const { data, error } = await client
+    .from("remnants")
+    .select("id,finish:finishes!inner(name)")
+    .is("deleted_at", null)
+    .ilike("finish.name", `%${escapeLikeValue(finishSearch)}%`)
+    .limit(200);
+
+  if (error) throw error;
+  return [...new Set((data || []).map((row) => Number(row.id)).filter(Boolean))];
 }
 
 export async function fetchSalesRepRows(client = getReadClient(), options = {}) {
@@ -676,16 +778,22 @@ export async function fetchLookupPayload(request, authContext = null) {
 
   const lookupClient = getWriteClient(requiredAuthed.client);
 
-  const [companies, materials, thicknesses] = await Promise.all([
+  const [companies, materials, thicknesses, finishes, colors, stone_products] = await Promise.all([
     fetchLookupRows("companies", lookupClient),
     fetchLookupRows("materials", lookupClient),
     fetchLookupRows("thicknesses", lookupClient),
+    fetchLookupRows("finishes", lookupClient),
+    fetchLookupRows("colors", lookupClient),
+    fetchStoneProductLookupRows(lookupClient),
   ]);
 
   return {
     companies,
     materials,
     thicknesses,
+    finishes,
+    colors,
+    stone_products,
   };
 }
 
@@ -716,7 +824,17 @@ export async function fetchPrivateRemnants(request, authContext = null) {
   let resolvedMaterialIds = [...materialIds];
   let query = requiredAuthed.client
     .from("remnants")
-    .select(REMNANT_SELECT)
+    .select(`
+      ${REMNANT_SELECT},
+      stone_product:stone_products(
+        id,
+        brand_name,
+        stone_product_colors(
+          role,
+          color:colors(id,name)
+        )
+      )
+    `)
     .is("deleted_at", null)
     .order("moraware_remnant_id", { ascending: true, nullsFirst: false })
     .order("id", { ascending: true });
@@ -729,10 +847,36 @@ export async function fetchPrivateRemnants(request, authContext = null) {
     resolvedMaterialIds = materialNameIds;
     query = query.in("material_id", materialNameIds);
   }
+  const [brandMatchedStoneProductIds, colorMatchedStoneProductIds, finishMatchedRemnantIds] = stone
+    ? await Promise.all([
+        fetchStoneProductIdsByBrandSearch(getWriteClient(requiredAuthed.client), stone),
+        fetchStoneProductIdsByColorSearch(getWriteClient(requiredAuthed.client), stone),
+        fetchRemnantIdsByFinishSearch(getWriteClient(requiredAuthed.client), stone),
+      ])
+    : [[], [], []];
+  const matchedStoneProductIds = [...new Set([...brandMatchedStoneProductIds, ...colorMatchedStoneProductIds])];
   if (stone && searchedRemnantId !== null) {
-    query = query.or(`name.ilike.%${stoneLike}%,moraware_remnant_id.eq.${searchedRemnantId}`);
+    const orFilters = [`name.ilike.%${stoneLike}%`, `moraware_remnant_id.eq.${searchedRemnantId}`];
+    if (matchedStoneProductIds.length) {
+      orFilters.push(`stone_product_id.in.(${matchedStoneProductIds.join(",")})`);
+    }
+    if (finishMatchedRemnantIds.length) {
+      orFilters.push(`id.in.(${finishMatchedRemnantIds.join(",")})`);
+    }
+    query = query.or(orFilters.join(","));
   } else if (stone) {
-    query = query.ilike("name", `%${stoneLike}%`);
+    if (matchedStoneProductIds.length || finishMatchedRemnantIds.length) {
+      const orFilters = [`name.ilike.%${stoneLike}%`];
+      if (matchedStoneProductIds.length) {
+        orFilters.push(`stone_product_id.in.(${matchedStoneProductIds.join(",")})`);
+      }
+      if (finishMatchedRemnantIds.length) {
+        orFilters.push(`id.in.(${finishMatchedRemnantIds.join(",")})`);
+      }
+      query = query.or(orFilters.join(","));
+    } else {
+      query = query.ilike("name", `%${stoneLike}%`);
+    }
   }
   if (status) query = query.eq("status", status);
   if (minWidth !== null) query = query.gte("width", minWidth);
@@ -741,10 +885,23 @@ export async function fetchPrivateRemnants(request, authContext = null) {
   const { data, error } = await query;
   if (error) throw error;
 
-  const formattedRows = filterFormattedRowsByMaterial((data || []).map(formatRemnant), resolvedMaterialIds, materialNames);
-  if (!shouldEnrich) return formattedRows;
+  const formattedRows = filterFormattedRowsByMaterial(
+    (data || []).map((row) => formatRemnant({
+      ...row,
+      ...extractStoneProductColors(row),
+    })),
+    resolvedMaterialIds,
+    materialNames,
+  );
+  const needsSharedColorFallback = formattedRows.some(
+    (row) => !dedupeColorList(row.colors).length,
+  );
+  const rowsWithSharedColors = needsSharedColorFallback
+    ? withSharedStoneColorFallback(formattedRows, await fetchStoneProductLookupRows(getWriteClient(requiredAuthed.client)))
+    : formattedRows;
+  if (!shouldEnrich) return rowsWithSharedColors;
 
-  const remnantIds = formattedRows.map((row) => row.id);
+  const remnantIds = rowsWithSharedColors.map((row) => row.id);
   const writeClient = getWriteClient(requiredAuthed.client);
   const [holdMap, saleMap, statusActorMap] = await Promise.all([
     fetchRelevantHoldMap(writeClient, remnantIds),
@@ -752,7 +909,7 @@ export async function fetchPrivateRemnants(request, authContext = null) {
     fetchStatusActorMap(writeClient, remnantIds),
   ]);
 
-  return attachStatusMetaToRows(attachSaleToRows(attachHoldToRows(formattedRows, holdMap), saleMap), statusActorMap);
+  return attachStatusMetaToRows(attachSaleToRows(attachHoldToRows(rowsWithSharedColors, holdMap), saleMap), statusActorMap);
 }
 
 export async function fetchRemnantEnrichment(request, ids, authContext = null) {
@@ -1260,18 +1417,21 @@ export async function createRemnant(client, authed, body) {
     throw error;
   }
 
+  const stoneProductId = await ensureStoneProduct(writeClient, payload);
   const imageData = await uploadImageIfPresent(writeClient, payload.name || `new-${Date.now()}`, body?.image_file);
   const insertPayload = {
     moraware_remnant_id: payload.moraware_remnant_id,
     company_id: payload.company_id,
     material_id: payload.material_id,
     thickness_id: payload.thickness_id,
+    finish_id: payload.finish_id,
     name: payload.name,
     width: payload.width,
     height: payload.height,
     l_shape: payload.l_shape,
     l_width: payload.l_width,
     l_height: payload.l_height,
+    stone_product_id: stoneProductId,
     status: payload.status,
     hash: body?.hash ? String(body.hash).trim() : `manual:${Date.now()}`,
     deleted_at: null,
@@ -1286,15 +1446,37 @@ export async function createRemnant(client, authed, body) {
 
   if (error) throw error;
 
+  await replaceStoneProductColors(writeClient, stoneProductId, {
+    colors: payload.colors,
+  });
+
+  const { data: refreshedData, error: refreshedError } = await writeClient
+    .from("remnants")
+    .select(`
+      ${REMNANT_SELECT},
+      stone_product:stone_products(
+        id,
+        brand_name,
+        stone_product_colors(
+          role,
+          color:colors(id,name)
+        )
+      )
+    `)
+    .eq("id", data.id)
+    .single();
+
+  if (refreshedError) throw refreshedError;
+
   runBestEffort(async () => {
     await writeAuditLog(writeClient, authed, {
       event_type: "remnant_created",
       entity_type: "remnant",
-      entity_id: data.id,
-      remnant_id: data.id,
-      company_id: data.company_id,
-      message: `Created remnant #${data.moraware_remnant_id || data.id}`,
-      new_data: data,
+      entity_id: refreshedData.id,
+      remnant_id: refreshedData.id,
+      company_id: refreshedData.company_id,
+      message: `Created remnant #${refreshedData.moraware_remnant_id || refreshedData.id}`,
+      new_data: refreshedData,
       meta: {
         source: "api",
         action: "create",
@@ -1302,7 +1484,10 @@ export async function createRemnant(client, authed, body) {
     });
   }, "Create remnant audit");
 
-  return formatRemnant(data);
+  return formatRemnant({
+    ...refreshedData,
+    ...extractStoneProductColors(refreshedData),
+  });
 }
 
 export async function updateRemnant(client, authed, remnantId, body) {
@@ -1335,18 +1520,28 @@ export async function updateRemnant(client, authed, remnantId, body) {
   }
 
   const imageData = await uploadImageIfPresent(writeClient, remnantId, body?.image_file);
+  const reuseExistingStoneProduct =
+    Number(existingRemnant.material_id) === Number(payload.material_id)
+    && String(existingRemnant.name || "").trim() === String(payload.name || "").trim();
+  const stoneProductId = await ensureStoneProduct(
+    writeClient,
+    payload,
+    reuseExistingStoneProduct ? existingRemnant.stone_product_id : null,
+  );
   const incomingStoneId = Object.prototype.hasOwnProperty.call(body || {}, "moraware_remnant_id")
     || Object.prototype.hasOwnProperty.call(body || {}, "external_id");
   const updatePayload = {
     company_id: payload.company_id,
     material_id: payload.material_id,
     thickness_id: payload.thickness_id,
+    finish_id: payload.finish_id,
     name: payload.name,
     width: payload.width,
     height: payload.height,
     l_shape: payload.l_shape,
     l_width: payload.l_width,
     l_height: payload.l_height,
+    stone_product_id: stoneProductId,
     ...(imageData || {}),
     moraware_remnant_id: incomingStoneId ? payload.moraware_remnant_id : existingRemnant.moraware_remnant_id,
   };
@@ -1365,16 +1560,43 @@ export async function updateRemnant(client, authed, remnantId, body) {
     throw nextError;
   }
 
+  await replaceStoneProductColors(writeClient, stoneProductId, {
+    colors: payload.colors,
+  });
+
+  const { data: refreshedData, error: refreshedError } = await writeClient
+    .from("remnants")
+    .select(`
+      ${REMNANT_SELECT},
+      stone_product:stone_products(
+        id,
+        brand_name,
+        stone_product_colors(
+          role,
+          color:colors(id,name)
+        )
+      )
+    `)
+    .eq("id", remnantId)
+    .maybeSingle();
+
+  if (refreshedError) throw refreshedError;
+  if (!refreshedData) {
+    const nextError = new Error("Remnant not found after update");
+    nextError.statusCode = 404;
+    throw nextError;
+  }
+
   runBestEffort(async () => {
     await writeAuditLog(writeClient, authed, {
       event_type: "remnant_updated",
       entity_type: "remnant",
-      entity_id: data.id,
-      remnant_id: data.id,
-      company_id: data.company_id,
-      message: `Updated remnant #${data.moraware_remnant_id || data.id}`,
+      entity_id: refreshedData.id,
+      remnant_id: refreshedData.id,
+      company_id: refreshedData.company_id,
+      message: `Updated remnant #${refreshedData.moraware_remnant_id || refreshedData.id}`,
       old_data: existingRemnant,
-      new_data: data,
+      new_data: refreshedData,
       meta: {
         source: "api",
         action: "update",
@@ -1382,7 +1604,10 @@ export async function updateRemnant(client, authed, remnantId, body) {
     });
   }, "Update remnant audit");
 
-  return formatRemnant(data);
+  return formatRemnant({
+    ...refreshedData,
+    ...extractStoneProductColors(refreshedData),
+  });
 }
 
 export async function updateRemnantStatus(client, authed, remnantId, body) {
@@ -2152,6 +2377,190 @@ function sanitizeExternalHttpUrl(value) {
   }
 }
 
+function dedupeStringList(values) {
+  const seen = new Set();
+  return (Array.isArray(values) ? values : [])
+    .map((value) => String(value || "").trim())
+    .filter((value) => {
+      if (!value) return false;
+      const normalized = value.toLowerCase();
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
+}
+
+function normalizeColorName(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "";
+  const key = normalized.toLowerCase();
+  if (key === "white-cool" || key === "white-warm") return "White";
+  if (key === "gray-light" || key === "gray-dark") return "Gray";
+  return normalized;
+}
+
+function dedupeColorList(values) {
+  const seen = new Set();
+  return (Array.isArray(values) ? values : [])
+    .map((value) => normalizeColorName(value))
+    .filter((value) => {
+      if (!value) return false;
+      const normalized = value.toLowerCase();
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
+}
+
+function normalizeStoneLookupKeyPart(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function stoneProductLookupKey(materialId, stoneName) {
+  const numericMaterialId = Number(materialId);
+  const normalizedName = normalizeStoneLookupKeyPart(stoneName);
+  if (!Number.isFinite(numericMaterialId) || !normalizedName) return "";
+  return `${numericMaterialId}:${normalizedName}`;
+}
+
+function extractStoneProductColors(row) {
+  const colorRows = Array.isArray(row?.stone_product?.stone_product_colors)
+    ? row.stone_product.stone_product_colors
+    : [];
+  const colors = dedupeColorList(colorRows.map((item) => item?.color?.name));
+
+  return {
+    colors,
+    primary_colors: colors,
+    accent_colors: [],
+  };
+}
+
+function withSharedStoneColorFallback(rows, stoneProducts) {
+  const fallbackMap = new Map(
+    (Array.isArray(stoneProducts) ? stoneProducts : [])
+      .map((row) => [stoneProductLookupKey(row.material_id, row.display_name || row.stone_name), row])
+      .filter(([key]) => Boolean(key)),
+  );
+
+  return (Array.isArray(rows) ? rows : []).map((row) => {
+    const colors = dedupeColorList([
+      ...(Array.isArray(row?.colors) ? row.colors : []),
+      ...(Array.isArray(row?.primary_colors) ? row.primary_colors : []),
+      ...(Array.isArray(row?.accent_colors) ? row.accent_colors : []),
+    ]);
+    if (colors.length) {
+      return {
+        ...row,
+        colors,
+        primary_colors: colors,
+        accent_colors: [],
+      };
+    }
+
+    const fallback = fallbackMap.get(stoneProductLookupKey(row?.material_id, row?.name));
+    if (!fallback) {
+      return {
+        ...row,
+        colors,
+        primary_colors: colors,
+        accent_colors: [],
+      };
+    }
+
+    const fallbackColors = dedupeColorList(fallback.colors);
+    return {
+      ...row,
+      colors: fallbackColors,
+      primary_colors: fallbackColors,
+      accent_colors: [],
+    };
+  });
+}
+
+async function ensureStoneProduct(writeClient, payload, existingStoneProductId = null) {
+  if (existingStoneProductId) return existingStoneProductId;
+  if (!payload?.material_id || !payload?.name) return null;
+
+  const displayName = String(payload.name || "").trim();
+  if (!displayName) return null;
+
+  const { data: existing, error: existingError } = await writeClient
+    .from("stone_products")
+    .select("id")
+    .eq("material_id", payload.material_id)
+    .eq("display_name", displayName)
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+  if (existing?.id) return existing.id;
+
+  const { data: created, error: createError } = await writeClient
+    .from("stone_products")
+    .insert({
+      material_id: payload.material_id,
+      display_name: displayName,
+      stone_name: displayName,
+      active: true,
+    })
+    .select("id")
+    .single();
+
+  if (createError) throw createError;
+  return created?.id || null;
+}
+
+async function replaceStoneProductColors(writeClient, stoneProductId, colorNamesByRole) {
+  if (!stoneProductId) return;
+
+  const allNames = dedupeColorList([
+    ...(Array.isArray(colorNamesByRole?.colors) ? colorNamesByRole.colors : []),
+    ...(Array.isArray(colorNamesByRole?.primary_colors) ? colorNamesByRole.primary_colors : []),
+    ...(Array.isArray(colorNamesByRole?.accent_colors) ? colorNamesByRole.accent_colors : []),
+  ]);
+
+  let colorRows = [];
+  if (allNames.length) {
+    const { data, error } = await writeClient
+      .from("colors")
+      .select("id,name")
+      .in("name", allNames);
+
+    if (error) throw error;
+    colorRows = data || [];
+  }
+
+  const colorIdByName = new Map(colorRows.map((row) => [row.name, row.id]));
+  const missingNames = allNames.filter((name) => !colorIdByName.has(name));
+  if (missingNames.length) {
+    throw new Error(`Unknown colors: ${missingNames.join(", ")}`);
+  }
+
+  const { error: deleteError } = await writeClient
+    .from("stone_product_colors")
+    .delete()
+    .eq("stone_product_id", stoneProductId);
+
+  if (deleteError) throw deleteError;
+
+  const rowsToInsert = [
+    ...allNames.map((name) => ({
+      stone_product_id: stoneProductId,
+      color_id: colorIdByName.get(name),
+      role: "primary",
+    })),
+  ];
+
+  if (!rowsToInsert.length) return;
+
+  const { error: insertError } = await writeClient
+    .from("stone_product_colors")
+    .insert(rowsToInsert);
+
+  if (insertError) throw insertError;
+}
+
 function normalizeSlabRow(row, priceRows = []) {
   const slabColors = Array.isArray(row?.slab_colors) ? row.slab_colors : [];
   const slabFinishes = Array.isArray(row?.slab_finishes) ? row.slab_finishes : [];
@@ -2235,13 +2644,22 @@ function normalizePayload(body) {
     company_id: asNumber(body.company_id),
     material_id: asNumber(body.material_id),
     thickness_id: asNumber(body.thickness_id),
+    finish_id: asNumber(body.finish_id),
     width: asNumber(body.width),
     height: asNumber(body.height),
     l_shape: Boolean(body.l_shape),
     l_width: asNumber(body.l_width),
     l_height: asNumber(body.l_height),
+    colors: dedupeColorList(
+      Array.isArray(body.colors) && body.colors.length
+        ? body.colors
+        : [...(Array.isArray(body.primary_colors) ? body.primary_colors : []), ...(Array.isArray(body.accent_colors) ? body.accent_colors : [])],
+    ),
     status: normalizeStatus(body.status),
   };
+
+  parsed.primary_colors = parsed.colors;
+  parsed.accent_colors = [];
 
   if (!parsed.l_shape) {
     parsed.l_width = null;

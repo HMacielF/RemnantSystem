@@ -88,6 +88,66 @@ function formatSale(row) {
   return row;
 }
 
+function normalizeColorName(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "";
+  const key = normalized.toLowerCase();
+  if (key === "white-cool" || key === "white-warm") return "White";
+  if (key === "gray-light" || key === "gray-dark") return "Gray";
+  return normalized;
+}
+
+function dedupeColorList(values) {
+  const seen = new Set();
+  return (Array.isArray(values) ? values : [])
+    .map((value) => normalizeColorName(value))
+    .filter((value) => {
+      if (!value) return false;
+      const normalized = value.toLowerCase();
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
+}
+
+function dedupeStringList(values) {
+  const seen = new Set();
+  return (Array.isArray(values) ? values : [])
+    .map((value) => String(value || "").trim())
+    .filter((value) => {
+      if (!value) return false;
+      const normalized = value.toLowerCase();
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
+}
+
+function resolveEffectiveFinish(row) {
+  const directFinish = String(row?.finish?.name || row?.finish_name || "").trim();
+  if (directFinish) return directFinish;
+
+  const finishes = dedupeStringList(row?.slab_finishes);
+  if (finishes.length === 1) return finishes[0];
+  if (finishes.length <= 1) return "";
+
+  const text = [
+    row?.name,
+    row?.stone_product?.display_name,
+    row?.stone_product?.stone_name,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const matched = finishes.find((finish) => {
+    const normalizedFinish = finish.toLowerCase();
+    return text.includes(`${normalizedFinish} finish`) || text.includes(normalizedFinish);
+  });
+
+  return matched || "";
+}
+
 function pickRelevantHold(rows) {
   const candidates = Array.isArray(rows) ? rows : [];
   const visibleCandidates = candidates.filter((row) =>
@@ -112,7 +172,53 @@ function formatPublicRemnant(row) {
     company_name: row.company || "",
     material_name: row.material || "",
     thickness_name: row.thickness || "",
+    brand_name: row.brand_name || "",
+    colors: dedupeColorList(row.colors),
   };
+}
+
+async function fetchStoneProductIdsByBrandSearch(client, search) {
+  const brandSearch = String(search || "").trim();
+  if (!brandSearch) return [];
+
+  const { data, error } = await client
+    .from("stone_products")
+    .select("id")
+    .ilike("brand_name", `%${escapeLikeValue(brandSearch)}%`)
+    .eq("active", true)
+    .limit(200);
+
+  if (error) throw error;
+  return [...new Set((data || []).map((row) => Number(row.id)).filter(Boolean))];
+}
+
+async function fetchStoneProductIdsByColorSearch(client, search) {
+  const colorSearch = String(search || "").trim();
+  if (!colorSearch) return [];
+
+  const { data, error } = await client
+    .from("stone_product_colors")
+    .select("stone_product_id,color:colors!inner(name)")
+    .ilike("color.name", `%${escapeLikeValue(colorSearch)}%`)
+    .limit(200);
+
+  if (error) throw error;
+  return [...new Set((data || []).map((row) => Number(row.stone_product_id)).filter(Boolean))];
+}
+
+async function fetchRemnantIdsByFinishSearch(client, search) {
+  const finishSearch = String(search || "").trim();
+  if (!finishSearch) return [];
+
+  const { data, error } = await client
+    .from("remnants")
+    .select("id,finish:finishes!inner(name)")
+    .is("deleted_at", null)
+    .ilike("finish.name", `%${escapeLikeValue(finishSearch)}%`)
+    .limit(200);
+
+  if (error) throw error;
+  return [...new Set((data || []).map((row) => Number(row.id)).filter(Boolean))];
 }
 
 async function fetchVisibleActiveRemnantRows({ internalIds = [], externalIds = [] } = {}) {
@@ -320,8 +426,17 @@ export function getPublicRemnantFilters(searchParams) {
 export async function fetchPublicRemnants(filters) {
   const stoneLike = escapeLikeValue(filters.stone);
   const searchedRemnantId = extractRemnantIdSearch(filters.stone);
+  const publicClient = getPublicReadClient();
+  const [brandMatchedStoneProductIds, colorMatchedStoneProductIds, finishMatchedRemnantIds] = filters.stone
+    ? await Promise.all([
+        fetchStoneProductIdsByBrandSearch(getTrustedReadClient(), filters.stone),
+        fetchStoneProductIdsByColorSearch(getTrustedReadClient(), filters.stone),
+        fetchRemnantIdsByFinishSearch(getTrustedReadClient(), filters.stone),
+      ])
+    : [[], [], []];
+  const matchedStoneProductIds = [...new Set([...brandMatchedStoneProductIds, ...colorMatchedStoneProductIds])];
 
-  let query = getPublicReadClient()
+  let query = publicClient
     .from("active_remnants")
     .select(ACTIVE_REMNANT_SELECT)
     .order("id", { ascending: true });
@@ -330,9 +445,27 @@ export async function fetchPublicRemnants(filters) {
     query = query.in("material", filters.materialNames);
   }
   if (filters.stone && searchedRemnantId !== null) {
-    query = query.or(`name.ilike.%${stoneLike}%,id.eq.${searchedRemnantId}`);
+    const orFilters = [`name.ilike.%${stoneLike}%`, `id.eq.${searchedRemnantId}`];
+    if (matchedStoneProductIds.length) {
+      orFilters.push(`stone_product_id.in.(${matchedStoneProductIds.join(",")})`);
+    }
+    if (finishMatchedRemnantIds.length) {
+      orFilters.push(`internal_remnant_id.in.(${finishMatchedRemnantIds.join(",")})`);
+    }
+    query = query.or(orFilters.join(","));
   } else if (filters.stone) {
-    query = query.ilike("name", `%${stoneLike}%`);
+    if (matchedStoneProductIds.length || finishMatchedRemnantIds.length) {
+      const orFilters = [`name.ilike.%${stoneLike}%`];
+      if (matchedStoneProductIds.length) {
+        orFilters.push(`stone_product_id.in.(${matchedStoneProductIds.join(",")})`);
+      }
+      if (finishMatchedRemnantIds.length) {
+        orFilters.push(`internal_remnant_id.in.(${finishMatchedRemnantIds.join(",")})`);
+      }
+      query = query.or(orFilters.join(","));
+    } else {
+      query = query.ilike("name", `%${stoneLike}%`);
+    }
   }
   if (filters.status) query = query.eq("status", filters.status);
   if (filters.minWidth !== null) query = query.gte("width", filters.minWidth);
@@ -340,7 +473,27 @@ export async function fetchPublicRemnants(filters) {
 
   const { data, error } = await query;
   if (error) throw error;
-  return (data || []).map(formatPublicRemnant);
+  const rows = data || [];
+  const stoneProductIds = [...new Set(rows.map((row) => Number(row.stone_product_id)).filter(Boolean))];
+  let brandByStoneProductId = new Map();
+  if (stoneProductIds.length) {
+    const { data: stoneProducts, error: stoneProductError } = await getTrustedReadClient()
+      .from("stone_products")
+      .select("id,brand_name")
+      .in("id", stoneProductIds);
+
+    if (stoneProductError) throw stoneProductError;
+    brandByStoneProductId = new Map(
+      (stoneProducts || []).map((row) => [Number(row.id), String(row.brand_name || "").trim()]),
+    );
+  }
+
+  return rows.map((row) =>
+    formatPublicRemnant({
+      ...row,
+      brand_name: brandByStoneProductId.get(Number(row.stone_product_id)) || "",
+    }),
+  );
 }
 
 export async function fetchPublicRemnantEnrichment(remnantIds) {
@@ -352,8 +505,59 @@ export async function fetchPublicRemnantEnrichment(remnantIds) {
   if (visibleIds.length === 0) return [];
 
   const trustedClient = getTrustedReadClient();
-  const holdMap = await fetchRelevantHoldMap(trustedClient, visibleIds);
-  const saleMap = await fetchLatestSaleMap(trustedClient, visibleIds);
+  const [holdMap, saleMap, remnantColorRows] = await Promise.all([
+    fetchRelevantHoldMap(trustedClient, visibleIds),
+    fetchLatestSaleMap(trustedClient, visibleIds),
+    trustedClient
+      .from("remnants")
+      .select(`
+        id,
+        name,
+        parent_slab_id,
+        finish:finishes(name),
+        stone_product:stone_products(
+          brand_name,
+          display_name,
+          stone_name,
+          stone_product_colors(
+            color:colors(name)
+          )
+        ),
+        slab_finishes:slabs(
+          slab_finishes(
+            finish:finishes(name)
+          )
+        )
+      `)
+      .in("id", visibleIds)
+      .then(({ data, error }) => {
+        if (error) throw error;
+        return data || [];
+      }),
+  ]);
+  const colorMap = new Map(
+    remnantColorRows.map((row) => [
+      Number(row.id),
+      dedupeColorList(
+        (Array.isArray(row?.stone_product?.stone_product_colors) ? row.stone_product.stone_product_colors : [])
+          .map((item) => item?.color?.name),
+      ),
+    ]),
+  );
+  const finishMap = new Map(
+    remnantColorRows.map((row) => {
+      const slabFinishes = Array.isArray(row?.slab_finishes?.slab_finishes)
+        ? row.slab_finishes.slab_finishes.map((item) => item?.finish?.name)
+        : [];
+      return [
+        Number(row.id),
+        resolveEffectiveFinish({
+          ...row,
+          slab_finishes: slabFinishes,
+        }),
+      ];
+    }),
+  );
 
   return visibleIds.map((remnantId) => {
     const currentSale = saleMap.get(Number(remnantId)) || null;
@@ -362,6 +566,9 @@ export async function fetchPublicRemnantEnrichment(remnantIds) {
       current_hold: holdMap.get(Number(remnantId)) || null,
       current_sale: currentSale,
       sold_at: currentSale?.sold_at || null,
+      brand_name: String(remnantColorRows.find((row) => Number(row.id) === Number(remnantId))?.stone_product?.brand_name || "").trim(),
+      finish_name: finishMap.get(Number(remnantId)) || "",
+      colors: colorMap.get(Number(remnantId)) || [],
     };
   });
 }

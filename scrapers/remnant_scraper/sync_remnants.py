@@ -26,6 +26,7 @@ from scrapers.remnant_scraper.config import load_settings
 from scrapers.remnant_scraper.parsing import (
     get_page_material_and_name,
     parse_brand_and_stone_name,
+    parse_finish,
     parse_line,
     parse_thickness,
 )
@@ -650,6 +651,7 @@ def main():
                     remnant_id, width, height, l_shape, l_width, l_height, remnant_status = size_parsed
                     normalized_status = normalize_status(remnant_status)
                     thickness = parse_thickness(description)
+                    finish_name = parse_finish(f"{raw_name} {description}")
                     material_key = material.strip() or "Other"
                     thickness_key = thickness.strip() or "Other"
                     material_id = material_ids.get(material_key)
@@ -660,6 +662,7 @@ def main():
                     if thickness_id is None:
                         thickness_id = get_or_create_lookup_id(supabase, "thicknesses", thickness_key)
                         thickness_ids[thickness_key] = thickness_id
+                    finish_id = get_or_create_lookup_id(supabase, "finishes", finish_name) if finish_name else None
 
                     download_links = tds[1].find_elements(By.TAG_NAME, "a")
                     if not download_links:
@@ -684,6 +687,16 @@ def main():
                     stone_name = stone_identity["stone_name"] or display_name
                     brand_name = stone_identity["brand_name"]
                     supplier_name = stone_identity["supplier_name"]
+                    if thickness == "unknown" and brand_name == "Quick Color":
+                        thickness = "3cm"
+                        thickness_key = thickness
+                        thickness_id = thickness_ids.get(thickness_key)
+                        if thickness_id is None:
+                            thickness_id = get_or_create_lookup_id(supabase, "thicknesses", thickness_key)
+                            thickness_ids[thickness_key] = thickness_id
+                    if not finish_name and brand_name == "Quick Color":
+                        finish_name = "Polished"
+                        finish_id = get_or_create_lookup_id(supabase, "finishes", finish_name)
                     supplier_id = get_or_create_supplier_id(supabase, supplier_name)
                     ensure_supplier_brand(supabase, supplier_id, brand_name, material_id)
                     stone_product_id = get_or_create_stone_product_id(
@@ -704,7 +717,7 @@ def main():
                     existing = (
                         supabase.table("remnants")
                         .select(
-                            "id,company_id,material_id,thickness_id,name,width,height,l_shape,l_width,l_height,status,"
+                            "id,company_id,material_id,thickness_id,finish_id,name,width,height,l_shape,l_width,l_height,status,"
                             "source_image_url,deleted_at,last_seen_at,photo_hash,image,image_path,"
                             "stone_product_id,parent_slab_id"
                         )
@@ -719,6 +732,7 @@ def main():
                         "company_id": company_id,
                         "material_id": material_id,
                         "thickness_id": thickness_id,
+                        "finish_id": finish_id,
                         "name": stone_name,
                         "width": width,
                         "height": height,
@@ -735,6 +749,7 @@ def main():
                                     str(company_id),
                                     str(material_id),
                                     str(thickness_id),
+                                    str(finish_id or ""),
                                     display_name,
                                     stone_name,
                                     str(stone_product_id or ""),
@@ -774,6 +789,7 @@ def main():
                                 existing_row.get("company_id") != company_id,
                                 existing_row.get("material_id") != material_id,
                                 existing_row.get("thickness_id") != thickness_id,
+                                existing_row.get("finish_id") != finish_id,
                                 existing_row.get("name") != stone_name,
                                 existing_row.get("stone_product_id") != stone_product_id,
                                 existing_row.get("parent_slab_id") != parent_slab_id,

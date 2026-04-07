@@ -39,6 +39,27 @@ body {
   overflow-x: clip;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 img {
   display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+@media (max-width: 640px) {
+  html {
+    font-size: 15px;
+  }
 }
