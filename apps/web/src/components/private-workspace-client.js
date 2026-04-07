@@ -1761,7 +1761,8 @@ export default function PrivateWorkspaceClient() {
                 <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
                   Min Width
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={filters.minWidth}
                     onChange={(event) => setFilters((current) => ({ ...current, minWidth: event.target.value }))}
                     placeholder="W"
@@ -1772,7 +1773,8 @@ export default function PrivateWorkspaceClient() {
                 <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
                   Min Height
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={filters.minHeight}
                     onChange={(event) => setFilters((current) => ({ ...current, minHeight: event.target.value }))}
                     placeholder="H"
@@ -2567,18 +2569,22 @@ export default function PrivateWorkspaceClient() {
                   <label className="block text-sm font-medium text-gray-700">
                     Width
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       value={editorForm.width}
                       onChange={(event) => updateEditorField("width", event.target.value)}
+                      placeholder='36.5 or 36 1/2'
                       className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
                     />
                   </label>
                   <label className="block text-sm font-medium text-gray-700">
                     Height
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       value={editorForm.height}
                       onChange={(event) => updateEditorField("height", event.target.value)}
+                      placeholder='24.25 or 24 1/4'
                       className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
                     />
                   </label>
@@ -2595,18 +2601,22 @@ export default function PrivateWorkspaceClient() {
                       <label className="block text-sm font-medium text-gray-700">
                         L Width
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
                           value={editorForm.l_width}
                           onChange={(event) => updateEditorField("l_width", event.target.value)}
+                          placeholder='18.5 or 18 1/2'
                           className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
                         />
                       </label>
                       <label className="block text-sm font-medium text-gray-700">
                         L Height
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
                           value={editorForm.l_height}
                           onChange={(event) => updateEditorField("l_height", event.target.value)}
+                          placeholder='18.5 or 18 1/2'
                           className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
                         />
                       </label>

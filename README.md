@@ -75,11 +75,11 @@ Key `public.remnants` columns used by this repo:
 - `material_id bigint not null`
 - `thickness_id bigint not null`
 - `name text not null`
-- `width bigint not null`
-- `height bigint not null`
+- `width numeric(10,2) not null`
+- `height numeric(10,2) not null`
 - `l_shape boolean not null`
-- `l_width bigint`
-- `l_height bigint`
+- `l_width numeric(10,2)`
+- `l_height numeric(10,2)`
 - `status text not null` with `available`, `hold`, `sold`
 - `hash text not null`
 - `image text`

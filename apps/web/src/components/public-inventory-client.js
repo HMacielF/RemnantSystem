@@ -592,7 +592,8 @@ export default function PublicInventoryClient() {
               <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
                 Min Width
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={filters.minWidth}
                   onChange={(event) => setFilters((current) => ({ ...current, minWidth: event.target.value }))}
                   placeholder="W"
@@ -603,7 +604,8 @@ export default function PublicInventoryClient() {
               <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
                 Min Height
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={filters.minHeight}
                   onChange={(event) => setFilters((current) => ({ ...current, minHeight: event.target.value }))}
                   placeholder="H"

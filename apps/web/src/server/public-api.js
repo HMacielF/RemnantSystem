@@ -61,6 +61,43 @@ function asNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parseMeasurement(value) {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+
+  const normalized = String(value || "")
+    .trim()
+    .replace(/["”]/g, "")
+    .replace(/\s*-\s*/g, " ")
+    .replace(/\s+/g, " ");
+
+  if (!normalized) return null;
+
+  const direct = Number(normalized);
+  if (Number.isFinite(direct)) return direct;
+
+  const mixedFractionMatch = /^(\d+(?:\.\d+)?)\s+(\d+)\s*\/\s*(\d+)$/.exec(normalized);
+  if (mixedFractionMatch) {
+    const whole = Number(mixedFractionMatch[1]);
+    const numerator = Number(mixedFractionMatch[2]);
+    const denominator = Number(mixedFractionMatch[3]);
+    if (Number.isFinite(whole) && Number.isFinite(numerator) && Number.isFinite(denominator) && denominator !== 0) {
+      return whole + numerator / denominator;
+    }
+  }
+
+  const fractionMatch = /^(\d+)\s*\/\s*(\d+)$/.exec(normalized);
+  if (fractionMatch) {
+    const numerator = Number(fractionMatch[1]);
+    const denominator = Number(fractionMatch[2]);
+    if (Number.isFinite(numerator) && Number.isFinite(denominator) && denominator !== 0) {
+      return numerator / denominator;
+    }
+  }
+
+  return null;
+}
+
 function normalizeStatus(value, fallback = "available") {
   const normalized = String(value || "").trim().toLowerCase();
   if (normalized === "on hold") return "hold";
@@ -418,8 +455,8 @@ export function getPublicRemnantFilters(searchParams) {
     materialNames: material.map((value) => String(value || "").trim()).filter(Boolean),
     stone: String(searchParams.get("stone") || "").trim(),
     status: normalizeStatus(searchParams.get("status"), ""),
-    minWidth: asNumber(searchParams.get("min-width") ?? searchParams.get("minWidth")),
-    minHeight: asNumber(searchParams.get("min-height") ?? searchParams.get("minHeight")),
+    minWidth: parseMeasurement(searchParams.get("min-width") ?? searchParams.get("minWidth")),
+    minHeight: parseMeasurement(searchParams.get("min-height") ?? searchParams.get("minHeight")),
   };
 }
 

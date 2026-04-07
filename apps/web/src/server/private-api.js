@@ -808,8 +808,8 @@ export async function fetchPrivateRemnants(request, authContext = null) {
   const stoneLike = escapeLikeValue(stone);
   const searchedRemnantId = extractRemnantIdSearch(stone);
   const status = normalizeStatus(searchParams.get("status"), "");
-  const minWidth = asNumber(searchParams.get("min-width") ?? searchParams.get("minWidth"));
-  const minHeight = asNumber(searchParams.get("min-height") ?? searchParams.get("minHeight"));
+  const minWidth = parseMeasurement(searchParams.get("min-width") ?? searchParams.get("minWidth"));
+  const minHeight = parseMeasurement(searchParams.get("min-height") ?? searchParams.get("minHeight"));
   const shouldEnrich = String(searchParams.get("enrich") || "1") !== "0";
 
   const requiredAuthed =
@@ -2099,6 +2099,43 @@ function asNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parseMeasurement(value) {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+
+  const normalized = String(value || "")
+    .trim()
+    .replace(/["”]/g, "")
+    .replace(/\s*-\s*/g, " ")
+    .replace(/\s+/g, " ");
+
+  if (!normalized) return null;
+
+  const direct = Number(normalized);
+  if (Number.isFinite(direct)) return direct;
+
+  const mixedFractionMatch = /^(\d+(?:\.\d+)?)\s+(\d+)\s*\/\s*(\d+)$/.exec(normalized);
+  if (mixedFractionMatch) {
+    const whole = Number(mixedFractionMatch[1]);
+    const numerator = Number(mixedFractionMatch[2]);
+    const denominator = Number(mixedFractionMatch[3]);
+    if (Number.isFinite(whole) && Number.isFinite(numerator) && Number.isFinite(denominator) && denominator !== 0) {
+      return whole + numerator / denominator;
+    }
+  }
+
+  const fractionMatch = /^(\d+)\s*\/\s*(\d+)$/.exec(normalized);
+  if (fractionMatch) {
+    const numerator = Number(fractionMatch[1]);
+    const denominator = Number(fractionMatch[2]);
+    if (Number.isFinite(numerator) && Number.isFinite(denominator) && denominator !== 0) {
+      return numerator / denominator;
+    }
+  }
+
+  return null;
+}
+
 function formatAdminIdentifier(tableConfig, row) {
   return tableConfig.primaryKey.reduce((acc, key) => {
     acc[key] = row?.[key] ?? null;
@@ -2645,11 +2682,11 @@ function normalizePayload(body) {
     material_id: asNumber(body.material_id),
     thickness_id: asNumber(body.thickness_id),
     finish_id: asNumber(body.finish_id),
-    width: asNumber(body.width),
-    height: asNumber(body.height),
+    width: parseMeasurement(body.width),
+    height: parseMeasurement(body.height),
     l_shape: Boolean(body.l_shape),
-    l_width: asNumber(body.l_width),
-    l_height: asNumber(body.l_height),
+    l_width: parseMeasurement(body.l_width),
+    l_height: parseMeasurement(body.l_height),
     colors: dedupeColorList(
       Array.isArray(body.colors) && body.colors.length
         ? body.colors
