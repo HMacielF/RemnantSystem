@@ -200,6 +200,17 @@ function dedupeStringList(values) {
     });
 }
 
+function normalizeCompanySlug(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/counter\s*tops?/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-+/g, "-");
+}
+
 function resolveEffectiveFinish(row) {
   const directFinish = String(row?.finish?.name || row?.finish_name || "").trim();
   if (directFinish) return directFinish;
@@ -500,7 +511,33 @@ export function getPublicRemnantFilters(searchParams) {
   };
 }
 
-export async function fetchPublicRemnants(filters) {
+async function fetchPublicCompanyNames() {
+  const { data, error } = await getPublicReadClient()
+    .from("active_remnants")
+    .select("company");
+
+  if (error) throw error;
+
+  return [...new Set((data || []).map((row) => String(row?.company || "").trim()).filter(Boolean))];
+}
+
+async function resolveCompanyNameBySlug(companySlug) {
+  const normalizedSlug = normalizeCompanySlug(companySlug);
+  if (!normalizedSlug) return null;
+
+  const companyNames = await fetchPublicCompanyNames();
+  const exactMatch = companyNames.find((name) => normalizeCompanySlug(name) === normalizedSlug);
+  if (exactMatch) return exactMatch;
+
+  const prefixMatch = companyNames.find((name) => {
+    const normalizedName = normalizeCompanySlug(name);
+    return normalizedName === normalizedSlug || normalizedName.startsWith(`${normalizedSlug}-`);
+  });
+  return prefixMatch || null;
+}
+
+export async function fetchPublicRemnants(filters, options = {}) {
+  const companyName = String(options.companyName || "").trim();
   const stoneLike = escapeLikeValue(filters.stone);
   const searchedRemnantId = extractRemnantIdSearch(filters.stone);
   const publicClient = getPublicReadClient();
@@ -520,6 +557,9 @@ export async function fetchPublicRemnants(filters) {
 
   if (filters.materialNames.length > 0) {
     query = query.in("material", filters.materialNames);
+  }
+  if (companyName) {
+    query = query.eq("company", companyName);
   }
   if (filters.stone && searchedRemnantId !== null) {
     const orFilters = [`name.ilike.%${stoneLike}%`, `id.eq.${searchedRemnantId}`];
@@ -571,6 +611,22 @@ export async function fetchPublicRemnants(filters) {
       brand_name: brandByStoneProductId.get(Number(row.stone_product_id)) || "",
     }),
   );
+}
+
+export async function fetchPublicCompanyRemnants(companySlug, filters) {
+  const companyName = await resolveCompanyNameBySlug(companySlug);
+  if (!companyName) {
+    const error = new Error("Company not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const rows = await fetchPublicRemnants(filters, { companyName });
+  if (normalizeCompanySlug(companyName) === "quick") {
+    return rows.filter((row) => !String(row?.name || "").trim().toLowerCase().startsWith("quick "));
+  }
+
+  return rows;
 }
 
 export async function fetchPublicRemnantEnrichment(remnantIds) {
