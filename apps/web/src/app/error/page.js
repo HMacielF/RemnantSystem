@@ -34,6 +34,24 @@ function resolveErrorContent(reason, message) {
         cardTitle: "We could not sign you in",
         message: "Check your email and password, then try again.",
       };
+    case "oauth_start_failed":
+      return {
+        eyebrow: "Google Sign-In",
+        title: "Google sign-in could not start.",
+        description: "The provider setup or redirect configuration is not ready yet. Review the message, then try again after setup is complete.",
+        cardEyebrow: "OAuth Setup",
+        cardTitle: "Google login is unavailable",
+        message: message || "Google sign-in is unavailable right now.",
+      };
+    case "oauth_callback_failed":
+      return {
+        eyebrow: "Google Sign-In",
+        title: "We could not finish your Google sign-in.",
+        description: "The Google account was accepted, but the final callback into the portal did not complete. Review the message, then try again.",
+        cardEyebrow: "OAuth Callback",
+        cardTitle: "Sign-in did not finish",
+        message: message || "Unable to finish Google sign-in.",
+      };
     default:
       return {
         eyebrow: "Access Error",

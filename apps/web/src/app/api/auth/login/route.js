@@ -1,65 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { setSessionCookies } from "@/server/private-api";
-
-function createSupabase() {
-  const url = process.env.SUPABASE_URL;
-  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
-  if (!url || !anonKey) {
-    throw new Error("SUPABASE_URL and SUPABASE_ANON_KEY/SUPABASE_KEY are required");
-  }
-
-  return createClient(url, anonKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
-}
-
-function createServiceSupabase() {
-  const url = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceRoleKey) {
-    return null;
-  }
-
-  return createClient(url, serviceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
-}
-
-async function isInactiveProfile(userId) {
-  const serviceClient = createServiceSupabase();
-  if (!serviceClient || !userId) return false;
-
-  const { data, error } = await serviceClient
-    .from("profiles")
-    .select("active")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Login profile lookup failed:", error);
-    return false;
-  }
-
-  return data?.active === false;
-}
-
-function errorRedirect(request, reason, message) {
-  const url = new URL("/error", request.url);
-  if (reason) {
-    url.searchParams.set("reason", reason);
-  }
-  if (message) {
-    url.searchParams.set("msg", message);
-  }
-  return NextResponse.redirect(url, { status: 303 });
-}
+import { createPublicAuthClient, errorRedirect, isInactiveProfile } from "@/server/auth-utils";
 
 export async function POST(request) {
   const formData = await request.formData();
@@ -71,7 +12,7 @@ export async function POST(request) {
   }
 
   try {
-    const supabase = createSupabase();
+    const supabase = createPublicAuthClient();
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error || !data?.session?.access_token) {
