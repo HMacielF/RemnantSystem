@@ -16,6 +16,7 @@ const DEFAULT_CROP_RECT = {
   height: 540,
 };
 const TOAST_DURATION_MS = 3600;
+const HOLD_REQUEST_REFRESH_MS = 15_000;
 
 function imageSrc(remnant) {
   return remnant.image || remnant.source_image_url || "";
@@ -1284,6 +1285,44 @@ export default function PrivateWorkspaceClient() {
     const requestsPayload = await apiFetch("/api/hold-requests?status=pending");
     setHoldRequests(Array.isArray(requestsPayload) ? requestsPayload : []);
   }
+
+  useEffect(() => {
+    if (authState !== "ready") return undefined;
+
+    let active = true;
+
+    async function syncHoldRequests() {
+      if (document.visibilityState === "hidden") return;
+      try {
+        const requestsPayload = await apiFetch("/api/hold-requests?status=pending", { cache: "no-store" });
+        if (!active) return;
+        setHoldRequests(Array.isArray(requestsPayload) ? requestsPayload : []);
+      } catch (_error) {
+        // Keep background refresh quiet; explicit actions still surface errors.
+      }
+    }
+
+    const intervalId = window.setInterval(syncHoldRequests, HOLD_REQUEST_REFRESH_MS);
+    const handleVisible = () => {
+      if (document.visibilityState === "visible") {
+        void syncHoldRequests();
+      }
+    };
+
+    window.addEventListener("focus", handleVisible);
+    document.addEventListener("visibilitychange", handleVisible);
+
+    if (queueOpen) {
+      void syncHoldRequests();
+    }
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleVisible);
+      document.removeEventListener("visibilitychange", handleVisible);
+    };
+  }, [authState, queueOpen]);
 
   async function reloadMyHolds() {
     const holdsPayload = await apiFetch("/api/my-holds");

@@ -1,3 +1,4 @@
+import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
 
 const ACTIVE_REMNANT_SELECT = "*";
@@ -53,6 +54,45 @@ function getTrustedReadClient() {
 function getServiceClient() {
   const { serviceRoleKey } = envConfig();
   return serviceRoleKey ? createSupabaseClient(serviceRoleKey) : null;
+}
+
+let cachedMailTransport = null;
+
+function smtpConfig() {
+  const port = Number(process.env.SMTP_PORT || 587);
+  return {
+    host: String(process.env.SMTP_HOST || "").trim(),
+    port: Number.isFinite(port) ? port : 587,
+    user: String(process.env.SMTP_USER || "").trim(),
+    pass: String(process.env.SMTP_PASS || "").trim(),
+    from: String(process.env.SMTP_FROM || process.env.SMTP_USER || "").trim(),
+  };
+}
+
+function isSmtpConfigured() {
+  const config = smtpConfig();
+  return Boolean(config.host && config.port && config.user && config.pass && config.from);
+}
+
+function getMailTransport() {
+  if (cachedMailTransport) return cachedMailTransport;
+
+  const config = smtpConfig();
+  if (!isSmtpConfigured()) {
+    throw new Error("SMTP is not configured");
+  }
+
+  cachedMailTransport = nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.port === 465,
+    auth: {
+      user: config.user,
+      pass: config.pass,
+    },
+  });
+
+  return cachedMailTransport;
 }
 
 function asNumber(value) {
@@ -633,7 +673,9 @@ async function writeAuditLog(client, entry) {
 }
 
 async function queueNotification(client, entry) {
-  const { error } = await client.from("notification_queue").insert({
+  const { data, error } = await client
+    .from("notification_queue")
+    .insert({
     notification_type: entry.notification_type,
     target_user_id: entry.target_user_id ?? null,
     target_email: entry.target_email ?? null,
@@ -643,11 +685,132 @@ async function queueNotification(client, entry) {
     payload: entry.payload ?? {},
     scheduled_for: entry.scheduled_for ?? new Date().toISOString(),
     status: entry.status ?? "pending",
-  });
+    error: entry.error ?? null,
+  })
+    .select("id,status")
+    .single();
 
   if (error) {
     console.error("Notification queue write failed:", error);
+    return null;
   }
+
+  return data || null;
+}
+
+async function updateNotificationStatus(client, notificationId, status, errorMessage = null) {
+  if (!notificationId) return;
+
+  const payload = {
+    status,
+    error: errorMessage ? String(errorMessage).slice(0, 1000) : null,
+  };
+
+  if (status === "sent") {
+    payload.sent_at = new Date().toISOString();
+  }
+
+  const { error } = await client
+    .from("notification_queue")
+    .update(payload)
+    .eq("id", notificationId);
+
+  if (error) {
+    console.error("Notification queue status update failed:", error);
+  }
+}
+
+async function fetchProfileSummary(client, profileId) {
+  const normalizedId = String(profileId || "").trim();
+  if (!normalizedId) return null;
+
+  const { data, error } = await client
+    .from("profiles")
+    .select("id,email,full_name")
+    .eq("id", normalizedId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data || null;
+}
+
+function emailSummaryLine(label, value) {
+  const text = String(value || "").trim();
+  return text ? `${label}: ${text}` : null;
+}
+
+async function sendHoldRequestEmail({ salesRep, holdRequest, remnant }) {
+  if (!salesRep?.email) {
+    throw new Error("Sales rep email is missing");
+  }
+
+  const transport = getMailTransport();
+  const from = smtpConfig().from;
+  const displayId = remnant?.id || holdRequest?.external_remnant_id || holdRequest?.remnant_id || "";
+  const heading = [
+    String(remnant?.brand_name || "").trim(),
+    String(remnant?.name || "").trim(),
+  ].filter(Boolean).join(" ").trim() || String(remnant?.name || "").trim() || `Remnant #${displayId}`;
+  const subheading = [
+    String(remnant?.material_name || "").trim(),
+    String(remnant?.company_name || "").trim(),
+  ].filter(Boolean).join(" · ");
+  const size = remnant?.l_shape
+    ? `${remnant?.width}" x ${remnant?.height}" + ${remnant?.l_width}" x ${remnant?.l_height}"`
+    : remnant?.width && remnant?.height
+      ? `${remnant.width}" x ${remnant.height}"`
+      : "";
+
+  const lines = [
+    `A client just requested a hold in Remnant System.`,
+    "",
+    emailSummaryLine("Sales rep", salesRep?.full_name || salesRep?.email),
+    emailSummaryLine("Requester", holdRequest?.requester_name),
+    emailSummaryLine("Requester email", holdRequest?.requester_email),
+    emailSummaryLine("Remnant", heading),
+    emailSummaryLine("Remnant ID", displayId ? `#${displayId}` : ""),
+    emailSummaryLine("Details", subheading),
+    emailSummaryLine("Size", size),
+    emailSummaryLine("Finish", remnant?.finish_name),
+    emailSummaryLine("Thickness", remnant?.thickness_name),
+    emailSummaryLine("Job number", holdRequest?.job_number),
+    emailSummaryLine("Notes", holdRequest?.notes),
+  ].filter(Boolean);
+
+  await transport.sendMail({
+    from,
+    to: salesRep.email,
+    subject: `New hold request for #${displayId}${heading ? ` · ${heading}` : ""}`,
+    text: lines.join("\n"),
+    html: `
+      <div style="font-family:Arial,sans-serif;color:#232323;line-height:1.5">
+        <p>A client just requested a hold in Remnant System.</p>
+        <table style="border-collapse:collapse">
+          ${[
+            ["Sales rep", salesRep?.full_name || salesRep?.email],
+            ["Requester", holdRequest?.requester_name],
+            ["Requester email", holdRequest?.requester_email],
+            ["Remnant", heading],
+            ["Remnant ID", displayId ? `#${displayId}` : ""],
+            ["Details", subheading],
+            ["Size", size],
+            ["Finish", remnant?.finish_name],
+            ["Thickness", remnant?.thickness_name],
+            ["Job number", holdRequest?.job_number],
+            ["Notes", holdRequest?.notes],
+          ]
+            .filter(([, value]) => String(value || "").trim())
+            .map(
+              ([label, value]) => `
+                <tr>
+                  <td style="padding:4px 12px 4px 0;font-weight:700;vertical-align:top">${label}</td>
+                  <td style="padding:4px 0">${String(value)}</td>
+                </tr>`,
+            )
+            .join("")}
+        </table>
+      </div>`,
+  });
 }
 
 function runBestEffort(task, label) {
@@ -728,13 +891,17 @@ export async function createPublicHoldRequest(body) {
     }
   }
 
+  const salesRepProfile = salesRepUserId
+    ? await fetchProfileSummary(serviceSupabase, salesRepUserId)
+    : null;
+
   const insertPayload = {
     remnant_id: resolvedRemnant.id,
     company_id: resolvedRemnant.company_id || null,
     requester_name: requesterName,
     requester_email: requesterEmail,
     sales_rep_user_id: salesRepUserId || null,
-    sales_rep_name: salesRepName || null,
+    sales_rep_name: salesRepProfile?.full_name || salesRepName || null,
     notes: String(body.notes || "").trim() || null,
     job_number: String(body.job_number || "").trim() || null,
     status: "pending",
@@ -749,9 +916,10 @@ export async function createPublicHoldRequest(body) {
   if (error) throw error;
 
   runBestEffort(async () => {
-    await queueNotification(serviceSupabase, {
+    const notificationRow = await queueNotification(serviceSupabase, {
       notification_type: "hold_request_created",
       target_user_id: salesRepUserId || null,
+      target_email: salesRepProfile?.email || null,
       remnant_id: resolvedRemnant.id,
       hold_request_id: createdRequest?.id || null,
       payload: {
@@ -760,6 +928,38 @@ export async function createPublicHoldRequest(body) {
         job_number: insertPayload.job_number,
       },
     });
+
+    if (notificationRow?.id) {
+      if (!salesRepProfile?.email) {
+        await updateNotificationStatus(
+          serviceSupabase,
+          notificationRow.id,
+          "failed",
+          "No sales rep email available for this hold request",
+        );
+      } else if (!isSmtpConfigured()) {
+        await updateNotificationStatus(
+          serviceSupabase,
+          notificationRow.id,
+          "failed",
+          "SMTP is not configured on the server",
+        );
+      } else {
+        try {
+          await sendHoldRequestEmail({
+            salesRep: salesRepProfile,
+            holdRequest: {
+              ...insertPayload,
+              external_remnant_id: externalRemnantId,
+            },
+            remnant: visibleRemnant,
+          });
+          await updateNotificationStatus(serviceSupabase, notificationRow.id, "sent");
+        } catch (emailError) {
+          await updateNotificationStatus(serviceSupabase, notificationRow.id, "failed", emailError?.message || emailError);
+        }
+      }
+    }
 
     await writeAuditLog(serviceSupabase, {
       event_type: "hold_request_created",
