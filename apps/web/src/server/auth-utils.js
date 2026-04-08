@@ -26,6 +26,7 @@ export function createPublicAuthClient() {
       persistSession: false,
       autoRefreshToken: false,
       detectSessionInUrl: false,
+      flowType: "pkce",
     },
   });
 }
