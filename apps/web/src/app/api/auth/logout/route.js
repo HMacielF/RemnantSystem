@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { clearAuthCookies } from "@/server/private-api";
 
 function buildResponse(request) {
-  const response = NextResponse.redirect(new URL("/portal", request.url));
+  const response = NextResponse.redirect(new URL("/portal", request.url), { status: 303 });
   return clearAuthCookies(response);
 }
 

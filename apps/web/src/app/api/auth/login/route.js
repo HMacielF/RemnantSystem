@@ -58,7 +58,7 @@ function errorRedirect(request, reason, message) {
   if (message) {
     url.searchParams.set("msg", message);
   }
-  return NextResponse.redirect(url);
+  return NextResponse.redirect(url, { status: 303 });
 }
 
 export async function POST(request) {
@@ -86,7 +86,7 @@ export async function POST(request) {
       return errorRedirect(request, "account_inactive");
     }
 
-    const response = NextResponse.redirect(new URL("/manage", request.url));
+    const response = NextResponse.redirect(new URL("/manage", request.url), { status: 303 });
     return setSessionCookies(response, data.session);
   } catch (error) {
     console.error("Login failed:", error);

@@ -21,7 +21,7 @@ export async function POST(request) {
   const email = String(formData.get("email") || "").trim();
 
   if (!email) {
-    return NextResponse.redirect(new URL("/error?msg=Email%20is%20required", request.url));
+    return NextResponse.redirect(new URL("/error?msg=Email%20is%20required", request.url), { status: 303 });
   }
 
   try {
@@ -34,14 +34,16 @@ export async function POST(request) {
     if (error) {
       return NextResponse.redirect(
         new URL(`/error?msg=${encodeURIComponent(error.message)}`, request.url),
+        { status: 303 },
       );
     }
 
-    return NextResponse.redirect(new URL("/password-reset-sent", request.url));
+    return NextResponse.redirect(new URL("/password-reset-sent", request.url), { status: 303 });
   } catch (error) {
     console.error("Forgot password failed:", error);
     return NextResponse.redirect(
       new URL(`/error?msg=${encodeURIComponent(error?.message || "Password reset failed")}`, request.url),
+      { status: 303 },
     );
   }
 }
