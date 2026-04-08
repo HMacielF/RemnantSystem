@@ -7,6 +7,7 @@ const allowedDevOrigins = Array.from(
   new Set([
     "localhost",
     "127.0.0.1",
+    "192.168.1.164",
     ...Object.values(os.networkInterfaces())
       .flat()
       .filter((entry) => entry && entry.family === "IPv4" && entry.internal === false)

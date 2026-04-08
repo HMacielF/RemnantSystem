@@ -1,22 +1,29 @@
 @import "tailwindcss";
 
 :root {
-  --background: linear-gradient(180deg, #f8f1ea 0%, #f1e8de 45%, #e9edf3 100%);
-  --background-solid: #f1e8de;
+  --background: linear-gradient(180deg, #ffffff 0%, #f2f2f2 62%, rgba(247, 134, 57, 0.08) 100%);
+  --background-solid: #f2f2f2;
   --foreground: #171717;
+  --brand-orange: #f78639;
+  --brand-orange-deep: #e56d1f;
+  --brand-ink: #232323;
+  --brand-white: #f2f2f2;
+  --brand-shell: #f7f7f7;
+  --brand-line: #dde1e6;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-neuething-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-stolzl-display);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: linear-gradient(180deg, #f8f1ea 0%, #f1e8de 45%, #e9edf3 100%);
-    --background-solid: #f1e8de;
+    --background: linear-gradient(180deg, #ffffff 0%, #f2f2f2 62%, rgba(247, 134, 57, 0.08) 100%);
+    --background-solid: #f2f2f2;
     --foreground: #171717;
   }
 }
@@ -35,8 +42,12 @@ body {
   background: var(--background);
   background-color: var(--background-solid);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-neuething-sans), Arial, Helvetica, sans-serif;
   overflow-x: clip;
+}
+
+.font-display {
+  font-family: var(--font-stolzl-display), var(--font-neuething-sans), Arial, Helvetica, sans-serif;
 }
 
 *,

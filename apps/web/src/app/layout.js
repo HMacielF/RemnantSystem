@@ -1,9 +1,31 @@
-import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
+import { Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+const neuethingSans = localFont({
+  variable: "--font-neuething-sans",
+  display: "swap",
+  src: [
+    { path: "./fonts/NeuethingSans-RegularSemiExpanded.otf", weight: "400", style: "normal" },
+    { path: "./fonts/NeuethingSans-MediumSemiExpanded.otf", weight: "500", style: "normal" },
+    { path: "./fonts/NeuethingSans-SemiBoldSemiExpanded.otf", weight: "600", style: "normal" },
+    { path: "./fonts/NeuethingSans-BoldSemiExpanded.otf", weight: "700", style: "normal" },
+    { path: "./fonts/NeuethingSans-EtraBoldSemiExpanded.otf", weight: "800", style: "normal" },
+    { path: "./fonts/NeuethingSans-BlackSemiExpanded.otf", weight: "900", style: "normal" },
+  ],
+});
+
+// Keep the active display stack explicit so the rest of the app has a clear,
+// predictable set of heading weights to use.
+const stolzDisplay = localFont({
+  variable: "--font-stolzl-display",
+  display: "swap",
+  src: [
+    { path: "./fonts/StolzlDisplay-Light.ttf", weight: "300", style: "normal" },
+    { path: "./fonts/StolzlDisplay-Regular.ttf", weight: "400", style: "normal" },
+    { path: "./fonts/StolzlDisplay-Medium.ttf", weight: "500", style: "normal" },
+    { path: "./fonts/StolzlDisplay-Bold.ttf", weight: "700", style: "normal" },
+  ],
 });
 
 const geistMono = Geist_Mono({
@@ -21,7 +43,7 @@ export default function RootLayout({ children }) {
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${neuethingSans.variable} ${stolzDisplay.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body suppressHydrationWarning className="min-h-full flex flex-col">
         {children}

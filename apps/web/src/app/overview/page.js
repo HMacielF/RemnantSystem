@@ -31,7 +31,7 @@ export default function OverviewPage() {
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#f7bf97]">
                 Workspace Overview
               </p>
-              <h1 className="mt-3 max-w-3xl text-4xl font-semibold leading-tight">
+              <h1 className="font-display mt-3 max-w-3xl text-4xl font-semibold leading-tight">
                 One app for public browsing, management, and super-admin work.
               </h1>
               <p className="mt-4 max-w-2xl text-base leading-7 text-slate-200">
@@ -57,7 +57,7 @@ export default function OverviewPage() {
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a16235]">
                   {route.eyebrow}
                 </p>
-                <h2 className="mt-3 text-xl font-semibold text-[#18212d]">{route.title}</h2>
+                <h2 className="font-display mt-3 text-xl font-semibold text-[#18212d]">{route.title}</h2>
                 <p className="mt-3 text-sm leading-6 text-[#5d6a78]">{route.body}</p>
               </div>
               <Link
@@ -75,7 +75,7 @@ export default function OverviewPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a16235]">
               Current Setup
             </p>
-            <h2 className="mt-3 text-2xl font-semibold text-[#18212d]">The app is set up for day-to-day use.</h2>
+            <h2 className="font-display mt-3 text-2xl font-semibold text-[#18212d]">The app is set up for day-to-day use.</h2>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <div className="rounded-[22px] border border-[#eadfd7] bg-[#fff8f2] p-4 text-sm leading-6 text-[#5f5146]">
                 The public viewer is live and reading the current remnant inventory.
@@ -96,7 +96,7 @@ export default function OverviewPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a16235]">
               Focus
             </p>
-            <h2 className="mt-3 text-2xl font-semibold text-[#18212d]">Keep improving workflow depth and polish.</h2>
+            <h2 className="font-display mt-3 text-2xl font-semibold text-[#18212d]">Keep improving workflow depth and polish.</h2>
             <p className="mt-3 text-sm leading-7 text-[#5d6a78]">
               The biggest remaining value is workflow polish: deeper editor flows, image handling refinements, and day-to-day usability improvements.
             </p>

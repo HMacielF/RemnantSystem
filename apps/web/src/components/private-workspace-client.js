@@ -79,6 +79,26 @@ function remnantJobReference(remnant) {
   return "";
 }
 
+function jobNumberPrefixForCompanyName(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized.includes("prime")) return "P";
+  return "J";
+}
+
+function jobNumberPrefixForRemnant(remnant) {
+  return jobNumberPrefixForCompanyName(companyText(remnant));
+}
+
+function formatJobNumber(value, context) {
+  const normalized = normalizeJobNumberInput(value);
+  if (!normalized) return "";
+  const prefix =
+    typeof context === "string"
+      ? jobNumberPrefixForCompanyName(context)
+      : jobNumberPrefixForRemnant(context);
+  return `${prefix}${normalized}`;
+}
+
 function statusBadgeText(remnant) {
   const normalized = normalizeRemnantStatus(remnant);
   const jobReference = remnantJobReference(remnant);
@@ -86,12 +106,12 @@ function statusBadgeText(remnant) {
   if (normalized === "hold") {
     const owner = firstName(remnant?.current_hold?.owner_name || "");
     const until = remnant?.current_hold?.expires_at ? `Until ${formatShortDateLabel(remnant.current_hold.expires_at)}` : "";
-    return [owner || "On Hold", jobReference ? `J${jobReference}` : "", until].filter(Boolean).join(" · ");
+    return [owner || "On Hold", formatJobNumber(jobReference, remnant), until].filter(Boolean).join(" · ");
   }
 
   if (normalized === "sold") {
     const soldBy = firstName(remnant?.sold_by_name || remnant?.current_sale?.sold_by_name || "");
-    return [soldBy || "Sold", jobReference ? `J${jobReference}` : ""].filter(Boolean).join(" · ");
+    return [soldBy || "Sold", formatJobNumber(jobReference, remnant)].filter(Boolean).join(" · ");
   }
 
   return statusText(remnant);
@@ -121,6 +141,23 @@ function materialOptionsFromRows(rows) {
 
 function normalizeStoneLookupName(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function stoneNameWithoutBrandPrefix(stoneName, brandName) {
+  const stone = String(stoneName || "").trim();
+  const brand = String(brandName || "").trim();
+  if (!stone || !brand) return stone;
+
+  const normalizedStone = normalizeStoneLookupName(stone);
+  const normalizedBrand = normalizeStoneLookupName(brand);
+  if (!normalizedStone.startsWith(`${normalizedBrand} `)) return stone;
+
+  return stone.slice(brand.length).trim();
+}
+
+function supportsBrandField(materialName) {
+  const normalized = normalizeStoneLookupName(materialName);
+  return normalized === "quartz" || normalized === "porcelain";
 }
 
 function colorListIncludes(values, target) {
@@ -175,6 +212,160 @@ function brandText(remnant) {
   return String(remnant?.brand_name || "").trim();
 }
 
+function stoneNameText(remnant) {
+  return String(remnant?.name || "").trim();
+}
+
+function companyText(remnant) {
+  return String(remnant?.company_name || remnant?.company || "").trim();
+}
+
+function thicknessText(remnant) {
+  const value = String(remnant?.thickness_name || remnant?.thickness || "").trim();
+  if (!value) return "";
+  const normalized = value.toLowerCase();
+  if (normalized === "unknown" || normalized === "n/a" || normalized === "na") return "";
+  return value;
+}
+
+function finishText(remnant) {
+  return String(remnant?.finish_name || "").trim();
+}
+
+function priceText(remnant) {
+  const numeric = Number(remnant?.price_per_sqft);
+  if (!Number.isFinite(numeric) || numeric <= 0) return "";
+  const formatted = Number.isInteger(numeric)
+    ? String(numeric)
+    : numeric.toFixed(numeric >= 100 ? 0 : 2).replace(/\.?0+$/, "");
+  return `$${formatted}`;
+}
+
+function privateCardHeading(remnant) {
+  const brand = brandText(remnant);
+  const stone = stoneNameText(remnant);
+  if (brand && stone) {
+    const normalizedBrand = normalizeStoneLookupName(brand);
+    const normalizedStone = normalizeStoneLookupName(stone);
+    const brandLead = normalizedBrand.split(/\s+/)[0] || "";
+    if (brandLead && normalizedStone.startsWith(`${brandLead} `)) {
+      return stone;
+    }
+    return `${brand} ${stone}`;
+  }
+  return stone || cardTitleText(remnant);
+}
+
+function privateCardSubheading(remnant) {
+  const material = String(remnant?.material_name || remnant?.material || "").trim();
+  const company = companyText(remnant);
+  return [material, company].filter(Boolean).join(" · ");
+}
+
+function privateCardMetricEntries(remnant) {
+  return [
+    { label: "Size", value: cardSizeText(remnant) },
+    ...(priceText(remnant) ? [{ label: "Price", value: priceText(remnant), title: "Open slab price per sqft" }] : []),
+    ...(thicknessText(remnant) ? [{ label: "Thick", value: thicknessText(remnant), title: "Thickness" }] : []),
+    ...(finishText(remnant) ? [{ label: "Finish", value: finishText(remnant) }] : []),
+  ];
+}
+
+function privateModalSummaryEntries(remnant) {
+  return [
+    { label: "Material", value: String(remnant?.material_name || remnant?.material || "").trim() },
+    { label: "Size", value: cardSizeText(remnant) },
+    ...(priceText(remnant) ? [{ label: "Price", value: priceText(remnant), title: "Open slab price per sqft" }] : []),
+    { label: "Thick", value: thicknessText(remnant), title: "Thickness" },
+    { label: "Finish", value: finishText(remnant) },
+  ].filter((entry) => String(entry.value || "").trim());
+}
+
+function PrivateRemnantSummaryBlock({ remnant, className = "", onOpenImage }) {
+  const colors = remnantColors(remnant);
+  const metrics = privateModalSummaryEntries(remnant);
+  const image = imageSrc(remnant);
+  const displayId = displayRemnantId(remnant);
+
+  return (
+    <section
+      className={`rounded-[26px] border border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,var(--brand-white)_100%)] p-3.5 shadow-[0_16px_38px_rgba(25,27,28,0.06)] sm:p-4 ${className}`.trim()}
+    >
+      <div className="grid gap-4 sm:grid-cols-[240px_minmax(0,1fr)] sm:items-start">
+        <div className="self-start">
+          <button
+            type="button"
+            onClick={onOpenImage}
+            disabled={!image}
+            className={`overflow-hidden rounded-[22px] border border-white/80 bg-white text-left shadow-[0_12px_24px_rgba(25,27,28,0.08)] transition ${image ? "hover:-translate-y-0.5" : "cursor-default"}`}
+          >
+            {image ? (
+              <img
+                alt={`Remnant ${displayId}`}
+                className="h-36 w-full bg-[var(--brand-white)] p-2 object-contain object-center"
+                src={image}
+              />
+            ) : (
+              <div className="flex h-36 w-full items-center justify-center bg-[var(--brand-white)] px-6 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
+                No Image
+              </div>
+            )}
+          </button>
+          {colors.length ? (
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
+              {colors.map((color) => (
+                <span
+                  key={`${displayId}-summary-${color}`}
+                  className="inline-flex items-center gap-2 rounded-full border border-[var(--brand-line)] bg-white/92 px-2.5 py-1 text-[11px] font-semibold text-[rgba(25,27,28,0.72)]"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="h-3 w-3 rounded-full border border-black/10 shadow-inner"
+                    style={colorSwatchStyle(color)}
+                  />
+                  {color}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-orange)]">Remnant Summary</p>
+          <div className="mt-3">
+            <h3 className="font-display text-lg font-semibold text-[var(--brand-ink)] sm:text-xl">
+              {privateCardHeading(remnant)}
+            </h3>
+            <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgba(35,35,35,0.54)]">
+              {privateCardSubheading(remnant)}
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="inline-flex rounded-full border border-[var(--brand-line)] bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-orange-deep)]">
+                ID #{displayId}
+              </span>
+              <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${statusBadgeClass(remnant?.status)}`}>
+                {statusText(remnant)}
+              </span>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {metrics.map((entry) => (
+                <div
+                  key={`${displayId}-${entry.label}`}
+                  className="rounded-[20px] border border-[var(--brand-line)] bg-white/92 px-4 py-3"
+                >
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]" title={entry.title}>
+                    {entry.label}
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-[var(--brand-ink)]">{entry.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function remnantColors(remnant) {
   return Array.isArray(remnant?.colors) ? remnant.colors.filter(Boolean) : [];
 }
@@ -195,7 +386,7 @@ function colorSwatchStyle(colorName) {
     green: { backgroundColor: "#758c75" },
     navy: { backgroundColor: "#2f4a6d" },
     taupe: { backgroundColor: "#a9927b" },
-    white: { backgroundColor: "#f4f1ea" },
+    white: { backgroundColor: "#ffffff" },
   };
   return palette[normalized] || { backgroundColor: "#d6ccc2" };
 }
@@ -205,14 +396,14 @@ function SelectField({ wrapperClassName = "relative mt-2", className = "", child
     <div className={wrapperClassName}>
       <select
         {...props}
-        className={`h-12 w-full appearance-none rounded-2xl border border-[#d8c7b8] bg-[linear-gradient(180deg,#ffffff_0%,#fbf6f1_100%)] px-4 pr-10 text-sm font-medium text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10 ${className}`}
+        className={`h-12 w-full appearance-none rounded-2xl border border-[var(--brand-line)] bg-white px-4 pr-10 text-sm font-medium text-[var(--brand-ink)] shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] ${className}`}
       >
         {children}
       </select>
       <svg
         aria-hidden="true"
         viewBox="0 0 20 20"
-        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#a17b63]"
+        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--brand-orange)]"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.8"
@@ -221,6 +412,74 @@ function SelectField({ wrapperClassName = "relative mt-2", className = "", child
       >
         <path d="m5 7.5 5 5 5-5" />
       </svg>
+    </div>
+  );
+}
+
+function InAppSelect({
+  value,
+  onChange,
+  options,
+  placeholder = "Select option",
+  wrapperClassName = "mt-2",
+  disabled = false,
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = (Array.isArray(options) ? options : []).find((option) => String(option.value) === String(value ?? ""));
+  const buttonText = selected?.label || placeholder;
+
+  return (
+    <div className={`relative ${wrapperClassName}`.trim()}>
+      <button
+        type="button"
+        onClick={() => {
+          if (!disabled) setOpen((current) => !current);
+        }}
+        onBlur={() => {
+          window.setTimeout(() => setOpen(false), 120);
+        }}
+        disabled={disabled}
+        className={`flex h-12 w-full items-center justify-between gap-3 rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-left text-sm font-medium shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] ${selected ? "text-[var(--brand-ink)]" : "text-[rgba(35,35,35,0.48)]"} ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+      >
+        <span className="truncate">{buttonText}</span>
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          className={`h-4 w-4 shrink-0 text-[var(--brand-orange)] transition ${open ? "rotate-180" : ""}`}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="m5 7.5 5 5 5-5" />
+        </svg>
+      </button>
+      {open && !disabled ? (
+        <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-[22px] border border-[var(--brand-line)] bg-white shadow-[0_20px_40px_rgba(25,27,28,0.12)]">
+          <div className="max-h-64 overflow-y-auto p-2">
+            {(Array.isArray(options) ? options : []).map((option) => {
+              const isSelected = String(option.value) === String(value ?? "");
+              return (
+                <button
+                  key={`select-${option.value}`}
+                  type="button"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    onChange?.({ target: { value: option.value } });
+                    setOpen(false);
+                  }}
+                  className={`flex w-full items-center rounded-[16px] px-3 py-2.5 text-left transition hover:bg-[var(--brand-white)] ${isSelected ? "bg-[var(--brand-white)]" : ""}`}
+                >
+                  <span className={`block truncate text-sm ${isSelected ? "font-semibold text-[var(--brand-ink)]" : "font-medium text-[rgba(35,35,35,0.78)]"}`}>
+                    {option.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -583,7 +842,7 @@ function firstName(value) {
 
 function normalizeJobNumberInput(value) {
   return String(value || "")
-    .replace(/^\s*j\s*#?\s*/i, "")
+    .replace(/^\s*[jp]\s*#?\s*/i, "")
     .trim();
 }
 
@@ -602,6 +861,7 @@ export default function PrivateWorkspaceClient() {
   const [availableMaterialOptions, setAvailableMaterialOptions] = useState([]);
   const [holdRequests, setHoldRequests] = useState([]);
   const [myHolds, setMyHolds] = useState([]);
+  const [mySold, setMySold] = useState([]);
   const [lookups, setLookups] = useState({ companies: [], materials: [], thicknesses: [], finishes: [], colors: [], stone_products: [] });
   const [salesReps, setSalesReps] = useState([]);
   const [nextStoneId, setNextStoneId] = useState(null);
@@ -613,12 +873,19 @@ export default function PrivateWorkspaceClient() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(null);
   const [queueOpen, setQueueOpen] = useState(false);
   const [myHoldsOpen, setMyHoldsOpen] = useState(false);
+  const [mySoldOpen, setMySoldOpen] = useState(false);
   const [myHoldsLoading, setMyHoldsLoading] = useState(false);
+  const [mySoldLoading, setMySoldLoading] = useState(false);
   const [pendingReviewId, setPendingReviewId] = useState("");
   const [holdRequestDrafts, setHoldRequestDrafts] = useState({});
   const [workingRemnantId, setWorkingRemnantId] = useState("");
   const [editorMode, setEditorMode] = useState("");
   const [editorForm, setEditorForm] = useState(null);
+  const [editorColorComposerOpen, setEditorColorComposerOpen] = useState(false);
+  const [editorColorDraft, setEditorColorDraft] = useState("");
+  const [editorColorSaving, setEditorColorSaving] = useState(false);
+  const [editorStoneMenuOpen, setEditorStoneMenuOpen] = useState(false);
+  const [editorBrandMenuOpen, setEditorBrandMenuOpen] = useState(false);
   const [holdEditor, setHoldEditor] = useState(null);
   const [soldEditor, setSoldEditor] = useState(null);
   const [cropModal, setCropModal] = useState(null);
@@ -641,6 +908,16 @@ export default function PrivateWorkspaceClient() {
   const canStructure = canManageStructure(profile);
   const isStatusUser = profile?.system_role === "status_user";
   const roleDisplay = humanizeRole(profile?.system_role);
+  const profileCompanyName = useMemo(() => {
+    const directName = String(
+      profile?.company_name || profile?.company?.name || profile?.company || "",
+    ).trim();
+    if (directName) return directName;
+    const match = (Array.isArray(lookups?.companies) ? lookups.companies : []).find(
+      (company) => Number(company?.id) === Number(profile?.company_id),
+    );
+    return String(match?.name || "").trim();
+  }, [lookups?.companies, profile]);
   const materialFilterOptions = useMemo(() => {
     return uniqueMaterialOptions([...availableMaterialOptions, ...filters.materials]);
   }, [availableMaterialOptions, filters.materials]);
@@ -661,18 +938,71 @@ export default function PrivateWorkspaceClient() {
     if (!editorForm?.material_id) return [];
     const materialId = Number(editorForm.material_id);
     if (!Number.isFinite(materialId)) return [];
+    const normalizedBrand = normalizeStoneLookupName(editorForm.brand_name || "");
 
     return (Array.isArray(lookups.stone_products) ? lookups.stone_products : [])
-      .filter((row) => Number(row.material_id) === materialId)
+      .filter((row) => {
+        if (Number(row.material_id) !== materialId) return false;
+        if (!normalizedBrand) return true;
+        return normalizeStoneLookupName(row.brand_name || "").includes(normalizedBrand);
+      })
       .sort((a, b) => String(a.display_name || "").localeCompare(String(b.display_name || "")));
+  }, [editorForm?.brand_name, editorForm?.material_id, lookups.stone_products]);
+  const editorBrandSuggestions = useMemo(() => {
+    if (!editorForm?.material_id) return [];
+    const materialId = Number(editorForm.material_id);
+    if (!Number.isFinite(materialId)) return [];
+    const seen = new Set();
+    return (Array.isArray(lookups.stone_products) ? lookups.stone_products : [])
+      .filter((row) => Number(row.material_id) === materialId)
+      .map((row) => String(row.brand_name || "").trim())
+      .filter((value) => {
+        const key = normalizeStoneLookupName(value);
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => a.localeCompare(b));
   }, [editorForm?.material_id, lookups.stone_products]);
+  const filteredEditorBrandSuggestions = useMemo(() => {
+    const search = normalizeStoneLookupName(editorForm?.brand_name || "");
+    const rows = Array.isArray(editorBrandSuggestions) ? editorBrandSuggestions : [];
+    if (!search) return rows.slice(0, 8);
+    return rows.filter((value) => normalizeStoneLookupName(value).includes(search)).slice(0, 8);
+  }, [editorBrandSuggestions, editorForm?.brand_name]);
+  const filteredEditorStoneSuggestions = useMemo(() => {
+    const search = normalizeStoneLookupName(editorForm?.name || "");
+    const rows = Array.isArray(editorStoneSuggestions) ? editorStoneSuggestions : [];
+    if (!search) return rows.slice(0, 8);
+    return rows
+      .filter((row) => {
+        const display = normalizeStoneLookupName(row.display_name || row.stone_name || "");
+        const brand = normalizeStoneLookupName(row.brand_name || "");
+        return display.includes(search) || brand.includes(search);
+      })
+      .slice(0, 8);
+  }, [editorForm?.name, editorStoneSuggestions]);
   const matchedEditorStone = useMemo(() => {
     if (!editorForm?.material_id || !editorForm?.name) return null;
     const materialId = Number(editorForm.material_id);
     if (!Number.isFinite(materialId) || !normalizeStoneLookupName(editorForm.name)) return null;
+    const normalizedBrand = normalizeStoneLookupName(editorForm.brand_name || "");
 
-    return editorStoneSuggestions.find((row) => stoneLookupMatchesName(row, editorForm.name)) || null;
-  }, [editorForm?.material_id, editorForm?.name, editorStoneSuggestions]);
+    return editorStoneSuggestions.find((row) => {
+      if (!stoneLookupMatchesName(row, editorForm.name)) return false;
+      if (!normalizedBrand) return true;
+      return normalizeStoneLookupName(row.brand_name || "") === normalizedBrand;
+    }) || editorStoneSuggestions.find((row) => stoneLookupMatchesName(row, editorForm.name)) || null;
+  }, [editorForm?.brand_name, editorForm?.material_id, editorForm?.name, editorStoneSuggestions]);
+  const selectedEditorMaterialName = useMemo(() => {
+    const materialId = Number(editorForm?.material_id);
+    if (!Number.isFinite(materialId)) return "";
+    const row = (Array.isArray(lookups.materials) ? lookups.materials : []).find(
+      (item) => Number(item?.id) === materialId,
+    );
+    return String(row?.name || "").trim();
+  }, [editorForm?.material_id, lookups.materials]);
+  const showEditorBrandField = supportsBrandField(selectedEditorMaterialName);
   const modalImageItems = useMemo(
     () => remnants.filter((remnant) => Boolean(imageSrc(remnant))),
     [remnants],
@@ -685,6 +1015,7 @@ export default function PrivateWorkspaceClient() {
     selectedImageRemnant ||
       queueOpen ||
       myHoldsOpen ||
+      mySoldOpen ||
       (editorMode && editorForm) ||
       holdEditor ||
       soldEditor ||
@@ -698,7 +1029,7 @@ export default function PrivateWorkspaceClient() {
           "Review requests, change status, and keep your company feed current.",
         boardEyebrow: "Your Inventory Lane",
         boardTitle: "Status updates and request work",
-        queueTitle: "Your request queue",
+        queueTitle: "Requests",
         queueDescription: "Requests that need a quick approve or deny pass from your lane.",
       }
     : {
@@ -826,9 +1157,10 @@ export default function PrivateWorkspaceClient() {
         setProfile(nextProfile);
         setAuthState("ready");
 
-        const [requestsPayload, myHoldsPayload, lookupPayload, salesRepPayload, stonePayload, remnantRows] = await Promise.all([
+        const [requestsPayload, myHoldsPayload, mySoldPayload, lookupPayload, salesRepPayload, stonePayload, remnantRows] = await Promise.all([
           apiFetch("/api/hold-requests?status=pending", { cache: "no-store" }),
           apiFetch("/api/my-holds", { cache: "no-store" }),
+          apiFetch("/api/my-sold", { cache: "no-store" }),
           apiFetch("/api/lookups", { cache: "no-store" }),
           nextProfile.system_role === "status_user" ? Promise.resolve([]) : apiFetch("/api/sales-reps", { cache: "no-store" }),
           canManageStructure(nextProfile) ? apiFetch("/api/next-stone-id", { cache: "no-store" }) : Promise.resolve({ nextStoneId: null }),
@@ -838,6 +1170,7 @@ export default function PrivateWorkspaceClient() {
         if (!mounted) return;
         setHoldRequests(Array.isArray(requestsPayload) ? requestsPayload : []);
         setMyHolds(Array.isArray(myHoldsPayload) ? myHoldsPayload : []);
+        setMySold(Array.isArray(mySoldPayload) ? mySoldPayload : []);
         setLookups({
           companies: Array.isArray(lookupPayload.companies) ? lookupPayload.companies : [],
           materials: Array.isArray(lookupPayload.materials) ? lookupPayload.materials : [],
@@ -934,11 +1267,14 @@ export default function PrivateWorkspaceClient() {
       const nextColors = currentColors.length
         ? currentColors
         : Array.isArray(matchedEditorStone.colors) ? matchedEditorStone.colors : [];
+      const nextBrandName = current.brand_name || matchedEditorStone.brand_name || "";
       const sameColors = JSON.stringify(currentColors) === JSON.stringify(nextColors);
-      if (sameColors) return current;
+      const sameBrand = String(current.brand_name || "") === String(nextBrandName || "");
+      if (sameColors && sameBrand) return current;
 
       return {
         ...current,
+        brand_name: nextBrandName,
         colors: nextColors,
       };
     });
@@ -954,8 +1290,14 @@ export default function PrivateWorkspaceClient() {
     setMyHolds(Array.isArray(holdsPayload) ? holdsPayload : []);
   }
 
+  async function reloadMySold() {
+    const soldPayload = await apiFetch("/api/my-sold");
+    setMySold(Array.isArray(soldPayload) ? soldPayload : []);
+  }
+
   async function openMyHoldsPanel() {
     setQueueOpen(false);
+    setMySoldOpen(false);
     setMyHoldsOpen(true);
     try {
       setMyHoldsLoading(true);
@@ -964,6 +1306,20 @@ export default function PrivateWorkspaceClient() {
       showErrorMessage(loadError.message);
     } finally {
       setMyHoldsLoading(false);
+    }
+  }
+
+  async function openMySoldPanel() {
+    setQueueOpen(false);
+    setMyHoldsOpen(false);
+    setMySoldOpen(true);
+    try {
+      setMySoldLoading(true);
+      await reloadMySold();
+    } catch (loadError) {
+      showErrorMessage(loadError.message);
+    } finally {
+      setMySoldLoading(false);
     }
   }
 
@@ -1039,10 +1395,12 @@ export default function PrivateWorkspaceClient() {
     setEditorForm({
       moraware_remnant_id: nextStoneId ?? "",
       name: "",
+      brand_name: "",
       company_id: profile.system_role === "status_user" ? String(profile.company_id || "") : "",
       material_id: "",
       thickness_id: "",
       finish_id: "",
+      price_per_sqft: "",
       colors: [],
       width: "",
       height: "",
@@ -1053,6 +1411,10 @@ export default function PrivateWorkspaceClient() {
       original_image_preview: "",
       image_file: null,
     });
+    setEditorColorComposerOpen(false);
+    setEditorColorDraft("");
+    setEditorStoneMenuOpen(false);
+    setEditorBrandMenuOpen(false);
     if (editorImageInputRef.current) editorImageInputRef.current.value = "";
   }
 
@@ -1071,10 +1433,12 @@ export default function PrivateWorkspaceClient() {
       id: remnant.id,
       moraware_remnant_id: remnant.moraware_remnant_id || "",
       name: remnant.name || "",
+      brand_name: remnant.brand_name || "",
       company_id: String(remnant.company_id || ""),
       material_id: String(remnant.material_id || ""),
       thickness_id: String(remnant.thickness_id || ""),
       finish_id: String(remnant.finish_id || ""),
+      price_per_sqft: remnant.price_per_sqft ?? "",
       colors,
       width: remnant.width || "",
       height: remnant.height || "",
@@ -1085,23 +1449,40 @@ export default function PrivateWorkspaceClient() {
       original_image_preview: imageSrc(remnant),
       image_file: null,
     });
+    setEditorColorComposerOpen(false);
+    setEditorColorDraft("");
+    setEditorStoneMenuOpen(false);
+    setEditorBrandMenuOpen(false);
     if (editorImageInputRef.current) editorImageInputRef.current.value = "";
   }
 
   function closeEditor() {
     setEditorMode("");
     setEditorForm(null);
+    setEditorColorComposerOpen(false);
+    setEditorColorDraft("");
+    setEditorColorSaving(false);
+    setEditorStoneMenuOpen(false);
+    setEditorBrandMenuOpen(false);
     setCropModal(null);
     cropImageRef.current = null;
     if (editorImageInputRef.current) editorImageInputRef.current.value = "";
   }
 
   function updateEditorField(key, value) {
-    setEditorForm((current) => ({
-      ...(current || {}),
-      [key]: value,
-      ...(key === "l_shape" && !value ? { l_width: "", l_height: "" } : {}),
-    }));
+    setEditorForm((current) => {
+      const next = {
+        ...(current || {}),
+        [key]: value,
+        ...(key === "l_shape" && !value ? { l_width: "", l_height: "" } : {}),
+      };
+
+      if (key === "brand_name" && next.name) {
+        next.name = stoneNameWithoutBrandPrefix(next.name, value);
+      }
+
+      return next;
+    });
   }
 
   function toggleEditorColor(colorName) {
@@ -1119,6 +1500,58 @@ export default function PrivateWorkspaceClient() {
     });
   }
 
+  async function createEditorColor() {
+    if (!editorForm) return;
+    const requestedName = String(editorColorDraft || "").trim();
+    if (!requestedName) {
+      showErrorMessage("Enter a color name first.");
+      return;
+    }
+
+    try {
+      setEditorColorSaving(true);
+      clearMessage();
+      const createdColor = await apiFetch("/api/lookups/colors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: requestedName }),
+      });
+
+      const nextColor = createdColor?.name || String(requestedName || "").trim();
+      if (!nextColor) return;
+
+      setLookups((current) => {
+        const currentRows = Array.isArray(current.colors) ? current.colors : [];
+        const exists = currentRows.some((row) => normalizeStoneLookupName(row?.name) === normalizeStoneLookupName(nextColor));
+        const nextRows = exists
+          ? currentRows
+          : [...currentRows, { id: createdColor?.id || `new-${nextColor}`, name: nextColor, active: true }];
+
+        nextRows.sort((a, b) => String(a?.name || "").localeCompare(String(b?.name || "")));
+        return {
+          ...current,
+          colors: nextRows,
+        };
+      });
+
+      setEditorForm((current) => {
+        if (!current) return current;
+        const currentColors = Array.isArray(current.colors) ? current.colors : [];
+        return colorListIncludes(currentColors, nextColor)
+          ? current
+          : { ...current, colors: [...currentColors, nextColor] };
+      });
+
+      setEditorColorDraft("");
+      setEditorColorComposerOpen(false);
+      showSuccessMessage(`Color ${nextColor} added.`);
+    } catch (error) {
+      showErrorMessage(error.message || "Unable to add color.");
+    } finally {
+      setEditorColorSaving(false);
+    }
+  }
+
   async function saveEditor(event) {
     event.preventDefault();
     if (!editorForm) return;
@@ -1129,11 +1562,13 @@ export default function PrivateWorkspaceClient() {
       const payload = {
         moraware_remnant_id: editorForm.moraware_remnant_id,
         name: editorForm.name,
+        brand_name: editorForm.brand_name,
         company_id: editorForm.company_id,
         material_id: editorForm.material_id,
         thickness_id: editorForm.thickness_id,
         finish_id: editorForm.finish_id,
         colors: editorForm.colors,
+        price_per_sqft: editorForm.price_per_sqft,
         width: editorForm.width,
         height: editorForm.height,
         l_shape: Boolean(editorForm.l_shape),
@@ -1164,6 +1599,7 @@ export default function PrivateWorkspaceClient() {
       closeEditor();
       await reloadHoldRequests();
       await reloadMyHolds();
+      await reloadMySold();
       setFilters((current) => ({ ...current }));
       setLoading(true);
     } catch (saveError) {
@@ -1184,6 +1620,7 @@ export default function PrivateWorkspaceClient() {
       showSuccessMessage("Remnant archived.");
       await reloadHoldRequests();
       await reloadMyHolds();
+      await reloadMySold();
       setFilters((current) => ({ ...current }));
       setLoading(true);
     } catch (archiveError) {
@@ -1212,15 +1649,6 @@ export default function PrivateWorkspaceClient() {
     } catch (imageError) {
       setError(imageError.message);
     }
-  }
-
-  function resetEditorImage() {
-    setEditorForm((current) => current ? ({
-      ...current,
-      image_file: null,
-      image_preview: current.original_image_preview || "",
-    }) : current);
-    if (editorImageInputRef.current) editorImageInputRef.current.value = "";
   }
 
   async function openCropEditor() {
@@ -1445,7 +1873,7 @@ export default function PrivateWorkspaceClient() {
       job_number: normalizeJobNumberInput(hold?.job_number || ""),
       notes: hold?.notes || "",
       summary: hold
-        ? `${hold.status === "active" ? "Active" : "Expired"} hold${hold.customer_name ? ` for ${hold.customer_name}` : ""}${hold.job_number ? ` · J${normalizeJobNumberInput(hold.job_number)}` : ""}${hold.expires_at ? ` · Expires ${formatDateLabel(hold.expires_at)}` : ""}`
+        ? `${hold.status === "active" ? "Active" : "Expired"} hold${hold.customer_name ? ` for ${hold.customer_name}` : ""}${hold.job_number ? ` · ${formatJobNumber(hold.job_number, remnant)}` : ""}${hold.expires_at ? ` · Expires ${formatDateLabel(hold.expires_at)}` : ""}`
         : "No hold is linked to this remnant yet.",
     });
   }
@@ -1462,6 +1890,7 @@ export default function PrivateWorkspaceClient() {
     const sale = remnant.current_sale || null;
     clearMessage();
     setSoldEditor({
+      remnant,
       remnantId: remnant.id,
       remnantLabel: remnantToastLabel(remnant),
       sold_by_user_id: isStatusUser ? profile?.id || "" : sale?.sold_by_user_id || "",
@@ -1510,6 +1939,7 @@ export default function PrivateWorkspaceClient() {
       showSuccessMessage(`Remnant ${holdEditor.remnantLabel} marked as on hold.`);
       await reloadHoldRequests();
       await reloadMyHolds();
+      await reloadMySold();
       setFilters((current) => ({ ...current }));
       setLoading(true);
     } catch (holdError) {
@@ -1543,6 +1973,7 @@ export default function PrivateWorkspaceClient() {
       closeSoldEditor();
       await reloadHoldRequests();
       await reloadMyHolds();
+      await reloadMySold();
       showSuccessMessage(`Remnant ${soldEditor.remnantLabel} marked as sold.`);
     } catch (soldError) {
       showErrorMessage(soldError.message);
@@ -1566,6 +1997,7 @@ export default function PrivateWorkspaceClient() {
       showSuccessMessage(`Remnant ${holdEditor.remnantLabel} released from hold.`);
       await reloadHoldRequests();
       await reloadMyHolds();
+      await reloadMySold();
       setFilters((current) => ({ ...current }));
       setLoading(true);
     } catch (releaseError) {
@@ -1597,42 +2029,54 @@ export default function PrivateWorkspaceClient() {
   }
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#0f1727_0%,#152238_18%,#203454_36%,#eaf0f6_36%,#edf1f6_100%)] text-[#172230]">
+    <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,var(--brand-white)_52%,rgba(247,134,57,0.08)_100%)] text-[var(--brand-ink)]">
       <div className="mx-auto w-full max-w-[1800px] px-3 py-5 sm:px-4 md:px-6 2xl:px-8">
-        <section className="mb-4 overflow-hidden rounded-[32px] border border-white/15 bg-[linear-gradient(135deg,rgba(12,23,43,0.92),rgba(23,40,69,0.84))] px-6 py-5 text-white shadow-[0_28px_90px_rgba(8,15,32,0.18)]">
+        <section className="mb-4 overflow-hidden rounded-[32px] border border-[var(--brand-line)] bg-[linear-gradient(135deg,rgba(255,255,255,0.99),rgba(242,242,242,0.96))] px-6 py-5 text-[var(--brand-ink)] shadow-[0_28px_90px_rgba(25,27,28,0.10)]">
           <div className={`grid gap-5 lg:items-start ${isStatusUser ? "xl:grid-cols-[minmax(0,1fr)_520px]" : "xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,640px)]"}`}>
             <div className={`${isStatusUser ? "max-w-3xl" : "max-w-4xl"}`}>
-              <h1 className={`mt-3 font-semibold leading-tight text-white ${isStatusUser ? "max-w-2xl text-[1.7rem] md:text-[2.05rem]" : "max-w-3xl text-[1.9rem] md:text-[2.35rem]"}`}>
+              <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-orange)]">Management Workspace</p>
+              <h1 className={`font-display mt-3 font-semibold leading-tight text-[var(--brand-ink)] ${isStatusUser ? "max-w-2xl text-[1.7rem] md:text-[2.05rem]" : "max-w-3xl text-[1.9rem] md:text-[2.35rem]"}`}>
                 {workspaceCopy.title}
               </h1>
-              <p className={`mt-2 text-sm text-slate-300 ${isStatusUser ? "max-w-2xl leading-5.5" : "max-w-3xl leading-6"}`}>
+              <p className={`mt-2 text-sm text-[rgba(35,35,35,0.72)] ${isStatusUser ? "max-w-2xl leading-5.5" : "max-w-3xl leading-6"}`}>
                 {workspaceCopy.description}
               </p>
             </div>
 
-            <div className="rounded-[22px] border border-white/12 bg-white/8 p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur">
+            <div className={`rounded-[22px] border border-[var(--brand-line)] bg-white p-3.5 shadow-[0_16px_38px_rgba(25,27,28,0.06)] backdrop-blur ${isStatusUser ? "" : "ml-auto w-fit min-w-[420px] max-w-full"}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 flex-1 items-center gap-2">
-                  <h2 className="truncate text-base font-semibold text-white">
-                    {profile?.full_name || profile?.email || "User"}
+                  <h2 className="truncate text-base font-semibold text-[var(--brand-ink)]">
+                    {[
+                      profileCompanyName,
+                      profile?.full_name || profile?.email || "User",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </h2>
-                  <span className="inline-flex shrink-0 items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-200">
-                    {roleDisplay}
-                  </span>
                 </div>
+                <form method="POST" action="/api/auth/logout" className="shrink-0">
+                  <button
+                    type="submit"
+                    className="inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-3.5 text-center text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)]"
+                  >
+                    Log Out
+                  </button>
+                </form>
               </div>
-              <div className="mt-3.5 flex items-center gap-2.5">
+              <div className={`mt-3.5 gap-2.5 ${isStatusUser ? "flex items-center" : "flex flex-wrap items-center"}`}>
                 <button
                   type="button"
                   onClick={() => {
+                    setMySoldOpen(false);
                     setMyHoldsOpen(false);
                     setQueueOpen(true);
                   }}
-                  className={`inline-flex h-10 items-center justify-between gap-3 rounded-2xl border border-white/15 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/16 ${
-                    isStatusUser ? "min-w-0 flex-1" : ""
+                  className={`inline-flex h-10 items-center justify-between gap-3 rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)] ${
+                    isStatusUser ? "min-w-0 flex-1" : "min-w-[118px]"
                   }`}
                 >
-                  <span className={isStatusUser ? "truncate" : ""}>Request Queue</span>
+                  <span className="whitespace-nowrap">Requests</span>
                   <span className="inline-flex min-w-7 shrink-0 items-center justify-center rounded-full bg-rose-500 px-2 py-0.5 text-xs font-semibold text-white shadow-[0_8px_18px_rgba(244,63,94,0.32)]">
                     {holdRequests.length}
                   </span>
@@ -1640,20 +2084,32 @@ export default function PrivateWorkspaceClient() {
                 <button
                   type="button"
                   onClick={openMyHoldsPanel}
-                  className={`inline-flex h-10 items-center justify-between gap-3 rounded-2xl border border-white/15 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/16 ${
-                    isStatusUser ? "min-w-0 flex-1" : ""
+                  className={`inline-flex h-10 items-center justify-between gap-3 rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)] ${
+                    isStatusUser ? "min-w-0 flex-1" : "min-w-[118px]"
                   }`}
                 >
-                  <span className={isStatusUser ? "truncate" : ""}>My Holds</span>
+                  <span className="whitespace-nowrap">Holds</span>
                   <span className="inline-flex min-w-7 shrink-0 items-center justify-center rounded-full bg-amber-400 px-2 py-0.5 text-xs font-semibold text-[#3d2918] shadow-[0_8px_18px_rgba(251,191,36,0.28)]">
                     {myHolds.length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={openMySoldPanel}
+                  className={`inline-flex h-10 items-center justify-between gap-3 rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)] ${
+                    isStatusUser ? "min-w-0 flex-1" : "min-w-[118px]"
+                  }`}
+                >
+                  <span className="whitespace-nowrap">Sold</span>
+                  <span className="inline-flex min-w-7 shrink-0 items-center justify-center rounded-full bg-[rgba(247,134,57,0.14)] px-2 py-0.5 text-xs font-semibold text-[var(--brand-orange-deep)]">
+                    {mySold.length}
                   </span>
                 </button>
                 {profile?.system_role === "super_admin" ? (
                   <>
                     <Link
                       href="/admin"
-                      className={`inline-flex h-10 items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/16 ${
+                      className={`inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)] ${
                         isStatusUser ? "shrink-0 px-3.5" : ""
                       }`}
                     >
@@ -1661,7 +2117,7 @@ export default function PrivateWorkspaceClient() {
                     </Link>
                     <Link
                       href="/slabs"
-                      className={`inline-flex h-10 items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/16 ${
+                      className={`inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)] ${
                         isStatusUser ? "shrink-0 px-3.5" : ""
                       }`}
                     >
@@ -1669,14 +2125,6 @@ export default function PrivateWorkspaceClient() {
                     </Link>
                   </>
                 ) : null}
-                <form method="POST" action="/api/auth/logout" className="shrink-0">
-                  <button
-                    type="submit"
-                    className="inline-flex h-10 items-center justify-center rounded-2xl border border-white/12 bg-white/5 px-3.5 text-center text-sm font-semibold text-slate-100 transition hover:bg-white/12"
-                  >
-                    Log Out
-                  </button>
-                </form>
               </div>
             </div>
           </div>
@@ -1685,25 +2133,13 @@ export default function PrivateWorkspaceClient() {
 
         <div className="space-y-4">
           <section className="space-y-4">
-            <div className="rounded-[30px] border border-[#d9e2ec] bg-white/94 p-4 shadow-[0_24px_70px_rgba(44,29,18,0.10)] backdrop-blur">
-              {activeFilterCount ? (
-                <div className="mb-1.5 flex flex-wrap justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setFilters(emptyFilters())}
-                    className="inline-flex h-8 items-center justify-center rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm font-semibold text-[#56483f] transition hover:bg-[#fff7f1]"
-                  >
-                    Clear filters
-                  </button>
-                </div>
-              ) : null}
-
+            <div className="rounded-[30px] border border-[var(--brand-line)] bg-white/94 p-4 shadow-[0_24px_70px_rgba(25,27,28,0.08)] backdrop-blur">
               <div className={filterGridClass}>
                 <div className="min-w-0 sm:col-span-2 2xl:col-span-1 2xl:max-w-[29rem]">
-                  <p className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+                  <p className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
                     Material Types
                   </p>
-                  <div className="flex h-12 w-full max-w-full snap-x snap-mandatory items-center gap-2 overflow-x-auto whitespace-nowrap rounded-2xl border border-[#d8c7b8] bg-white px-3 py-2 text-sm text-[#2d2623] shadow-sm [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
+                  <div className="flex h-12 w-full max-w-full snap-x snap-mandatory items-center gap-2 overflow-x-auto whitespace-nowrap rounded-2xl border border-[var(--brand-line)] bg-white px-3 py-2 text-sm text-[var(--brand-ink)] shadow-sm [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
                     {materialFilterOptions.map((material) => {
                       const checked = filters.materials.includes(material);
                       return (
@@ -1721,8 +2157,8 @@ export default function PrivateWorkspaceClient() {
                           }
                           className={`inline-flex shrink-0 snap-start items-center rounded-xl border px-3 py-2 text-[13px] font-medium transition-all ${
                             checked
-                              ? "border-[#d89462] bg-[#fff1e3] text-[#8c4c1c] shadow-sm"
-                              : "border-[#efe2d6] bg-[#fffdfb] text-gray-700 hover:border-[#ead8ca] hover:bg-[#fff7f1]"
+                              ? "border-[var(--brand-orange)] bg-[rgba(247,134,57,0.12)] text-[var(--brand-orange-deep)] shadow-sm"
+                              : "border-[var(--brand-line)] bg-white text-[rgba(25,27,28,0.72)] hover:border-[rgba(247,134,57,0.32)] hover:bg-[var(--brand-shell)]"
                           }`}
                         >
                           {material}
@@ -1732,13 +2168,13 @@ export default function PrivateWorkspaceClient() {
                   </div>
                 </div>
 
-                <label className="block min-w-0 sm:col-span-2 2xl:col-span-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+                <label className="block min-w-0 sm:col-span-2 2xl:col-span-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
                   Stone / Brand / Color / Finish / ID #
                   <div className="relative mt-2">
                     <svg
                       aria-hidden="true"
                       viewBox="0 0 24 24"
-                      className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#b38f76]"
+                      className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--brand-orange)]"
                       fill="none"
                       stroke="currentColor"
                       strokeWidth="1.8"
@@ -1753,12 +2189,12 @@ export default function PrivateWorkspaceClient() {
                       value={filters.stone}
                       onChange={(event) => setFilters((current) => ({ ...current, stone: event.target.value }))}
                       placeholder="Stone, brand, color, finish or #741"
-                      className="h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white pl-10 pr-4 text-sm font-medium text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                      className="h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white pl-10 pr-4 text-sm font-medium text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                     />
                   </div>
                 </label>
 
-                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
                   Min Width
                   <input
                     type="text"
@@ -1766,11 +2202,11 @@ export default function PrivateWorkspaceClient() {
                     value={filters.minWidth}
                     onChange={(event) => setFilters((current) => ({ ...current, minWidth: event.target.value }))}
                     placeholder="W"
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-3 text-sm font-medium text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                    className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-3 text-sm font-medium text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                   />
                 </label>
 
-                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
                   Min Height
                   <input
                     type="text"
@@ -1778,11 +2214,11 @@ export default function PrivateWorkspaceClient() {
                     value={filters.minHeight}
                     onChange={(event) => setFilters((current) => ({ ...current, minHeight: event.target.value }))}
                     placeholder="H"
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-3 text-sm font-medium text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                    className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-3 text-sm font-medium text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                   />
                 </label>
 
-                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
                   Status
                   <SelectField
                     value={filters.status}
@@ -1800,14 +2236,14 @@ export default function PrivateWorkspaceClient() {
                 {canStructure ? (
                   <div className="flex items-end justify-start sm:col-span-2 2xl:col-span-1 2xl:justify-center">
                     <div className="flex w-12 flex-col items-center">
-                      <p className="mb-2 hidden w-full text-center text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355] lg:block">
+                      <p className="mb-2 hidden w-full text-center text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)] lg:block">
                         Add
                       </p>
                       <div className="relative">
                         <button
                           type="button"
                           onClick={openCreateEditor}
-                          className="peer inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#152238] text-white shadow-[0_14px_30px_rgba(21,34,56,0.18)] transition-all hover:-translate-y-0.5 hover:bg-[#f08b49]"
+                          className="peer inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--brand-ink)] text-white shadow-[0_14px_30px_rgba(25,27,28,0.18)] transition-all hover:-translate-y-0.5 hover:bg-[var(--brand-orange)]"
                           aria-label="Add remnant"
                         >
                           <svg
@@ -1863,187 +2299,245 @@ export default function PrivateWorkspaceClient() {
                   const showSoldAction = showStatusActions && normalizedStatus !== "sold";
                   const showHoldAction = showStatusActions && normalizedStatus !== "hold";
                   const showEditAction = showStatusActions && canStructure;
-                  const useSideActions = isStatusUser && showStatusActions && !showEditAction;
-                  const actionCount = [
-                    showAvailableAction,
-                    showSoldAction,
-                    showHoldAction,
-                    showEditAction,
-                  ].filter(Boolean).length;
-                  const actionColumns =
-                    actionCount >= 4 ? "grid-cols-4" : actionCount === 3 ? "grid-cols-3" : actionCount === 2 ? "grid-cols-2" : "grid-cols-1";
+                  const leftAction =
+                    normalizedStatus === "hold" || normalizedStatus === "sold"
+                      ? showAvailableAction
+                        ? {
+                            key: "available",
+                            label: isWorking ? "Working..." : "Available",
+                            title: "Make available",
+                            onClick: () => changeRemnantStatus(remnant, "available"),
+                            disabled: isWorking,
+                            className:
+                              "border-emerald-300 bg-emerald-100 text-emerald-800 hover:border-emerald-400 hover:bg-emerald-200",
+                            icon: (
+                              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="m5 12 4.2 4.2L19 6.5" />
+                              </svg>
+                            ),
+                          }
+                        : null
+                      : showHoldAction
+                        ? {
+                            key: "hold",
+                            label: "Hold",
+                            title: "Place on hold",
+                            onClick: () => openHoldEditor(remnant),
+                            disabled: false,
+                            className:
+                              "border-amber-300 bg-amber-100 text-amber-900 hover:border-amber-400 hover:bg-amber-200",
+                            icon: (
+                              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M10.9 4.75H6.75A2 2 0 0 0 4.75 6.75v4.15l7.34 7.35a1.8 1.8 0 0 0 2.55 0l3.62-3.62a1.8 1.8 0 0 0 0-2.55L10.9 4.75Z" />
+                                <circle cx="7.75" cy="7.75" r="1.05" />
+                              </svg>
+                            ),
+                          }
+                        : null;
+                  const rightAction =
+                    normalizedStatus === "sold"
+                      ? showHoldAction
+                        ? {
+                            key: "hold",
+                            label: "Hold",
+                            title: "Place on hold",
+                            onClick: () => openHoldEditor(remnant),
+                            disabled: false,
+                            className:
+                              "border-amber-300 bg-amber-100 text-amber-900 hover:border-amber-400 hover:bg-amber-200",
+                            icon: (
+                              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M10.9 4.75H6.75A2 2 0 0 0 4.75 6.75v4.15l7.34 7.35a1.8 1.8 0 0 0 2.55 0l3.62-3.62a1.8 1.8 0 0 0 0-2.55L10.9 4.75Z" />
+                                <circle cx="7.75" cy="7.75" r="1.05" />
+                              </svg>
+                            ),
+                          }
+                        : null
+                      : showSoldAction
+                        ? {
+                            key: "sold",
+                            label: isWorking ? "Working..." : "Sell",
+                            title: "Mark sold",
+                            onClick: () => changeRemnantStatus(remnant, "sold"),
+                            disabled: isWorking,
+                            className:
+                              "border-rose-300 bg-rose-100 text-rose-800 hover:border-rose-400 hover:bg-rose-200",
+                            icon: (
+                              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 3v18" />
+                                <path d="M16.5 7.5c0-1.66-2.01-3-4.5-3S7.5 5.84 7.5 7.5 9.51 10.5 12 10.5s4.5 1.34 4.5 3-2.01 3-4.5 3-4.5-1.34-4.5-3" />
+                              </svg>
+                            ),
+                          }
+                        : null;
                   const actionButtonBaseClass =
                     "inline-flex h-11 items-center justify-center rounded-[18px] border px-3 text-[11px] font-semibold leading-none transition-colors disabled:cursor-not-allowed disabled:opacity-50";
                   const availableActionClass = `${actionButtonBaseClass} border-emerald-300 bg-emerald-100 text-emerald-800 hover:border-emerald-400 hover:bg-emerald-200`;
                   const holdActionClass = `${actionButtonBaseClass} border-amber-300 bg-amber-100 text-amber-900 hover:border-amber-400 hover:bg-amber-200`;
                   const soldActionClass = `${actionButtonBaseClass} border-rose-300 bg-rose-100 text-rose-800 hover:border-rose-400 hover:bg-rose-200`;
-                  const editActionClass = `${actionButtonBaseClass} border-slate-300 bg-slate-100 text-slate-800 hover:border-slate-400 hover:bg-slate-200`;
+                  const centerEditAction = showEditAction
+                    ? {
+                        label: "Edit",
+                        title: "Edit remnant",
+                        onClick: () => openEditEditor(remnant),
+                        className: "border-slate-300 bg-slate-100 text-slate-800 hover:border-slate-400 hover:bg-slate-200",
+                        icon: (
+                          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M10.36 3.89h3.28l.47 1.88a6.8 6.8 0 0 1 1.51.63l1.7-.93 2.32 2.32-.93 1.7c.26.48.47.98.63 1.5l1.88.48v3.28l-1.88.47a6.8 6.8 0 0 1-.63 1.51l.93 1.7-2.32 2.32-1.7-.93a6.8 6.8 0 0 1-1.5.63l-.48 1.88h-3.28l-.47-1.88a6.8 6.8 0 0 1-1.51-.63l-1.7.93-2.32-2.32.93-1.7a6.8 6.8 0 0 1-.63-1.5l-1.88-.48v-3.28l1.88-.47c.16-.52.37-1.02.63-1.51l-.93-1.7 2.32-2.32 1.7.93c.48-.26.98-.47 1.5-.63z" />
+                            <circle cx="12" cy="12" r="2.85" />
+                          </svg>
+                        ),
+                      }
+                    : null;
                   return (
                     <article
                       key={String(remnant.id)}
-                      className="group overflow-hidden rounded-[28px] border border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(250,246,241,0.96))] shadow-[0_18px_38px_rgba(15,23,39,0.10)] transition-transform [contain-intrinsic-size:430px] [content-visibility:auto] hover:-translate-y-1"
+                      className="group relative overflow-hidden rounded-[24px] border border-[var(--brand-line)] bg-[rgba(255,255,255,0.96)] shadow-[0_14px_30px_rgba(25,27,28,0.08)] transition-transform [contain-intrinsic-size:420px] [content-visibility:auto] hover:-translate-y-1 sm:rounded-[26px]"
                     >
-                      <button type="button" className="block w-full text-left" onClick={() => imageSrc(remnant) && openImageViewer(remnant)}>
-                        <div className="relative aspect-[4/3] overflow-hidden bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.45),transparent_32%),linear-gradient(180deg,#f7efe6_0%,#efe4d7_100%)]">
-                          <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-24 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.45),transparent_72%)]" />
-                          <div className="pointer-events-none absolute inset-x-0 top-0 z-[2] flex items-start justify-between gap-2 p-3">
-                            <span className="inline-flex items-center rounded-full border border-white/70 bg-white/88 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8c6040] shadow-sm backdrop-blur">
-                              ID #{displayRemnantId(remnant)}
-                            </span>
-                            <span
-                              className={`inline-flex max-w-[72%] items-center justify-end rounded-full px-2.5 py-1 text-[10px] font-semibold leading-tight tracking-[0.02em] shadow-sm backdrop-blur ${statusBadgeClass(normalizedStatus)}`}
-                            >
-                              {statusBadge}
-                            </span>
-                          </div>
-                          {imageSrc(remnant) ? (
-                            <div className="flex h-full w-full items-center justify-center p-2.5">
-                              <img
-                                src={imageSrc(remnant)}
-                                alt={`Remnant ${displayRemnantId(remnant)}`}
-                                className="h-full w-full rounded-[20px] object-contain object-center transition-transform duration-300 motion-safe:md:group-hover:scale-[1.02]"
-                                decoding="async"
+                      <div className="relative">
+                        <div className="overflow-hidden">
+                          <div className="relative aspect-[4/3] overflow-hidden bg-[linear-gradient(180deg,var(--brand-white)_0%,rgba(255,255,255,0.94)_100%)]">
+                            {imageSrc(remnant) ? (
+                              <button
+                                type="button"
+                                className="absolute inset-0 z-[1] block w-full overflow-hidden text-left"
+                                onClick={() => openImageViewer(remnant)}
+                                aria-label={`Open image for remnant ${displayRemnantId(remnant)}`}
                               />
+                            ) : null}
+                            <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-24 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.45),transparent_72%)]" />
+                            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-16 bg-[linear-gradient(180deg,rgba(35,35,35,0),rgba(35,35,35,0.18))]" />
+                            <div className="pointer-events-none absolute inset-x-0 top-0 z-[2] flex items-start justify-between gap-2 p-3">
+                              <span className="inline-flex items-center rounded-full border border-white/70 bg-white/88 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-orange-deep)] shadow-sm backdrop-blur">
+                                ID #{displayRemnantId(remnant)}
+                              </span>
+                              <span
+                                className={`inline-flex max-w-[72%] items-center justify-end rounded-full px-2.5 py-1 text-[10px] font-semibold leading-tight tracking-[0.02em] shadow-sm backdrop-blur ${statusBadgeClass(normalizedStatus)}`}
+                              >
+                                {statusBadge}
+                              </span>
                             </div>
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center bg-[#f4ece4] text-sm font-semibold uppercase tracking-[0.16em] text-[#9c7355]">
-                              No Image
-                            </div>
-                          )}
-                        </div>
-                      </button>
-                      <div className="space-y-3 p-4 text-sm text-[#232323]">
-                        <div className={`gap-3 ${useSideActions ? "grid grid-cols-[minmax(0,1fr)_108px] items-start" : ""}`}>
-                          <div className="space-y-3 rounded-[24px] border border-[#efe5dc] bg-[#fbf8f4] px-4 py-3.5 text-[#4d3d34]">
-                            <div>
-                              <h3 className="text-[15px] font-semibold leading-snug text-[#2d2623]">
-                                {cardTitleText(remnant)}
-                              </h3>
-                              <div className="mt-1 flex flex-wrap items-center gap-2 text-[13px] font-medium text-[#5f4c42]">
-                                <span>ID #{displayRemnantId(remnant)}</span>
-                                {brandText(remnant) ? (
-                                  <span className="inline-flex items-center rounded-full border border-[#eadfd7] bg-white/88 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#8f5b35]">
-                                    {brandText(remnant)}
+                            {imageSrc(remnant) ? (
+                              <div className="pointer-events-none flex h-full w-full items-center justify-center overflow-hidden p-1.5 sm:p-2">
+                                <img
+                                  src={imageSrc(remnant)}
+                                  alt={`Remnant ${displayRemnantId(remnant)}`}
+                                  className="h-full w-full scale-[1.05] object-contain object-center transition-transform duration-300 motion-safe:md:group-hover:scale-[1.08]"
+                                  decoding="async"
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-[var(--brand-white)] text-sm font-semibold uppercase tracking-[0.16em] text-[var(--brand-orange)]">
+                                No Image
+                              </div>
+                            )}
+                            {leftAction ? (
+                              <div className="absolute bottom-0 left-0 z-[3] p-3">
+                                <button
+                                  type="button"
+                                  disabled={leftAction.disabled}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    leftAction.onClick();
+                                  }}
+                                  className={`group/private-action inline-flex h-10 items-center justify-center gap-0 overflow-hidden rounded-2xl px-2.5 pr-2.5 text-[11px] font-medium shadow-[0_12px_30px_rgba(25,27,28,0.18)] backdrop-blur transition-all hover:-translate-y-0.5 hover:gap-2 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 ${leftAction.className}`}
+                                  aria-label={leftAction.label}
+                                  title={leftAction.title}
+                                >
+                                  {leftAction.icon}
+                                  <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 ease-out group-hover/private-action:max-w-[8rem] group-hover/private-action:opacity-100">
+                                    {leftAction.label}
                                   </span>
-                                ) : null}
-                              </div>
-                            </div>
-                            <div className="grid gap-2 sm:grid-cols-2">
-                              <div className="rounded-[18px] border border-[#eee2d8] bg-white/85 px-3 py-2">
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9c7355]">Size</p>
-                                <p className="mt-1 text-[13px] font-semibold text-[#2d2623]">
-                                  {cardSizeText(remnant)}
-                                </p>
-                              </div>
-                              <div className="rounded-[18px] border border-[#eee2d8] bg-white/85 px-3 py-2">
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9c7355]">Status</p>
-                                <p className="mt-1 text-[13px] font-semibold text-[#2d2623]">
-                                  {status}
-                                </p>
-                              </div>
-                            </div>
-                            {remnantColors(remnant).length ? (
-                              <div className="rounded-[18px] border border-[#eee2d8] bg-white/85 px-3 py-2">
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9c7355]">Colors</p>
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                  {remnantColors(remnant).map((color) => (
-                                    <span
-                                      key={`${remnant.id}-${color}`}
-                                      className="inline-flex items-center gap-2 rounded-full border border-[#eadfd7] bg-[#fffaf6] px-2.5 py-1 text-[11px] font-semibold text-[#5f4c42]"
-                                    >
-                                      <span
-                                        aria-hidden="true"
-                                        className="h-3 w-3 rounded-full border border-black/10 shadow-inner"
-                                        style={colorSwatchStyle(color)}
-                                      />
-                                      {color}
-                                    </span>
-                                  ))}
-                                </div>
+                                </button>
                               </div>
                             ) : null}
-                            {statusOwnedByProfile(profile, remnant) && isStatusUser ? (
-                              <div className="rounded-[18px] border border-[#efe2d6] bg-white/80 px-3 py-2 text-[12px] font-medium text-[#6f594a]">
-                                Assigned to you
+                            {rightAction ? (
+                              <div className="absolute bottom-0 right-0 z-[3] p-3">
+                                <button
+                                  type="button"
+                                  disabled={rightAction.disabled}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    rightAction.onClick();
+                                  }}
+                                  className={`group/private-action inline-flex h-10 items-center justify-end gap-0 overflow-hidden rounded-2xl px-2.5 pr-2.5 text-[11px] font-medium shadow-[0_12px_30px_rgba(25,27,28,0.18)] backdrop-blur transition-all hover:-translate-y-0.5 hover:gap-2 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 ${rightAction.className}`}
+                                  aria-label={rightAction.label}
+                                  title={rightAction.title}
+                                >
+                                  <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 ease-out group-hover/private-action:max-w-[8rem] group-hover/private-action:opacity-100">
+                                    {rightAction.label}
+                                  </span>
+                                  {rightAction.icon}
+                                </button>
+                              </div>
+                            ) : null}
+                            {centerEditAction ? (
+                              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[3] flex justify-center p-3">
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    centerEditAction.onClick();
+                                  }}
+                                  className={`pointer-events-auto group/private-action inline-flex h-10 items-center justify-center gap-0 overflow-hidden rounded-2xl px-2.5 text-[11px] font-medium shadow-[0_12px_30px_rgba(25,27,28,0.18)] backdrop-blur transition-all hover:-translate-y-0.5 hover:gap-2 active:scale-[0.99] ${centerEditAction.className}`}
+                                  aria-label={centerEditAction.label}
+                                  title={centerEditAction.title}
+                                >
+                                  {centerEditAction.icon}
+                                  <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 ease-out group-hover/private-action:max-w-[7rem] group-hover/private-action:opacity-100">
+                                    {centerEditAction.label}
+                                  </span>
+                                </button>
                               </div>
                             ) : null}
                           </div>
-                          {useSideActions ? (
-                            <div className="grid gap-2 self-stretch">
-                              {showAvailableAction ? (
-                                <button
-                                  type="button"
-                                  disabled={isWorking}
-                                  onClick={() => changeRemnantStatus(remnant, "available")}
-                                  className={availableActionClass}
+                        </div>
+                      </div>
+                      <div className="p-3 text-sm text-[#232323] sm:p-3.5">
+                        <div className="rounded-[22px] border border-[var(--brand-line)] bg-[linear-gradient(180deg,#ffffff_0%,rgba(242,242,242,0.92)_100%)] px-3.5 py-3 text-[var(--brand-ink)] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+                          <div className="min-w-0">
+                            <h3 className="font-display text-[16px] font-semibold leading-snug text-[var(--brand-ink)] sm:text-[17px]">
+                              {privateCardHeading(remnant)}
+                            </h3>
+                            {privateCardSubheading(remnant) ? (
+                              <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgba(35,35,35,0.54)]">
+                                {privateCardSubheading(remnant)}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className={`mt-3 grid items-stretch gap-2 ${privateCardMetricEntries(remnant).length >= 2 ? "grid-cols-2" : "grid-cols-1"}`}>
+                            {privateCardMetricEntries(remnant).map((entry, index) => (
+                              <div
+                                key={`${remnant.id}-${entry.label}`}
+                                className="flex min-w-0 flex-col rounded-[16px] border border-[var(--brand-line)] bg-white/88 px-3 py-2"
+                              >
+                                <p className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)] sm:text-[11px]" title={entry.title}>
+                                  {entry.label}
+                                </p>
+                                <p className="mt-1 text-[12px] font-semibold leading-tight text-[var(--brand-ink)] sm:text-[13px]">
+                                  {entry.value}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                          {remnantColors(remnant).length ? (
+                            <div className="mt-3 flex flex-wrap justify-center gap-2">
+                              {remnantColors(remnant).map((color) => (
+                                <span
+                                  key={`${remnant.id}-${color}`}
+                                  className="inline-flex items-center gap-2 rounded-full border border-[var(--brand-line)] bg-white/92 px-2.5 py-1 text-[11px] font-semibold text-[rgba(25,27,28,0.72)]"
                                 >
-                                  {isWorking ? "Working..." : "Available"}
-                                </button>
-                              ) : null}
-                              {showHoldAction ? (
-                                <button
-                                  type="button"
-                                  onClick={() => openHoldEditor(remnant)}
-                                  className={holdActionClass}
-                                >
-                                  Hold
-                                </button>
-                              ) : null}
-                              {showSoldAction ? (
-                                <button
-                                  type="button"
-                                  disabled={isWorking}
-                                  onClick={() => changeRemnantStatus(remnant, "sold")}
-                                  className={soldActionClass}
-                                >
-                                  {isWorking ? "Working..." : "Sell"}
-                                </button>
-                              ) : null}
+                                  <span
+                                    aria-hidden="true"
+                                    className="h-3 w-3 rounded-full border border-black/10 shadow-inner"
+                                    style={colorSwatchStyle(color)}
+                                  />
+                                  {color}
+                                </span>
+                              ))}
                             </div>
                           ) : null}
                         </div>
-                        {showStatusActions && !useSideActions ? (
-                          <div className={`grid gap-2 pt-1 ${actionColumns}`}>
-                            {showAvailableAction ? (
-                              <button
-                                type="button"
-                                disabled={isWorking}
-                                onClick={() => changeRemnantStatus(remnant, "available")}
-                                className={availableActionClass}
-                              >
-                                {isWorking ? "Working..." : "Available"}
-                              </button>
-                            ) : null}
-                            {showHoldAction ? (
-                              <button
-                                type="button"
-                                onClick={() => openHoldEditor(remnant)}
-                                className={holdActionClass}
-                              >
-                                Hold
-                              </button>
-                            ) : null}
-                            {showSoldAction ? (
-                              <button
-                                type="button"
-                                disabled={isWorking}
-                                onClick={() => changeRemnantStatus(remnant, "sold")}
-                                className={soldActionClass}
-                              >
-                                {isWorking ? "Working..." : "Sell"}
-                              </button>
-                            ) : null}
-                            {showEditAction ? (
-                              <button
-                                type="button"
-                                onClick={() => openEditEditor(remnant)}
-                                className={editActionClass}
-                              >
-                                Edit
-                              </button>
-                            ) : null}
-                          </div>
-                        ) : null}
                       </div>
                     </article>
                   );
@@ -2055,70 +2549,108 @@ export default function PrivateWorkspaceClient() {
       </div>
 
       <footer className="px-4 pb-10 pt-2 md:px-6">
-        <div className="mx-auto max-w-[1800px] rounded-[24px] border border-white/60 bg-white/70 px-4 py-5 text-center shadow-sm backdrop-blur sm:rounded-[28px] sm:px-6">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#5b6f87]">Internal Workspace</p>
-          <p className="mt-2 text-sm text-[#617286]">Built to keep remnant inventory, hold review, and status updates clear for the team.</p>
+        <div className="mx-auto max-w-[1800px] rounded-[24px] border border-[var(--brand-line)] bg-white/80 px-4 py-5 text-center shadow-sm backdrop-blur sm:rounded-[28px] sm:px-6">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--brand-orange)]">Internal Workspace</p>
+          <p className="mt-2 text-sm text-[rgba(25,27,28,0.72)]">Built to keep remnant inventory, hold review, and status updates clear for the team.</p>
         </div>
       </footer>
 
       {selectedImageRemnant ? (
-        <div className="fixed inset-0 z-[73] bg-black/75 px-4 py-6" onClick={closeImageViewer}>
-          <div className="mx-auto flex h-full max-w-6xl flex-col">
-            <div
-              className="mb-4 flex flex-wrap items-start justify-between gap-3 rounded-[28px] border border-white/15 bg-white/10 px-4 py-4 text-white backdrop-blur"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85">
-                    ID #{displayRemnantId(selectedImageRemnant)}
-                  </span>
-                  <span className="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
-                    {selectedImageIndex + 1} / {modalImageItems.length}
-                  </span>
+        <div
+          className="fixed inset-0 z-[73] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_24%),linear-gradient(180deg,rgba(12,12,12,0.86),rgba(8,8,8,0.92))] px-3 py-4 sm:px-4 sm:py-6"
+          onClick={closeImageViewer}
+        >
+          <div className="mx-auto flex h-full max-w-[1180px] flex-col" onClick={(event) => event.stopPropagation()}>
+            <div className="flex min-h-0 flex-1 items-center justify-center">
+              <div className="flex h-full w-full flex-col overflow-hidden rounded-[34px] border border-white/10 bg-[linear-gradient(180deg,rgba(30,30,30,0.82),rgba(16,16,16,0.9))] shadow-[0_32px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl">
+                <div className="flex items-start justify-between gap-4 border-b border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] px-4 py-4 text-white sm:px-5">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center rounded-full border border-white/15 bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85">
+                        ID #{displayRemnantId(selectedImageRemnant)}
+                      </span>
+                      <span className="inline-flex items-center rounded-full border border-white/15 bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
+                        {selectedImageIndex + 1} / {modalImageItems.length}
+                      </span>
+                      <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${statusBadgeClass(normalizeRemnantStatus(selectedImageRemnant))}`}>
+                        {statusBadgeText(selectedImageRemnant)}
+                      </span>
+                    </div>
+                    <h2 className="font-display mt-3 text-xl font-semibold text-white sm:text-[2rem]">
+                      {privateCardHeading(selectedImageRemnant)}
+                    </h2>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/68">
+                      {privateCardSubheading(selectedImageRemnant) ? (
+                        <span>{privateCardSubheading(selectedImageRemnant)}</span>
+                      ) : null}
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {privateCardMetricEntries(selectedImageRemnant).map((entry) => (
+                        <span
+                          key={`${displayRemnantId(selectedImageRemnant)}-${entry.label}`}
+                          title={entry.title}
+                          className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-[11px] text-white/88"
+                        >
+                          <span className="font-semibold uppercase tracking-[0.08em] text-white/60">{entry.label}</span>
+                          <span className="whitespace-nowrap font-medium">{entry.value}</span>
+                        </span>
+                      ))}
+                      {remnantColors(selectedImageRemnant).map((color) => (
+                        <span
+                          key={`${displayRemnantId(selectedImageRemnant)}-viewer-${color}`}
+                          className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-2.5 py-1 text-[11px] font-medium text-white/82"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="h-3 w-3 rounded-full border border-white/20"
+                            style={colorSwatchStyle(color)}
+                          />
+                          {color}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center">
+                    <button
+                      type="button"
+                      onClick={closeImageViewer}
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/8 text-2xl text-white transition-colors hover:border-white/25 hover:bg-white/16"
+                      aria-label="Close image preview"
+                    >
+                      {"\u00D7"}
+                    </button>
+                  </div>
                 </div>
-                <h2 className="mt-3 text-xl font-semibold text-white sm:text-2xl">
-                  {selectedImageRemnant.name || "Unnamed"}
-                </h2>
-                <p className="mt-1 text-sm text-white/75">
-                  {selectedImageRemnant.material_name || "Unknown"} · {sizeText(selectedImageRemnant)}
-                </p>
+                <div className="flex min-h-0 flex-1 items-center justify-center p-3 sm:p-4">
+                  <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[28px] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_26%),linear-gradient(180deg,#1a1a1a_0%,#111111_100%)] p-2 sm:p-3">
+                    {modalImageItems.length > 1 ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={showPreviousImage}
+                          className="absolute left-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white shadow-lg backdrop-blur transition hover:bg-black/50"
+                          aria-label="Previous image"
+                        >
+                          ‹
+                        </button>
+                        <button
+                          type="button"
+                          onClick={showNextImage}
+                          className="absolute right-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white shadow-lg backdrop-blur transition hover:bg-black/50"
+                          aria-label="Next image"
+                        >
+                          ›
+                        </button>
+                      </>
+                    ) : null}
+                    <img
+                      src={imageSrc(selectedImageRemnant)}
+                      alt={`Remnant ${displayRemnantId(selectedImageRemnant)}`}
+                      className="max-h-full max-w-full rounded-[24px] object-contain shadow-[0_24px_60px_rgba(0,0,0,0.3)]"
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                {modalImageItems.length > 1 ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={showPreviousImage}
-                      className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/20 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/18"
-                    >
-                      Previous
-                    </button>
-                    <button
-                      type="button"
-                      onClick={showNextImage}
-                      className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/20 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/18"
-                    >
-                      Next
-                    </button>
-                  </>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={closeImageViewer}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-white/10 text-2xl text-white transition-colors hover:bg-white/20"
-                  aria-label="Close image preview"
-                >
-                  {"\u00D7"}
-                </button>
-              </div>
-            </div>
-            <div className="flex min-h-0 flex-1 items-center justify-center" onClick={(event) => event.stopPropagation()}>
-              <img
-                src={imageSrc(selectedImageRemnant)}
-                alt={`Remnant ${displayRemnantId(selectedImageRemnant)}`}
-                className="max-h-full max-w-full rounded-[28px] border border-white/15 bg-white/5 object-contain shadow-[0_30px_80px_rgba(0,0,0,0.35)]"
-              />
             </div>
           </div>
         </div>
@@ -2126,22 +2658,22 @@ export default function PrivateWorkspaceClient() {
 
       {queueOpen ? (
         <div className="fixed inset-0 z-[71] overflow-y-auto bg-black/50 px-4 py-8">
-          <div className="mx-auto max-w-5xl overflow-hidden rounded-[32px] border border-white/75 bg-white shadow-[0_24px_70px_rgba(44,29,18,0.10)]">
-            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#e4ebf2] bg-[linear-gradient(135deg,#fffaf6_0%,#f7efe8_100%)] px-6 py-5">
+          <div className="mx-auto max-w-5xl overflow-hidden rounded-[32px] border border-[var(--brand-line)] bg-white shadow-[0_24px_70px_rgba(35,35,35,0.14)]">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,#f7f7f7_100%)] px-6 py-5">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#5b6f87]">Queue</p>
-                  <span className="inline-flex items-center rounded-full border border-[#ecd6c4] bg-white/85 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8d6547]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--brand-orange)]">Queue</p>
+                  <span className="inline-flex items-center rounded-full border border-[var(--brand-line)] bg-[var(--brand-white)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)]">
                     {holdRequests.length} Pending
                   </span>
                 </div>
-                <h2 className="mt-1 text-2xl font-semibold text-[#172230]">{workspaceCopy.queueTitle}</h2>
-                <p className="mt-2 text-sm text-[#617286]">{workspaceCopy.queueDescription}</p>
+                <h2 className="font-display mt-1 text-2xl font-semibold text-[var(--brand-ink)]">{workspaceCopy.queueTitle}</h2>
+                <p className="mt-2 text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_72%,white)]">{workspaceCopy.queueDescription}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setQueueOpen(false)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#d8c7b8] bg-white text-xl text-[#6d584b] transition hover:bg-[#fff7f1]"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
                 aria-label="Close request queue"
               >
                 {"\u00D7"}
@@ -2150,8 +2682,8 @@ export default function PrivateWorkspaceClient() {
 
             <div className="max-h-[70vh] overflow-y-auto p-6">
               {holdRequests.length === 0 ? (
-                <div className="rounded-[24px] border border-dashed border-[#d7c4b6] bg-[#fff9f4] px-5 py-10 text-center text-[#6d584b]">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#9c7355]">No Requests</p>
+                <div className="rounded-[24px] border border-dashed border-[var(--brand-line)] bg-[var(--brand-white)] px-5 py-10 text-center text-[color:color-mix(in_srgb,var(--brand-ink)_72%,white)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">No Requests</p>
                   <p className="mt-2 text-sm">There are no hold requests to review right now.</p>
                 </div>
               ) : (
@@ -2161,67 +2693,67 @@ export default function PrivateWorkspaceClient() {
                     const requestRemnant = request.remnant || {};
                     const requestMaterial = requestRemnant.material?.name || requestRemnant.material_name || "Unknown";
                     const requestStoneName = String(requestRemnant.name || "").trim() || "Unnamed";
-                    const requestSize = compactSizeText(requestRemnant);
                     const requestMessage = String(request.notes || "").trim();
                     const requestDisplayId =
                       requestRemnant.display_id || requestRemnant.moraware_remnant_id || requestRemnant.id || request.remnant_id;
                     return (
-                      <article key={request.id} className={`rounded-[26px] border border-[#eadfd7] bg-[#fffaf6] p-4 shadow-sm ${isPending ? "opacity-60 saturate-75" : ""}`}>
-                        <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
-                          <button
-                            type="button"
-                            onClick={() => imageSrc(requestRemnant) && openImageViewer(requestRemnant)}
-                            className="overflow-hidden rounded-[22px] border border-[#eadfd7] bg-[#f6ede5] text-left transition-transform hover:-translate-y-0.5"
-                          >
-                            {imageSrc(requestRemnant) ? (
-                              <img
-                                src={imageSrc(requestRemnant)}
-                                alt={`Remnant ${requestDisplayId}`}
-                                className="h-44 w-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-44 items-center justify-center text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
-                                No Image
-                              </div>
-                            )}
-                          </button>
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-900 ring-1 ring-amber-300">
-                                    Pending
-                                  </span>
-                                  <span className="inline-flex items-center rounded-full bg-[#f5ede6] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#956746]">
-                                    ID #{requestDisplayId}
-                                  </span>
-                                </div>
-                                <h3 className="mt-2 text-xl font-semibold text-[#2d2623]">
-                                  {requestStoneName}
-                                </h3>
-                                <p className="mt-1 text-sm text-[#7d6759]">
-                                  {requestMaterial} · {requestSize}
+                      <article key={request.id} className={`rounded-[26px] border border-[var(--brand-line)] bg-[linear-gradient(180deg,#ffffff_0%,#fafafa_100%)] p-4 shadow-sm ${isPending ? "opacity-60 saturate-75" : ""}`}>
+                        <div className="min-w-0">
+                          <PrivateRemnantSummaryBlock
+                            remnant={requestRemnant}
+                            className=""
+                            onOpenImage={() => imageSrc(requestRemnant) && openImageViewer(requestRemnant)}
+                          />
+
+                          <div className="mt-4 rounded-[24px] border border-[var(--brand-line)] bg-[linear-gradient(180deg,#ffffff_0%,#fafafa_100%)] p-4 shadow-[0_10px_24px_rgba(25,27,28,0.04)]">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Client Details</p>
+                                <p className="mt-1 text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_70%,white)]">
+                                  Review who sent the request before you approve it.
                                 </p>
-                              </div>
-                              <div className="grid gap-2 text-sm text-[#4d3d34] sm:grid-cols-2">
-                                <p><strong>Name:</strong> {request.requester_name || "Unknown"}</p>
-                                <p><strong>Email:</strong> {request.requester_email || "Unknown"}</p>
                               </div>
                             </div>
 
-                            <div className="mt-4 rounded-[22px] border border-[#eadfd7] bg-white/85 p-4">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9c7355]">Customer message</p>
-                              <p className="mt-2 text-sm leading-6 text-[#4d3d34]">
+                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                              <div className="rounded-[22px] border border-[var(--brand-line)] bg-white p-4">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Client Name</p>
+                                <p className="mt-2 break-words text-sm font-medium text-[var(--brand-ink)]">
+                                  {request.requester_name || "Unknown"}
+                                </p>
+                              </div>
+                              <div className="rounded-[22px] border border-[var(--brand-line)] bg-white p-4">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Client Email</p>
+                                <p className="mt-2 break-all text-sm font-medium text-[var(--brand-ink)]">
+                                  {request.requester_email || "Unknown"}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="mt-3 rounded-[22px] border border-[var(--brand-line)] bg-white p-4">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Client Message</p>
+                              <p className="mt-2 text-sm leading-6 text-[color:color-mix(in_srgb,var(--brand-ink)_80%,white)]">
                                 {requestMessage || "No message provided."}
                               </p>
                             </div>
+                          </div>
 
-                            <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_160px_160px] lg:items-end">
-                              <label className="block text-sm font-medium text-[#4d3d34]">
+                          <div className="mt-4 rounded-[24px] border border-[var(--brand-line)] bg-white p-4 shadow-[0_10px_24px_rgba(25,27,28,0.04)]">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Review Action</p>
+                                <p className="mt-1 text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_70%,white)]">
+                                  Add the job number, then approve or deny the request.
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_170px_170px] lg:items-end">
+                              <label className="block text-sm font-medium text-[color:color-mix(in_srgb,var(--brand-ink)_82%,white)]">
                                 Job Number
-                                <div className="mt-1 flex overflow-hidden rounded-2xl border border-[#d8c7b8] bg-white shadow-sm">
-                                  <span className="inline-flex items-center border-r border-[#d8c7b8] bg-[#f7f1ea] px-4 text-sm font-semibold text-[#6d584b]">
-                                    J
+                                <div className="mt-1 flex overflow-hidden rounded-2xl border border-[var(--brand-line)] bg-white shadow-sm">
+                                  <span className="inline-flex items-center border-r border-[var(--brand-line)] bg-[var(--brand-white)] px-4 text-sm font-semibold text-[var(--brand-orange)]">
+                                    {jobNumberPrefixForRemnant(requestRemnant)}
                                   </span>
                                   <input
                                     type="text"
@@ -2233,7 +2765,7 @@ export default function PrivateWorkspaceClient() {
                                       }))
                                     }
                                     placeholder="1234"
-                                    className="min-w-0 flex-1 bg-white px-4 py-3 text-sm text-[#2d2623] outline-none"
+                                    className="min-w-0 flex-1 bg-white px-4 py-3 text-sm text-[var(--brand-ink)] outline-none"
                                   />
                                 </div>
                               </label>
@@ -2268,24 +2800,24 @@ export default function PrivateWorkspaceClient() {
 
       {myHoldsOpen ? (
         <div className="fixed inset-0 z-[71] overflow-y-auto bg-black/50 px-4 py-8">
-          <div className="mx-auto max-w-5xl overflow-hidden rounded-[32px] border border-white/75 bg-white shadow-[0_24px_70px_rgba(44,29,18,0.10)]">
-            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#e4ebf2] bg-[linear-gradient(135deg,#fffaf6_0%,#f7efe8_100%)] px-6 py-5">
+          <div className="mx-auto max-w-5xl overflow-hidden rounded-[32px] border border-[var(--brand-line)] bg-white shadow-[0_24px_70px_rgba(35,35,35,0.14)]">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,#f7f7f7_100%)] px-6 py-5">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#5b6f87]">Holds</p>
-                  <span className="inline-flex items-center rounded-full border border-[#ecd6c4] bg-white/85 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8d6547]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--brand-orange)]">Holds</p>
+                  <span className="inline-flex items-center rounded-full border border-[var(--brand-line)] bg-[var(--brand-white)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)]">
                     {myHolds.length} Active
                   </span>
                 </div>
-                <h2 className="mt-1 text-2xl font-semibold text-[#172230]">My Holds</h2>
-                <p className="mt-2 text-sm text-[#617286]">
+                <h2 className="font-display mt-1 text-2xl font-semibold text-[var(--brand-ink)]">Holds</h2>
+                <p className="mt-2 text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_72%,white)]">
                   View the stones currently under your hold, when they expire, and the original requester details.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setMyHoldsOpen(false)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#d8c7b8] bg-white text-xl text-[#6d584b] transition hover:bg-[#fff7f1]"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
                 aria-label="Close my holds"
               >
                 {"\u00D7"}
@@ -2294,13 +2826,13 @@ export default function PrivateWorkspaceClient() {
 
             <div className="max-h-[70vh] overflow-y-auto p-6">
               {myHoldsLoading ? (
-                <div className="rounded-[24px] border border-dashed border-[#d7c4b6] bg-[#fff9f4] px-5 py-10 text-center text-[#6d584b]">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#9c7355]">Loading</p>
+                <div className="rounded-[24px] border border-dashed border-[var(--brand-line)] bg-[var(--brand-white)] px-5 py-10 text-center text-[color:color-mix(in_srgb,var(--brand-ink)_72%,white)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Loading</p>
                   <p className="mt-2 text-sm">Refreshing your active holds.</p>
                 </div>
               ) : myHolds.length === 0 ? (
-                <div className="rounded-[24px] border border-dashed border-[#d7c4b6] bg-[#fff9f4] px-5 py-10 text-center text-[#6d584b]">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#9c7355]">No Holds</p>
+                <div className="rounded-[24px] border border-dashed border-[var(--brand-line)] bg-[var(--brand-white)] px-5 py-10 text-center text-[color:color-mix(in_srgb,var(--brand-ink)_72%,white)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">No Holds</p>
                   <p className="mt-2 text-sm">You do not have any active holds right now.</p>
                 </div>
               ) : (
@@ -2309,7 +2841,6 @@ export default function PrivateWorkspaceClient() {
                     const holdRemnant = hold.remnant || {};
                     const holdMaterial = holdRemnant.material_name || holdRemnant.material?.name || "Unknown";
                     const holdStoneName = String(holdRemnant.name || "").trim() || "Unnamed";
-                    const holdSize = compactSizeText(holdRemnant);
                     const requesterName = hold.customer_name || hold.requester_name || "Customer name unavailable";
                     const requesterEmail = hold.requester_email || "Not provided";
                     const requesterMessage = hold.requester_message || hold.notes || "No message provided.";
@@ -2324,71 +2855,60 @@ export default function PrivateWorkspaceClient() {
                       holdRemnant.display_id || holdRemnant.moraware_remnant_id || holdRemnant.id || hold.remnant_id;
 
                     return (
-                      <article key={hold.id} className="rounded-[26px] border border-[#eadfd7] bg-[#fffaf6] p-4 shadow-sm">
-                        <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
-                          <button
-                            type="button"
-                            onClick={() => imageSrc(holdRemnant) && openImageViewer(holdRemnant)}
-                            className="overflow-hidden rounded-[22px] border border-[#eadfd7] bg-[#f6ede5] text-left transition-transform hover:-translate-y-0.5"
-                          >
-                            {imageSrc(holdRemnant) ? (
-                              <img
-                                src={imageSrc(holdRemnant)}
-                                alt={`Remnant ${holdDisplayId}`}
-                                className="h-44 w-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-44 items-center justify-center text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
-                                No Image
-                              </div>
-                            )}
-                          </button>
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <p className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${holdStatusClass}`}>
-                                    {holdStatus === "expired" ? "Expired" : "On Hold"}
-                                  </p>
-                                  <span className="inline-flex items-center rounded-full bg-[#f5ede6] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#956746]">
-                                    ID #{holdDisplayId}
-                                  </span>
-                                </div>
-                                <h3 className="mt-2 text-xl font-semibold text-[#2d2623]">
-                                  {holdStoneName}
-                                </h3>
-                                <p className="mt-1 text-sm text-[#7d6759]">
-                                  {holdMaterial} · {holdSize}
+                      <article key={hold.id} className="rounded-[26px] border border-[var(--brand-line)] bg-[linear-gradient(180deg,#ffffff_0%,#fafafa_100%)] p-4 shadow-sm">
+                        <div className="min-w-0">
+                          <PrivateRemnantSummaryBlock
+                            remnant={holdRemnant}
+                            className=""
+                            onOpenImage={() => imageSrc(holdRemnant) && openImageViewer(holdRemnant)}
+                          />
+
+                          <div className="mt-4 rounded-[24px] border border-[var(--brand-line)] bg-[linear-gradient(180deg,#ffffff_0%,#fafafa_100%)] p-4 shadow-[0_10px_24px_rgba(25,27,28,0.04)]">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Hold Details</p>
+                                <p className="mt-1 text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_70%,white)]">
+                                  Review the active hold, requester details, and expiration date.
                                 </p>
                               </div>
-                              <div className="rounded-[20px] border border-[#eadfd7] bg-white/85 px-4 py-3 text-sm text-[#4d3d34]">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9c7355]">Expires</p>
-                                <p className="mt-1 font-semibold text-[#2d2623]">{formatDateLabel(hold.expires_at)}</p>
+                              <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${holdStatusClass}`}>
+                                {holdStatus === "expired" ? "Expired" : "On Hold"}
+                              </span>
+                            </div>
+
+                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                              <div className="rounded-[22px] border border-[var(--brand-line)] bg-white p-4">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Customer</p>
+                                <p className="mt-2 break-words text-sm font-medium text-[var(--brand-ink)]">{requesterName}</p>
+                              </div>
+                              <div className="rounded-[22px] border border-[var(--brand-line)] bg-white p-4">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Email</p>
+                                <p className="mt-2 break-all text-sm font-medium text-[var(--brand-ink)]">{requesterEmail}</p>
+                              </div>
+                              <div className="rounded-[22px] border border-[var(--brand-line)] bg-white p-4">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Job</p>
+                                <p className="mt-2 text-sm font-medium text-[var(--brand-ink)]">{hold.job_number ? formatJobNumber(hold.job_number, holdRemnant) : "Unknown"}</p>
+                              </div>
+                              <div className="rounded-[22px] border border-[var(--brand-line)] bg-white p-4">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Expires</p>
+                                <p className="mt-2 text-sm font-medium text-[var(--brand-ink)]">{formatDateLabel(hold.expires_at)}</p>
                               </div>
                             </div>
 
-                            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
-                              <div className="rounded-[20px] border border-[#eadfd7] bg-white/85 px-4 py-3 text-sm text-[#4d3d34]">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9c7355]">Customer</p>
-                                <p className="mt-1 break-words font-medium text-[#2d2623]">{requesterName}</p>
-                              </div>
-                              <div className="rounded-[20px] border border-[#eadfd7] bg-white/85 px-4 py-3 text-sm text-[#4d3d34]">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9c7355]">Email</p>
-                                <p className="mt-1 break-all font-medium text-[#2d2623]">{requesterEmail}</p>
-                              </div>
-                              <div className="rounded-[20px] border border-[#eadfd7] bg-white/85 px-4 py-3 text-sm text-[#4d3d34]">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9c7355]">Job</p>
-                                <p className="mt-1 font-medium text-[#2d2623]">{hold.job_number ? `J${normalizeJobNumberInput(hold.job_number)}` : "Unknown"}</p>
-                              </div>
-                              <div className="rounded-[20px] border border-[#eadfd7] bg-white/85 px-4 py-3 text-sm text-[#4d3d34]">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9c7355]">Status</p>
-                                <p className="mt-1 font-medium text-[#2d2623]">{statusText(holdRemnant)}</p>
-                              </div>
+                            <div className="mt-3 rounded-[22px] border border-[var(--brand-line)] bg-white p-4">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Client Message</p>
+                              <p className="mt-2 break-words text-sm leading-6 text-[color:color-mix(in_srgb,var(--brand-ink)_80%,white)]">{requesterMessage}</p>
                             </div>
+                          </div>
 
-                            <div className="mt-4 rounded-[22px] border border-[#eadfd7] bg-white/85 p-4">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9c7355]">Message</p>
-                              <p className="mt-2 break-words text-sm leading-6 text-[#4d3d34]">{requesterMessage}</p>
+                          <div className="mt-4 rounded-[24px] border border-[var(--brand-line)] bg-white p-4 shadow-[0_10px_24px_rgba(25,27,28,0.04)]">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Hold Actions</p>
+                                <p className="mt-1 text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_70%,white)]">
+                                  Release this remnant back to available or mark it as sold.
+                                </p>
+                              </div>
                             </div>
 
                             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -2421,152 +2941,415 @@ export default function PrivateWorkspaceClient() {
         </div>
       ) : null}
 
+      {mySoldOpen ? (
+        <div className="fixed inset-0 z-[71] overflow-y-auto bg-black/50 px-4 py-8">
+          <div className="mx-auto max-w-5xl overflow-hidden rounded-[32px] border border-[var(--brand-line)] bg-white shadow-[0_24px_70px_rgba(35,35,35,0.14)]">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,#f7f7f7_100%)] px-6 py-5">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--brand-orange)]">Sold</p>
+                  <span className="inline-flex items-center rounded-full border border-[var(--brand-line)] bg-[var(--brand-white)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)]">
+                    {mySold.length} Total
+                  </span>
+                </div>
+                <h2 className="font-display mt-1 text-2xl font-semibold text-[var(--brand-ink)]">Sold Remnants</h2>
+                <p className="mt-2 text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_72%,white)]">
+                  Review the remnants you marked as sold, including the job number and sale notes.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMySoldOpen(false)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+                aria-label="Close my sold"
+              >
+                {"\u00D7"}
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto p-6">
+              {mySoldLoading ? (
+                <div className="rounded-[24px] border border-dashed border-[var(--brand-line)] bg-[var(--brand-white)] px-5 py-10 text-center text-[color:color-mix(in_srgb,var(--brand-ink)_72%,white)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Loading</p>
+                  <p className="mt-2 text-sm">Refreshing your sold remnants.</p>
+                </div>
+              ) : mySold.length === 0 ? (
+                <div className="rounded-[24px] border border-dashed border-[var(--brand-line)] bg-[var(--brand-white)] px-5 py-10 text-center text-[color:color-mix(in_srgb,var(--brand-ink)_72%,white)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">No Sold Remnants</p>
+                  <p className="mt-2 text-sm">You have not marked any remnants as sold yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {mySold.map((sale) => {
+                    const soldRemnant = sale.remnant || {};
+                    const soldMaterial = soldRemnant.material_name || soldRemnant.material?.name || "Unknown";
+                    const soldStoneName = String(soldRemnant.name || "").trim() || "Unnamed";
+                    const soldDisplayId =
+                      soldRemnant.display_id || soldRemnant.moraware_remnant_id || soldRemnant.id || sale.remnant_id;
+
+                    return (
+                      <article key={sale.id} className="rounded-[26px] border border-[var(--brand-line)] bg-[linear-gradient(180deg,#ffffff_0%,#fafafa_100%)] p-4 shadow-sm">
+                        <div className="min-w-0">
+                          <PrivateRemnantSummaryBlock
+                            remnant={soldRemnant}
+                            className=""
+                            onOpenImage={() => imageSrc(soldRemnant) && openImageViewer(soldRemnant)}
+                          />
+
+                          <div className="mt-4 rounded-[24px] border border-[var(--brand-line)] bg-[linear-gradient(180deg,#ffffff_0%,#fafafa_100%)] p-4 shadow-[0_10px_24px_rgba(25,27,28,0.04)]">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Sale Details</p>
+                                <p className="mt-1 text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_70%,white)]">
+                                  Review when the remnant sold, the job reference, and sale notes.
+                                </p>
+                              </div>
+                              <span className="inline-flex items-center rounded-full bg-rose-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-rose-800 ring-1 ring-rose-300">
+                                Sold
+                              </span>
+                            </div>
+
+                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                              <div className="rounded-[22px] border border-[var(--brand-line)] bg-white p-4">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Sold At</p>
+                                <p className="mt-2 text-sm font-medium text-[var(--brand-ink)]">{formatDateLabel(sale.sold_at || sale.created_at)}</p>
+                              </div>
+                              <div className="rounded-[22px] border border-[var(--brand-line)] bg-white p-4">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Job</p>
+                                <p className="mt-2 text-sm font-medium text-[var(--brand-ink)]">{sale.job_number ? formatJobNumber(sale.job_number, soldRemnant) : "Unknown"}</p>
+                              </div>
+                            </div>
+
+                            <div className="mt-3 rounded-[22px] border border-[var(--brand-line)] bg-white p-4">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Sale Notes</p>
+                              <p className="mt-2 break-words text-sm leading-6 text-[color:color-mix(in_srgb,var(--brand-ink)_80%,white)]">{String(sale.notes || "").trim() || "No sale notes provided."}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {editorMode && editorForm ? (
         <div className="fixed inset-0 z-[72] overflow-y-auto bg-black/50 px-4 py-8">
-          <div className="mx-auto max-w-5xl overflow-hidden rounded-[32px] border border-white/70 bg-white shadow-[0_24px_70px_rgba(44,29,18,0.10)]">
-            <div className="flex items-center justify-between border-b border-[#eadfd7] bg-[linear-gradient(135deg,#fffaf6_0%,#f7efe8_100%)] px-6 py-5">
+          <div className="mx-auto max-w-6xl overflow-visible rounded-[32px] border border-[var(--brand-line)] bg-white shadow-[0_24px_70px_rgba(25,27,28,0.14)]">
+            <div className="flex items-center justify-between border-b border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,#f7f7f7_100%)] px-6 py-5">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#8a6a54]">Inventory</p>
-                <h2 className="text-2xl font-semibold text-[#2c211c]">{editorMode === "create" ? "Add Remnant" : "Edit Remnant"}</h2>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Inventory</p>
+                <h2 className="font-display text-2xl font-semibold text-[var(--brand-ink)]">{editorMode === "create" ? "Add Remnant" : "Edit Remnant"}</h2>
               </div>
-              <button type="button" onClick={closeEditor} className="h-10 w-10 rounded-full border border-[#d8c7b8] bg-white text-xl text-[#6d584b] transition hover:bg-[#fff7f1] active:bg-[#f6ede6]">
+              <button type="button" onClick={closeEditor} className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
                 {"\u00D7"}
               </button>
             </div>
             <form onSubmit={saveEditor} className="grid gap-4 p-6 md:grid-cols-2">
-              <div className="md:col-span-2 grid gap-4 rounded-[28px] border border-[#eadfd7] bg-[linear-gradient(135deg,#fffbf8_0%,#f8efe7_100%)] p-4 lg:grid-cols-[minmax(0,1.15fr)_320px]">
-                <div className="overflow-hidden rounded-[24px] border border-white/80 bg-white shadow-[0_16px_38px_rgba(44,29,18,0.08)]">
+              <div className="md:col-span-2 grid gap-4 rounded-[28px] border border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,var(--brand-white)_100%)] p-4 lg:grid-cols-[minmax(0,1.15fr)_320px]">
+                <div className="overflow-hidden rounded-[24px] border border-[var(--brand-line)] bg-white shadow-[0_16px_38px_rgba(25,27,28,0.08)]">
                   {editorForm.image_preview ? (
                     <img
                       src={editorForm.image_preview}
                       alt="Remnant preview"
-                      className="h-72 w-full bg-[#f4ece4] object-contain"
+                      className="h-72 w-full bg-[var(--brand-white)] object-contain"
                     />
                   ) : (
-                    <div className="flex h-72 items-center justify-center bg-[linear-gradient(135deg,#f4e7db_0%,#efe2d4_100%)] px-6 text-center text-sm font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+                    <div className="flex h-72 items-center justify-center bg-[linear-gradient(135deg,#ffffff_0%,var(--brand-white)_100%)] px-6 text-center text-sm font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
                       Add an image to preview and crop it here
                     </div>
                   )}
                 </div>
-                <div className="flex flex-col justify-between gap-4 rounded-[24px] border border-[#eadfd7] bg-white/80 p-5">
+                <div className="flex flex-col gap-5 rounded-[24px] border border-[var(--brand-line)] bg-white p-5">
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#9c7355]">Image Tools</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Image Tools</p>
                   </div>
                   <div className="space-y-3">
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)]">
                       Choose image
                       <input
                         ref={editorImageInputRef}
                         type="file"
                         accept="image/*"
                         onChange={handleEditorImageChange}
-                        className="mt-2 block w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 py-3 text-sm text-[#2d2623] file:mr-4 file:rounded-full file:border-0 file:bg-[#152238] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
+                        className="mt-2 block w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 py-3 text-sm text-[var(--brand-ink)] file:mr-4 file:rounded-full file:border-0 file:bg-[var(--brand-ink)] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
                       />
                     </label>
-                    <div className="flex flex-wrap gap-3">
+                    <div className="flex">
                       <button
                         type="button"
                         onClick={openCropEditor}
                         disabled={!editorForm.image_preview}
-                        className="inline-flex h-11 items-center justify-center rounded-2xl bg-[#152238] px-5 text-sm font-semibold text-white transition hover:bg-[#f08b49] disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex h-11 w-full items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Crop Image
+                        Crop
                       </button>
-                      <button
-                        type="button"
-                        onClick={resetEditorImage}
-                        disabled={!editorForm.image_preview && !editorForm.original_image_preview}
-                        className="inline-flex h-11 items-center justify-center rounded-2xl border border-[#d8c7b8] bg-white px-5 text-sm font-semibold text-[#56483f] transition hover:bg-[#fff7f1] disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Reset Image
-                      </button>
+                    </div>
+                  </div>
+                  <div className="border-t border-[var(--brand-line)] pt-5">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Colors</p>
+                      </div>
+                      {editorColorComposerOpen ? (
+                        <div className="grid w-full grid-cols-[minmax(0,1fr)_40px_auto] items-center gap-2 sm:max-w-full">
+                          <input
+                            type="text"
+                            value={editorColorDraft}
+                            onChange={(event) => setEditorColorDraft(event.target.value)}
+                            placeholder="Color"
+                            className="h-10 min-w-0 flex-1 rounded-2xl border border-[var(--brand-line)] bg-white px-3.5 text-sm text-[var(--brand-ink)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditorColorComposerOpen(false);
+                              setEditorColorDraft("");
+                            }}
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white text-base font-semibold text-[rgba(35,35,35,0.62)] transition hover:border-[var(--brand-orange)] hover:text-[var(--brand-orange)]"
+                            aria-label="Cancel add color"
+                          >
+                            ×
+                          </button>
+                          <button
+                            type="button"
+                            onClick={createEditorColor}
+                            disabled={editorColorSaving}
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--brand-ink)] text-sm font-semibold text-white transition hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-60"
+                            aria-label={editorColorSaving ? "Adding color" : "Add color"}
+                          >
+                            {editorColorSaving ? "…" : "✓"}
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setEditorColorComposerOpen(true)}
+                          className="inline-flex h-9 items-center justify-center gap-2 rounded-2xl border border-[var(--brand-line)] bg-white px-3.5 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+                        >
+                          <span className="text-base leading-none">+</span>
+                          Color
+                        </button>
+                      )}
+                    </div>
+                    <div className="mt-4 rounded-[22px] border border-[var(--brand-line)] bg-[var(--brand-white)] p-4">
+                      <div className="flex flex-wrap gap-2">
+                        {lookups.colors.map((row) => {
+                          const selected = colorListIncludes(editorForm.colors, row.name);
+                          return (
+                            <button
+                              key={`color-${row.id}`}
+                              type="button"
+                              onClick={() => toggleEditorColor(row.name)}
+                              className={`group relative inline-flex h-10 w-10 items-center justify-center rounded-full border transition ${
+                                selected
+                                  ? "border-[var(--brand-orange)] ring-4 ring-[rgba(247,134,57,0.16)] shadow-sm"
+                                  : "border-[var(--brand-line)] hover:border-[rgba(247,134,57,0.35)] hover:scale-[1.03]"
+                              }`}
+                              style={colorSwatchStyle(row.name)}
+                              title={row.name}
+                              aria-label={row.name}
+                              aria-pressed={selected}
+                            >
+                              {selected ? (
+                                <span className="h-3.5 w-3.5 rounded-full border border-white/75 bg-white/90 shadow-sm" />
+                              ) : null}
+                              <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-full bg-[#2c211c]/92 px-3 py-2 text-[11px] font-semibold text-white opacity-0 shadow-lg backdrop-blur-sm transition-all group-hover:opacity-100 group-focus-visible:opacity-100 xl:inline-flex">
+                                {row.name}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-              <section className="rounded-[26px] border border-[#eadfd7] bg-white p-5 shadow-[0_12px_28px_rgba(44,29,18,0.05)] md:col-span-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#9c7355]">Stone Details</p>
-                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                  <label className="block text-sm font-medium text-gray-700">
+              <section className="rounded-[26px] border border-[var(--brand-line)] bg-white p-5 shadow-[0_12px_28px_rgba(25,27,28,0.05)] md:col-span-2">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Stone Details</p>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-12">
+                  <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-3">
                     Company
-                    <SelectField
+                    <InAppSelect
                       value={String(editorForm.company_id ?? "")}
                       onChange={(event) => updateEditorField("company_id", event.target.value)}
-                      wrapperClassName="relative mt-2"
-                    >
-                      <option value="">Select company</option>
-                      {lookups.companies.map((row) => (
-                        <option key={row.id} value={String(row.id)}>{row.name}</option>
-                      ))}
-                    </SelectField>
+                      wrapperClassName="mt-2"
+                      placeholder="Select company"
+                      options={[
+                        { value: "", label: "Select company" },
+                        ...lookups.companies.map((row) => ({ value: String(row.id), label: row.name })),
+                      ]}
+                    />
                   </label>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-2">
                     Stone ID #
                     <input
                       type="number"
                       value={editorForm.moraware_remnant_id}
                       onChange={(event) => updateEditorField("moraware_remnant_id", event.target.value)}
-                      className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                     />
                   </label>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-2">
                     Material
-                    <SelectField
+                    <InAppSelect
                       value={String(editorForm.material_id ?? "")}
                       onChange={(event) => updateEditorField("material_id", event.target.value)}
-                      wrapperClassName="relative mt-2"
-                    >
-                      <option value="">Select material</option>
-                      {lookups.materials.map((row) => (
-                        <option key={row.id} value={String(row.id)}>{row.name}</option>
-                      ))}
-                    </SelectField>
-                  </label>
-                  <label className="block text-sm font-medium text-gray-700 md:col-span-2 xl:col-span-1">
-                    Stone Name
-                    <input
-                      type="text"
-                      value={editorForm.name}
-                      onChange={(event) => updateEditorField("name", event.target.value)}
-                      list="stone-product-name-suggestions"
-                      className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                      wrapperClassName="mt-2"
+                      placeholder="Select material"
+                      options={[
+                        { value: "", label: "Select material" },
+                        ...lookups.materials.map((row) => ({ value: String(row.id), label: row.name })),
+                      ]}
                     />
-                    <p className="mt-2 text-xs leading-5 text-[#7d6759]">
-                      Choose a material first. Existing stone names will appear here, and selecting a shared stone will prefill its saved colors.
-                    </p>
                   </label>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Thickness
-                    <SelectField
-                      value={String(editorForm.thickness_id ?? "")}
-                      onChange={(event) => updateEditorField("thickness_id", event.target.value)}
-                      wrapperClassName="relative mt-2"
-                    >
-                      <option value="">Select thickness</option>
-                      {lookups.thicknesses.map((row) => (
-                        <option key={row.id} value={String(row.id)}>{row.name}</option>
-                      ))}
-                    </SelectField>
+                  {showEditorBrandField ? (
+                    <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-2">
+                      Brand
+                      <div className="relative mt-2">
+                        <input
+                          type="text"
+                          value={editorForm.brand_name}
+                          onChange={(event) => {
+                            updateEditorField("brand_name", event.target.value);
+                            setEditorBrandMenuOpen(true);
+                          }}
+                          onFocus={() => setEditorBrandMenuOpen(true)}
+                          onBlur={() => {
+                            window.setTimeout(() => setEditorBrandMenuOpen(false), 120);
+                          }}
+                          className="h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                        />
+                        {editorBrandMenuOpen && filteredEditorBrandSuggestions.length ? (
+                          <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-[22px] border border-[var(--brand-line)] bg-white shadow-[0_20px_40px_rgba(25,27,28,0.12)]">
+                            <div className="max-h-64 overflow-y-auto p-2">
+                              {filteredEditorBrandSuggestions.map((brand) => (
+                                <button
+                                  key={`brand-suggestion-${brand}`}
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    updateEditorField("brand_name", brand);
+                                    setEditorBrandMenuOpen(false);
+                                  }}
+                                  className="flex w-full items-center rounded-[16px] px-3 py-2.5 text-left transition hover:bg-[var(--brand-white)]"
+                                >
+                                  <span className="block truncate text-sm font-semibold text-[var(--brand-ink)]">
+                                    {brand}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </label>
+                  ) : null}
+                  <label className={`block text-sm font-medium text-[rgba(35,35,35,0.78)] md:col-span-2 ${showEditorBrandField ? "xl:col-span-3" : "xl:col-span-5"}`}>
+                    Stone Name
+                    <div className="relative mt-2">
+                      <input
+                        type="text"
+                        value={editorForm.name}
+                        onChange={(event) => {
+                          updateEditorField("name", event.target.value);
+                          setEditorStoneMenuOpen(true);
+                        }}
+                        onFocus={() => setEditorStoneMenuOpen(true)}
+                        onBlur={() => {
+                          window.setTimeout(() => setEditorStoneMenuOpen(false), 120);
+                        }}
+                        className="h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                      />
+                      {editorStoneMenuOpen && filteredEditorStoneSuggestions.length ? (
+                        <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-[22px] border border-[var(--brand-line)] bg-white shadow-[0_20px_40px_rgba(25,27,28,0.12)]">
+                          <div className="max-h-64 overflow-y-auto p-2">
+                            {filteredEditorStoneSuggestions.map((row) => (
+                              <button
+                                key={`stone-suggestion-${row.id}`}
+                                type="button"
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  const nextBrand = row.brand_name || editorForm.brand_name || "";
+                                  const nextStoneName = stoneNameWithoutBrandPrefix(
+                                    row.display_name || row.stone_name || "",
+                                    nextBrand,
+                                  );
+                                  if (row.brand_name) {
+                                    updateEditorField("brand_name", row.brand_name);
+                                  }
+                                  updateEditorField("name", nextStoneName);
+                                  setEditorStoneMenuOpen(false);
+                                }}
+                                className="flex w-full items-start justify-between gap-3 rounded-[16px] px-3 py-2.5 text-left transition hover:bg-[var(--brand-white)]"
+                              >
+                                <span className="min-w-0">
+                                  <span className="block truncate text-sm font-semibold text-[var(--brand-ink)]">
+                                    {row.display_name || row.stone_name || "Unnamed"}
+                                  </span>
+                                  {row.brand_name ? (
+                                    <span className="mt-0.5 block truncate text-[11px] font-medium uppercase tracking-[0.12em] text-[rgba(35,35,35,0.54)]">
+                                      {row.brand_name}
+                                    </span>
+                                  ) : null}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                   </label>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-2">
                     Finish
-                    <SelectField
+                    <InAppSelect
                       value={String(editorForm.finish_id ?? "")}
                       onChange={(event) => updateEditorField("finish_id", event.target.value)}
-                      wrapperClassName="relative mt-2"
-                    >
-                      <option value="">Select finish</option>
-                      {lookups.finishes.map((row) => (
-                        <option key={row.id} value={String(row.id)}>{row.name}</option>
-                      ))}
-                    </SelectField>
+                      wrapperClassName="mt-2"
+                      placeholder="Select finish"
+                      options={[
+                        { value: "", label: "Select finish" },
+                        ...lookups.finishes.map((row) => ({ value: String(row.id), label: row.name })),
+                      ]}
+                    />
                   </label>
-                </div>
-              </section>
-              <section className="rounded-[26px] border border-[#eadfd7] bg-white p-5 shadow-[0_12px_28px_rgba(44,29,18,0.05)] md:col-span-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#9c7355]">Dimensions</p>
-                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-2">
+                    Thickness
+                    <InAppSelect
+                      value={String(editorForm.thickness_id ?? "")}
+                      onChange={(event) => updateEditorField("thickness_id", event.target.value)}
+                      wrapperClassName="mt-2"
+                      placeholder="Select thickness"
+                      options={[
+                        { value: "", label: "Select thickness" },
+                        ...lookups.thicknesses.map((row) => ({ value: String(row.id), label: row.name })),
+                      ]}
+                    />
+                  </label>
+                  <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-2">
+                    Price / sqft
+                    <div className="relative mt-2">
+                      <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-[var(--brand-orange)]">
+                        $
+                      </span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={editorForm.price_per_sqft}
+                        onChange={(event) => updateEditorField("price_per_sqft", event.target.value)}
+                        placeholder="0.00"
+                        className="h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white pl-8 pr-4 text-sm font-semibold text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                      />
+                    </div>
+                  </label>
+                  <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-2">
                     Width
                     <input
                       type="text"
@@ -2574,10 +3357,10 @@ export default function PrivateWorkspaceClient() {
                       value={editorForm.width}
                       onChange={(event) => updateEditorField("width", event.target.value)}
                       placeholder='36.5 or 36 1/2'
-                      className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                     />
                   </label>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-2">
                     Height
                     <input
                       type="text"
@@ -2585,20 +3368,22 @@ export default function PrivateWorkspaceClient() {
                       value={editorForm.height}
                       onChange={(event) => updateEditorField("height", event.target.value)}
                       placeholder='24.25 or 24 1/4'
-                      className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                     />
                   </label>
-                  <label className="inline-flex w-fit items-center gap-2 rounded-xl border border-[#d8c7b8] bg-[#fffaf6] px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-[#6d584b]">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(editorForm.l_shape)}
-                      onChange={(event) => updateEditorField("l_shape", event.target.checked)}
-                    />
-                    L-Shape
-                  </label>
+                  <div className="flex items-end xl:col-span-2">
+                    <label className="inline-flex w-fit items-center gap-2 rounded-xl border border-[var(--brand-line)] bg-[var(--brand-white)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-[rgba(35,35,35,0.72)]">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(editorForm.l_shape)}
+                        onChange={(event) => updateEditorField("l_shape", event.target.checked)}
+                      />
+                      L-Shape
+                    </label>
+                  </div>
                   {editorForm.l_shape ? (
                     <>
-                      <label className="block text-sm font-medium text-gray-700">
+                      <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-2">
                         L Width
                         <input
                           type="text"
@@ -2606,10 +3391,10 @@ export default function PrivateWorkspaceClient() {
                           value={editorForm.l_width}
                           onChange={(event) => updateEditorField("l_width", event.target.value)}
                           placeholder='18.5 or 18 1/2'
-                          className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                          className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                         />
                       </label>
-                      <label className="block text-sm font-medium text-gray-700">
+                      <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-2">
                         L Height
                         <input
                           type="text"
@@ -2617,54 +3402,15 @@ export default function PrivateWorkspaceClient() {
                           value={editorForm.l_height}
                           onChange={(event) => updateEditorField("l_height", event.target.value)}
                           placeholder='18.5 or 18 1/2'
-                          className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                          className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                         />
                       </label>
                     </>
                   ) : null}
                 </div>
               </section>
-              <section className="rounded-[26px] border border-[#eadfd7] bg-white p-5 shadow-[0_12px_28px_rgba(44,29,18,0.05)] md:col-span-2">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#9c7355]">Colors</p>
-                  </div>
-                </div>
-                <div className="mt-4 rounded-[22px] border border-[#eadfd7] bg-[#fffaf6] p-4">
-                  <div className="flex flex-wrap gap-2">
-                    {lookups.colors.map((row) => {
-                      const selected = colorListIncludes(editorForm.colors, row.name);
-                      return (
-                        <button
-                          key={`color-${row.id}`}
-                          type="button"
-                          onClick={() => toggleEditorColor(row.name)}
-                          className={`inline-flex h-10 w-10 items-center justify-center rounded-full border transition ${
-                            selected
-                              ? "border-[#d89462] ring-4 ring-[#f5d6bd] shadow-sm"
-                              : "border-[#e4d7cb] hover:border-[#d9c2af] hover:scale-[1.03]"
-                          }`}
-                          style={colorSwatchStyle(row.name)}
-                          title={row.name}
-                          aria-label={row.name}
-                          aria-pressed={selected}
-                        >
-                          {selected ? (
-                            <span className="h-3.5 w-3.5 rounded-full border border-white/75 bg-white/90 shadow-sm" />
-                          ) : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </section>
-              <datalist id="stone-product-name-suggestions">
-                {editorStoneSuggestions.map((row) => (
-                  <option key={`stone-product-${row.id}`} value={row.display_name || row.stone_name || ""} />
-                ))}
-              </datalist>
-              <div className="md:col-span-2 flex flex-wrap gap-3 pt-2">
-                <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-[#152238] px-6 text-sm font-semibold text-white transition hover:bg-[#f08b49]">
+              <div className="md:col-span-2 flex flex-wrap justify-center gap-3 pt-2">
+                <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-6 text-sm font-semibold text-white transition hover:bg-[var(--brand-orange)]">
                   {editorMode === "create" ? "Create Remnant" : "Save Changes"}
                 </button>
                 {editorMode === "edit" ? (
@@ -2672,7 +3418,7 @@ export default function PrivateWorkspaceClient() {
                     Archive
                   </button>
                 ) : null}
-                <button type="button" onClick={closeEditor} className="inline-flex h-12 items-center justify-center rounded-2xl border border-gray-300 bg-white px-6 text-sm font-semibold text-gray-700 transition hover:bg-gray-50">
+                <button type="button" onClick={closeEditor} className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-6 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
                   Cancel
                 </button>
               </div>
@@ -2683,19 +3429,18 @@ export default function PrivateWorkspaceClient() {
 
       {cropModal ? (
         <div className="fixed inset-0 z-[73] overflow-y-auto bg-black/60 px-4 py-8">
-          <div className="mx-auto max-w-6xl overflow-hidden rounded-[32px] border border-white/20 bg-[#fff9f4] shadow-[0_30px_80px_rgba(0,0,0,0.28)]">
-            <div className="flex items-center justify-between border-b border-[#eadfd7] bg-[linear-gradient(135deg,#fffaf6_0%,#f7efe8_100%)] px-6 py-5">
+          <div className="mx-auto max-w-6xl overflow-hidden rounded-[32px] border border-[var(--brand-line)] bg-white shadow-[0_30px_80px_rgba(0,0,0,0.28)]">
+            <div className="flex items-center justify-between border-b border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,#f7f7f7_100%)] px-6 py-5">
               <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-[#8a6a54]">Crop Workspace</p>
-                <h2 className="text-2xl font-semibold text-[#2c211c]">Free Crop</h2>
-                <p className="mt-1 text-sm text-[#7d6759]">Drag the image, move the frame, resize the corners, or rotate before saving.</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Crop Workspace</p>
+                <h2 className="font-display text-2xl font-semibold text-[var(--brand-ink)]">Free Crop</h2>
               </div>
-              <button type="button" onClick={closeCropEditor} className="h-10 w-10 rounded-full border border-gray-300 text-xl transition-colors active:bg-gray-200">
+              <button type="button" onClick={closeCropEditor} className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
                 {"\u00D7"}
               </button>
             </div>
             <div className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="overflow-hidden rounded-[28px] border border-[#eadfd7] bg-[linear-gradient(180deg,#f4eadf_0%,#efe3d6_100%)] p-4 shadow-inner">
+              <div className="overflow-hidden rounded-[28px] border border-[var(--brand-line)] bg-[linear-gradient(180deg,#ffffff_0%,var(--brand-white)_100%)] p-4 shadow-inner">
                 <canvas
                   ref={cropCanvasRef}
                   width={CROP_CANVAS_WIDTH}
@@ -2704,18 +3449,18 @@ export default function PrivateWorkspaceClient() {
                   onPointerMove={handleCropPointerMove}
                   onPointerUp={endCropPointerDrag}
                   onPointerLeave={endCropPointerDrag}
-                  className="h-auto w-full cursor-grab rounded-[24px] border border-white/80 bg-[#efe4d8] shadow-[0_18px_40px_rgba(44,29,18,0.08)]"
+                  className="h-auto w-full cursor-grab rounded-[24px] border border-[var(--brand-line)] bg-white shadow-[0_18px_40px_rgba(25,27,28,0.08)]"
                 />
               </div>
-              <div className="space-y-4 rounded-[28px] border border-[#eadfd7] bg-white p-5 shadow-[0_18px_40px_rgba(44,29,18,0.08)]">
+              <div className="space-y-4 rounded-[28px] border border-[var(--brand-line)] bg-white p-5 shadow-[0_18px_40px_rgba(25,27,28,0.08)]">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#9c7355]">Controls</p>
-                  <h3 className="mt-2 text-xl font-semibold text-[#2c211c]">Rotate and fine-tune</h3>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Controls</p>
+                  <h3 className="font-display mt-2 text-xl font-semibold text-[var(--brand-ink)]">Rotate and fine-tune</h3>
                 </div>
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between rounded-2xl border border-[#eadfd7] bg-[#fff9f4] px-4 py-3">
-                    <span className="text-sm font-medium text-[#6f594a]">Rotation</span>
-                    <span className="rounded-full border border-[#e7d4c4] bg-white px-3 py-1 text-sm font-semibold text-[#6f594a]">
+                  <div className="flex items-center justify-between rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-white)] px-4 py-3">
+                    <span className="text-sm font-medium text-[rgba(35,35,35,0.72)]">Rotation</span>
+                    <span className="rounded-full border border-[var(--brand-line)] bg-white px-3 py-1 text-sm font-semibold text-[var(--brand-ink)]">
                       {formatCropRotationLabel((cropModal.rotationBase || 0) + (cropModal.rotation || 0))}
                     </span>
                   </div>
@@ -2723,19 +3468,19 @@ export default function PrivateWorkspaceClient() {
                     <button
                       type="button"
                       onClick={() => updateCropModal((current) => ({ ...current, rotationBase: current.rotationBase - 90 }))}
-                      className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm font-semibold text-[#56483f] transition hover:bg-[#fff7f1]"
+                      className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
                     >
                       Rotate Left
                     </button>
                     <button
                       type="button"
                       onClick={() => updateCropModal((current) => ({ ...current, rotationBase: current.rotationBase + 90 }))}
-                      className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm font-semibold text-[#56483f] transition hover:bg-[#fff7f1]"
+                      className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
                     >
                       Rotate Right
                     </button>
                   </div>
-                  <label className="block text-sm font-medium text-[#6f594a]">
+                  <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)]">
                     Fine rotation
                     <input
                       type="range"
@@ -2743,17 +3488,9 @@ export default function PrivateWorkspaceClient() {
                       max="45"
                       value={cropModal.rotation}
                       onChange={(event) => updateCropModal((current) => ({ ...current, rotation: Number(event.target.value || 0) }))}
-                      className="mt-3 w-full accent-[#f08b49]"
+                      className="mt-3 w-full accent-[var(--brand-orange)]"
                     />
                   </label>
-                </div>
-                <div className="rounded-2xl border border-[#eadfd7] bg-[#fff9f4] p-4 text-sm leading-6 text-[#6d584b]">
-                  Move image:
-                  Click and drag outside the crop frame.
-                  Move crop:
-                  Drag inside the frame.
-                  Resize:
-                  Drag one of the orange corner handles.
                 </div>
                 <div className="flex flex-wrap gap-3">
                   <button
@@ -2767,14 +3504,14 @@ export default function PrivateWorkspaceClient() {
                       rotation: 0,
                       cropRect: { ...DEFAULT_CROP_RECT },
                     }))}
-                    className="inline-flex h-11 items-center justify-center rounded-2xl border border-[#d8c7b8] bg-white px-5 text-sm font-semibold text-[#56483f] transition hover:bg-[#fff7f1]"
+                    className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-5 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
                   >
                     Reset
                   </button>
                   <button
                     type="button"
                     onClick={saveCropEditor}
-                    className="inline-flex h-11 items-center justify-center rounded-2xl bg-[#152238] px-5 text-sm font-semibold text-white transition hover:bg-[#f08b49]"
+                    className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--brand-orange)]"
                   >
                     Save Crop
                   </button>
@@ -2787,62 +3524,39 @@ export default function PrivateWorkspaceClient() {
 
       {holdEditor ? (
         <div className="fixed inset-0 z-[72] overflow-y-auto bg-black/50 px-4 py-8">
-          <div className="mx-auto max-w-4xl overflow-hidden rounded-[32px] border border-white/75 bg-white shadow-[0_24px_70px_rgba(44,29,18,0.10)]">
-            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#eadfd7] bg-[linear-gradient(135deg,#fffaf6_0%,#f7efe8_100%)] px-6 py-5">
+          <div className="mx-auto max-w-6xl overflow-hidden rounded-[32px] border border-[var(--brand-line)] bg-white shadow-[0_24px_70px_rgba(25,27,28,0.14)]">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,#f7f7f7_100%)] px-6 py-5">
               <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-[#8a6a54]">Hold</p>
-                <h2 className="text-2xl font-semibold text-[#2c211c]">Manage Hold</h2>
-                <p className="mt-1 text-sm text-[#7d6759]">{holdEditor.remnantLabel}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Hold</p>
+                <h2 className="font-display text-2xl font-semibold text-[var(--brand-ink)]">Manage Hold</h2>
               </div>
-              <button type="button" onClick={closeHoldEditor} className="h-10 w-10 rounded-full border border-gray-300 text-xl transition-colors active:bg-gray-200">
+              <button type="button" onClick={closeHoldEditor} className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
                 {"\u00D7"}
               </button>
             </div>
             <form onSubmit={saveHoldEditor} className="p-6">
-              <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
-                <div className="space-y-3">
-                  <div className="overflow-hidden rounded-[24px] border border-[#eadfd7] bg-[#f6ede5]">
-                    {imageSrc(holdEditor.remnant || {}) ? (
-                      <img
-                        src={imageSrc(holdEditor.remnant || {})}
-                        alt={`Remnant ${displayRemnantId(holdEditor.remnant || {})}`}
-                        className="h-52 w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-52 items-center justify-center text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
-                        No Image
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(420px,1fr)]">
+                <div>
+                  <PrivateRemnantSummaryBlock
+                    remnant={holdEditor.remnant || {}}
+                    onOpenImage={() => imageSrc(holdEditor.remnant || {}) && openImageViewer(holdEditor.remnant || {})}
+                  />
+                </div>
+                <div className="rounded-[28px] border border-[var(--brand-line)] bg-white p-5 shadow-[0_16px_38px_rgba(25,27,28,0.06)]">
+                  <div className="rounded-[24px] border border-[var(--brand-line)] bg-[linear-gradient(180deg,#ffffff_0%,#fafafa_100%)] p-4 shadow-[0_10px_24px_rgba(25,27,28,0.04)]">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Hold Details</p>
+                        <p className="mt-1 text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_70%,white)]">
+                          {holdEditor.summary}
+                        </p>
                       </div>
-                    )}
-                  </div>
-                  <div className="rounded-[24px] border border-[#eadfd7] bg-[#fffaf6] p-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center rounded-full bg-[#f5ede6] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#956746]">
-                        ID #{displayRemnantId(holdEditor.remnant || {})}
-                      </span>
-                      <span className="inline-flex items-center rounded-full bg-[#f5ede6] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#956746]">
-                        {(holdEditor.remnant || {}).material_name || "Unknown"}
+                      <span className="rounded-full border border-[var(--brand-line)] bg-[var(--brand-white)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--brand-ink)]">
+                        {holdEditor.holdId ? "Existing Hold" : "New Hold"}
                       </span>
                     </div>
-                    <h3 className="mt-3 text-lg font-semibold text-[#2d2623]">
-                      {String(holdEditor.remnant?.name || "").trim() || "Unnamed"}
-                    </h3>
-                    <p className="mt-1 text-sm text-[#7d6759]">
-                      {compactSizeText(holdEditor.remnant || {})}
-                    </p>
                   </div>
-                </div>
-
-                <div>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">Hold Details</p>
-                    <span className="rounded-full bg-[#f5ede6] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#956746]">
-                      {holdEditor.holdId ? "Existing Hold" : "New Hold"}
-                    </span>
-                  </div>
-                  <div className="mt-3 rounded-[24px] border border-[#eadfd7] bg-[#fbf5ef] px-4 py-4 text-sm text-[#6f594a]">
-                    {holdEditor.summary}
-                  </div>
-                  <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+                  <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
                     All holds expire automatically after 7 days.
                   </p>
                   {holdEditor.locked_to_other_owner ? (
@@ -2851,23 +3565,16 @@ export default function PrivateWorkspaceClient() {
                     </div>
                   ) : null}
 
-                  <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
-                    {holdEditor.self_only ? (
-                      <label className="block text-sm font-medium text-gray-700 lg:col-span-2">
-                        Sales Rep
-                        <div className="mt-1 flex min-h-12 items-center rounded-2xl border border-gray-300 bg-[#f7f1ea] px-4 py-3 text-sm text-[#4d3d34]">
-                          {profileDisplayName(profile)}
-                        </div>
-                      </label>
-                    ) : (
-                      <label className="block text-sm font-medium text-gray-700 lg:col-span-2">
+                  <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    {holdEditor.self_only ? null : (
+                      <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] lg:col-span-2">
                         Sales Rep
                         <SelectField
                           value={holdEditor.owner_user_id}
                           onChange={(event) => updateHoldField("owner_user_id", event.target.value)}
                           disabled={salesReps.length === 0}
                           wrapperClassName="relative mt-1"
-                          className="border-gray-300"
+                          className=""
                         >
                           <option value="">
                             {salesReps.length === 0 ? "No active sales reps available" : "Select sales rep"}
@@ -2878,7 +3585,7 @@ export default function PrivateWorkspaceClient() {
                         </SelectField>
                       </label>
                     )}
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)]">
                       Customer Name
                       <input
                         type="text"
@@ -2887,14 +3594,14 @@ export default function PrivateWorkspaceClient() {
                         required
                         disabled={holdEditor.locked_to_other_owner}
                         placeholder="Customer name"
-                        className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
+                        className="mt-1 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 py-3 text-sm text-[var(--brand-ink)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                       />
                     </label>
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)]">
                       Job Number
-                      <div className="mt-1 flex overflow-hidden rounded-2xl border border-gray-300 bg-white">
-                        <span className="inline-flex items-center border-r border-gray-300 bg-[#f7f1ea] px-4 text-sm font-semibold text-[#6d584b]">
-                          J
+                      <div className="mt-1 flex overflow-hidden rounded-2xl border border-[var(--brand-line)] bg-white">
+                        <span className="inline-flex items-center border-r border-[var(--brand-line)] bg-[var(--brand-white)] px-4 text-sm font-semibold text-[var(--brand-orange)]">
+                          {jobNumberPrefixForRemnant(holdEditor.remnant)}
                         </span>
                         <input
                           type="text"
@@ -2903,25 +3610,25 @@ export default function PrivateWorkspaceClient() {
                           required
                           disabled={holdEditor.locked_to_other_owner}
                           placeholder="1234"
-                          className="min-w-0 flex-1 bg-white px-4 py-3 text-sm outline-none"
+                          className="min-w-0 flex-1 bg-white px-4 py-3 text-sm text-[var(--brand-ink)] outline-none"
                         />
                       </div>
                     </label>
-                    <label className="block text-sm font-medium text-gray-700 lg:col-span-2">
+                    <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] lg:col-span-2">
                       Hold Notes
                       <textarea
                         rows="4"
                         value={holdEditor.notes}
                         onChange={(event) => updateHoldField("notes", event.target.value)}
                         disabled={holdEditor.locked_to_other_owner}
-                        className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
+                        className="mt-1 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 py-3 text-sm text-[var(--brand-ink)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                         placeholder="Optional notes for the team"
                       />
                     </label>
                   </div>
 
-                  <div className="mt-5 flex flex-wrap gap-3">
-                    <button type="submit" disabled={holdEditor.locked_to_other_owner} className="inline-flex h-12 items-center justify-center rounded-2xl border border-amber-200 bg-amber-100 px-6 text-sm font-semibold text-amber-900 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-50">
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    <button type="submit" disabled={holdEditor.locked_to_other_owner} className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--brand-orange)] bg-[rgba(247,134,57,0.12)] px-6 text-sm font-semibold text-[var(--brand-orange-deep)] transition hover:bg-[rgba(247,134,57,0.2)] disabled:cursor-not-allowed disabled:opacity-50">
                       Save Hold
                     </button>
                     {holdEditor.holdId ? (
@@ -2944,7 +3651,7 @@ export default function PrivateWorkspaceClient() {
                         Sell
                       </button>
                     ) : null}
-                    <button type="button" onClick={closeHoldEditor} className="inline-flex h-12 items-center justify-center rounded-2xl border border-[#d8c7b8] bg-white px-6 text-sm font-semibold text-[#6d584b] transition hover:border-[#E78B4B]">
+                    <button type="button" onClick={closeHoldEditor} className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-6 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
                       Cancel
                     </button>
                   </div>
@@ -2957,28 +3664,39 @@ export default function PrivateWorkspaceClient() {
 
       {soldEditor ? (
         <div className="fixed inset-0 z-[72] overflow-y-auto bg-black/50 px-4 py-8">
-          <div className="mx-auto max-w-2xl overflow-hidden rounded-[32px] border border-white/75 bg-white shadow-[0_24px_70px_rgba(44,29,18,0.10)]">
-            <div className="flex items-center justify-between border-b border-[#eadfd7] bg-[linear-gradient(135deg,#fffaf6_0%,#f7efe8_100%)] px-6 py-5">
+          <div className="mx-auto max-w-6xl overflow-hidden rounded-[32px] border border-[var(--brand-line)] bg-white shadow-[0_24px_70px_rgba(25,27,28,0.14)]">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,#f7f7f7_100%)] px-6 py-5">
               <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-[#8a6a54]">Sold Workspace</p>
-                <h2 className="text-2xl font-semibold text-[#2c211c]">Mark as sold</h2>
-                <p className="mt-1 text-sm text-[#7d6759]">{soldEditor.remnantLabel}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Sold</p>
+                <h2 className="font-display text-2xl font-semibold text-[var(--brand-ink)]">Mark as Sold</h2>
               </div>
-              <button type="button" onClick={closeSoldEditor} className="h-10 w-10 rounded-full border border-gray-300 text-xl transition-colors active:bg-gray-200">
+              <button
+                type="button"
+                onClick={closeSoldEditor}
+                className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+              >
                 {"\u00D7"}
               </button>
             </div>
             <form onSubmit={saveSoldEditor} className="p-6">
-              <div className="grid grid-cols-1 gap-3">
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(420px,1fr)]">
+                <div>
+                  <PrivateRemnantSummaryBlock
+                    remnant={soldEditor.remnant || {}}
+                    onOpenImage={() => imageSrc(soldEditor.remnant || {}) && openImageViewer(soldEditor.remnant || {})}
+                  />
+                </div>
+                <div className="rounded-[28px] border border-[var(--brand-line)] bg-white p-5 shadow-[0_16px_38px_rgba(25,27,28,0.06)]">
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 {soldEditor.self_only ? (
-                  <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] lg:col-span-2">
                     Sales Rep
-                    <div className="mt-1 flex min-h-12 items-center rounded-2xl border border-gray-300 bg-[#f7f1ea] px-4 py-3 text-sm text-[#4d3d34]">
+                    <div className="mt-1 flex min-h-12 items-center rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-white)] px-4 py-3 text-sm text-[var(--brand-ink)]">
                       {profileDisplayName(profile)}
                     </div>
                   </label>
                 ) : (
-                  <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] lg:col-span-2">
                     Sales Rep
                     <SelectField
                       value={soldEditor.sold_by_user_id}
@@ -2986,7 +3704,7 @@ export default function PrivateWorkspaceClient() {
                       required
                       disabled={salesReps.length === 0}
                       wrapperClassName="relative mt-1"
-                      className="border-gray-300"
+                      className=""
                     >
                       <option value="">
                         {salesReps.length === 0 ? "No active sales reps available" : "Select sales rep"}
@@ -2997,11 +3715,11 @@ export default function PrivateWorkspaceClient() {
                     </SelectField>
                   </label>
                 )}
-                <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)]">
                   Job Number
-                  <div className="mt-1 flex overflow-hidden rounded-2xl border border-gray-300 bg-white">
-                    <span className="inline-flex items-center border-r border-gray-300 bg-[#f7f1ea] px-4 text-sm font-semibold text-[#6d584b]">
-                      J
+                  <div className="mt-1 flex overflow-hidden rounded-2xl border border-[var(--brand-line)] bg-white">
+                    <span className="inline-flex items-center border-r border-[var(--brand-line)] bg-[var(--brand-white)] px-4 text-sm font-semibold text-[var(--brand-orange)]">
+                      {jobNumberPrefixForRemnant(soldEditor.remnant)}
                     </span>
                     <input
                       type="text"
@@ -3009,28 +3727,30 @@ export default function PrivateWorkspaceClient() {
                       onChange={(event) => updateSoldField("job_number", normalizeJobNumberInput(event.target.value))}
                       required
                       placeholder="1234"
-                      className="min-w-0 flex-1 bg-white px-4 py-3 text-sm outline-none"
+                      className="min-w-0 flex-1 bg-white px-4 py-3 text-sm text-[var(--brand-ink)] outline-none"
                     />
                   </div>
                 </label>
-                <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] lg:col-span-2">
                   Sold Notes
                   <textarea
-                    rows="3"
+                    rows="4"
                     value={soldEditor.notes}
                     onChange={(event) => updateSoldField("notes", event.target.value)}
-                    className="mt-1 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm"
+                    className="mt-1 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 py-3 text-sm text-[var(--brand-ink)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                     placeholder="Optional notes"
                   />
                 </label>
               </div>
               <div className="mt-5 flex flex-wrap gap-3">
-                <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-200 bg-rose-100 px-6 text-sm font-semibold uppercase tracking-[0.08em] text-rose-800 transition hover:bg-rose-200">
-                  Save Sold
+                    <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-200 bg-rose-100 px-6 text-sm font-semibold text-rose-800 transition hover:bg-rose-200">
+                  Save Sale
                 </button>
-                <button type="button" onClick={closeSoldEditor} className="inline-flex h-12 items-center justify-center rounded-2xl border border-[#d8c7b8] bg-white px-6 text-sm font-semibold text-[#6d584b] transition hover:border-[#E78B4B]">
+                    <button type="button" onClick={closeSoldEditor} className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-6 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
                   Cancel
                 </button>
+              </div>
+                </div>
               </div>
             </form>
           </div>

@@ -22,7 +22,7 @@ export default function AuthShell({
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#9c7355]">
               {eyebrow}
             </p>
-            <h1 className="mt-4 text-[2.2rem] font-semibold tracking-tight text-[#241c18] sm:text-[2.6rem] lg:text-[3.1rem] xl:text-[3.35rem]">
+            <h1 className="font-display mt-4 text-[2.2rem] font-semibold tracking-tight text-[#241c18] sm:text-[2.6rem] lg:text-[3.1rem] xl:text-[3.35rem]">
               {title}
             </h1>
             <p className="mt-5 max-w-2xl text-[1.02rem] leading-8 text-[#6d584b]">
@@ -35,7 +35,7 @@ export default function AuthShell({
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#9c7355]">
                 {cardEyebrow}
               </p>
-              <h2 className="mt-3 text-3xl font-semibold text-[#241c18]">
+              <h2 className="font-display mt-3 text-3xl font-semibold text-[#241c18]">
                 {cardTitle}
               </h2>
               {cardDescription ? (

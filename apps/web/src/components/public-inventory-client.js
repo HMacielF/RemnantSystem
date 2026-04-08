@@ -5,6 +5,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useBodyScrollLock from "@/components/use-body-scroll-lock";
 
+function useDebouncedValue(value, delayMs = 250) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedValue(value);
+    }, delayMs);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [delayMs, value]);
+
+  return debouncedValue;
+}
+
 function imageSrc(remnant) {
   return remnant.image || remnant.source_image_url || "";
 }
@@ -45,6 +59,41 @@ function cardSizeText(remnant) {
   return `${remnant.width}" x ${remnant.height}"`;
 }
 
+function CardSizeValue({ remnant }) {
+  if (remnant.l_shape) {
+    return (
+      <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        <span className="whitespace-nowrap">{`${remnant.width}" x ${remnant.height}"`}</span>
+        <span aria-hidden="true" className="text-[var(--brand-orange)]">+</span>
+        <span className="whitespace-nowrap">{`${remnant.l_width}" x ${remnant.l_height}"`}</span>
+      </span>
+    );
+  }
+
+  return <span className="whitespace-nowrap">{`${remnant.width}" x ${remnant.height}"`}</span>;
+}
+
+function publicCardMetricLayout(remnant) {
+  const hasThickness = Boolean(thicknessText(remnant));
+  const hasFinish = Boolean(finishText(remnant));
+  if (hasThickness && hasFinish) {
+    return {
+      grid: "grid-cols-2 md:grid-cols-3",
+      sizeTile: "col-span-2 md:col-span-1",
+    };
+  }
+  if (hasThickness || hasFinish) {
+    return {
+      grid: "grid-cols-2",
+      sizeTile: "",
+    };
+  }
+  return {
+    grid: "grid-cols-1",
+    sizeTile: "",
+  };
+}
+
 function cardTitleText(remnant) {
   const material = String(remnant.material_name || remnant.material || "").trim();
   const stone = String(remnant.name || "").trim();
@@ -74,6 +123,14 @@ function companyText(remnant) {
 
 function finishText(remnant) {
   return String(remnant?.finish_name || "").trim();
+}
+
+function remnantMetricEntries(remnant) {
+  return [
+    { label: "Size", value: cardSizeText(remnant) },
+    ...(thicknessText(remnant) ? [{ label: "Thick", value: thicknessText(remnant), title: "Thickness" }] : []),
+    ...(finishText(remnant) ? [{ label: "Finish", value: finishText(remnant) }] : []),
+  ];
 }
 
 function publicCardHeading(remnant) {
@@ -121,7 +178,7 @@ function colorSwatchStyle(colorName) {
     green: { backgroundColor: "#758c75" },
     navy: { backgroundColor: "#2f4a6d" },
     taupe: { backgroundColor: "#a9927b" },
-    white: { backgroundColor: "#f4f1ea" },
+    white: { backgroundColor: "#ffffff" },
   };
   return palette[normalized] || { backgroundColor: "#d6ccc2" };
 }
@@ -131,14 +188,14 @@ function SelectField({ wrapperClassName = "relative mt-2", className = "", child
     <div className={wrapperClassName}>
       <select
         {...props}
-        className={`h-12 w-full appearance-none rounded-2xl border border-[#d8c7b8] bg-[linear-gradient(180deg,#ffffff_0%,#fbf6f1_100%)] px-4 pr-10 text-sm font-medium text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10 ${className}`}
+        className={`h-12 w-full appearance-none rounded-2xl border border-[var(--brand-line)] bg-white px-4 pr-10 text-sm font-medium text-[var(--brand-ink)] shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] ${className}`}
       >
         {children}
       </select>
       <svg
         aria-hidden="true"
         viewBox="0 0 20 20"
-        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#a17b63]"
+        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--brand-orange)]"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.8"
@@ -176,6 +233,16 @@ function currentFiltersFromSearch(searchParams) {
   };
 }
 
+function emptyFilters() {
+  return {
+    materials: [],
+    stone: "",
+    minWidth: "",
+    minHeight: "",
+    status: "",
+  };
+}
+
 async function apiFetch(path, options) {
   const res = await fetch(path, options);
   if (!res.ok) {
@@ -206,17 +273,17 @@ function buildSearchQuery(filters) {
 function PublicInventorySkeletonCard() {
   return (
     <div className="overflow-hidden rounded-[24px] border border-white/80 bg-white/92 shadow-[0_14px_30px_rgba(58,37,22,0.07)] sm:rounded-[26px]">
-      <div className="relative aspect-[4/3] overflow-hidden bg-[linear-gradient(180deg,#f7efe6_0%,#efe4d7_100%)]">
-        <div className="absolute inset-0 animate-pulse bg-[linear-gradient(90deg,rgba(243,235,228,0.92),rgba(234,223,211,0.88),rgba(243,235,228,0.92))]" />
+      <div className="relative aspect-[4/3] overflow-hidden bg-[linear-gradient(180deg,var(--brand-white)_0%,rgba(255,255,255,0.92)_100%)]">
+        <div className="absolute inset-0 animate-pulse bg-[linear-gradient(90deg,rgba(242,242,242,0.96),rgba(255,255,255,0.88),rgba(242,242,242,0.96))]" />
         <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
           <div className="h-6 w-20 animate-pulse rounded-full bg-white/75" />
           <div className="h-6 w-24 animate-pulse rounded-full bg-white/70" />
         </div>
       </div>
       <div className="space-y-2.5 p-3.5 sm:p-4">
-        <div className="rounded-[22px] bg-[#fbf8f4] px-3 py-3">
-          <div className="h-4 w-3/5 animate-pulse rounded-full bg-[#eaded3]" />
-          <div className="mt-3 h-4 w-2/3 animate-pulse rounded-full bg-[#f0e6dd]" />
+        <div className="rounded-[22px] bg-[var(--brand-white)] px-3 py-3">
+          <div className="h-4 w-3/5 animate-pulse rounded-full bg-[rgba(35,35,35,0.10)]" />
+          <div className="mt-3 h-4 w-2/3 animate-pulse rounded-full bg-[rgba(35,35,35,0.08)]" />
         </div>
       </div>
     </div>
@@ -228,11 +295,8 @@ export default function PublicInventoryClient() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchKey = searchParams.toString();
-  const initialFilters = useMemo(
-    () => currentFiltersFromSearch(new URLSearchParams(searchKey)),
-    [searchKey],
-  );
-  const [filters, setFilters] = useState(initialFilters);
+  const [filters, setFilters] = useState(() => emptyFilters());
+  const debouncedFilters = useDebouncedValue(filters, 250);
   const [remnants, setRemnants] = useState([]);
   const [salesReps, setSalesReps] = useState([]);
   const [materialOptions, setMaterialOptions] = useState([]);
@@ -241,6 +305,7 @@ export default function PublicInventoryClient() {
   const [error, setError] = useState("");
   const [selectedImageIndex, setSelectedImageIndex] = useState(null);
   const [holdRemnant, setHoldRemnant] = useState(null);
+  const [mobileFilterPinned, setMobileFilterPinned] = useState(false);
   const [holdForm, setHoldForm] = useState({
     requester_name: "",
     requester_email: "",
@@ -253,6 +318,9 @@ export default function PublicInventoryClient() {
   const abortRef = useRef(null);
   const enrichmentRef = useRef(null);
   const lastPathnameRef = useRef(pathname);
+  const materialRailRef = useRef(null);
+  const materialRailScrollRef = useRef(0);
+  const imageSwipeStartRef = useRef(null);
 
   useEffect(() => {
     setFilters(currentFiltersFromSearch(new URLSearchParams(searchKey)));
@@ -269,7 +337,7 @@ export default function PublicInventoryClient() {
   }, [notice]);
 
   useEffect(() => {
-    const params = buildSearchQuery(filters);
+    const params = buildSearchQuery(debouncedFilters);
     const nextUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
     const currentUrl = searchKey ? `${pathname}?${searchKey}` : pathname;
     if (lastPathnameRef.current !== pathname) {
@@ -278,7 +346,7 @@ export default function PublicInventoryClient() {
     }
     if (nextUrl === currentUrl) return;
     router.replace(nextUrl, { scroll: false });
-  }, [filters, pathname, router, searchKey]);
+  }, [debouncedFilters, pathname, router, searchKey]);
 
   useEffect(() => {
     let mounted = true;
@@ -320,7 +388,7 @@ export default function PublicInventoryClient() {
       try {
         setLoading(true);
         setError("");
-        const params = buildSearchQuery(filters);
+        const params = buildSearchQuery(debouncedFilters);
         params.set("enrich", "0");
         const rows = await apiFetch(`/api/public/remnants?${params.toString()}`, {
           signal: controller.signal,
@@ -368,7 +436,7 @@ export default function PublicInventoryClient() {
     return () => {
       controller.abort();
     };
-  }, [filters, lookupsLoaded]);
+  }, [debouncedFilters, lookupsLoaded]);
 
   function toggleMaterialFilter(material) {
     setFilters((current) => {
@@ -462,8 +530,37 @@ export default function PublicInventoryClient() {
       ? modalImageItems[selectedImageIndex]
       : null;
   const isModalOpen = Boolean(selectedImageRemnant || holdRemnant);
+  const activeFilterCount =
+    filters.materials.length +
+    (filters.stone.trim() ? 1 : 0) +
+    (filters.minWidth.trim() ? 1 : 0) +
+    (filters.minHeight.trim() ? 1 : 0) +
+    (filters.status.trim() ? 1 : 0);
 
   useBodyScrollLock(isModalOpen);
+
+  useEffect(() => {
+    const rail = materialRailRef.current;
+    if (!rail) return;
+    rail.scrollLeft = materialRailScrollRef.current;
+  }, [materialOptions, filters.materials]);
+
+  useEffect(() => {
+    function syncMobileFilterPinned() {
+      const filterMenu = document.getElementById("filter_menu");
+      if (!filterMenu) return;
+      const rect = filterMenu.getBoundingClientRect();
+      setMobileFilterPinned(window.innerWidth < 640 && rect.bottom < 56);
+    }
+
+    syncMobileFilterPinned();
+    window.addEventListener("scroll", syncMobileFilterPinned, { passive: true });
+    window.addEventListener("resize", syncMobileFilterPinned);
+    return () => {
+      window.removeEventListener("scroll", syncMobileFilterPinned);
+      window.removeEventListener("resize", syncMobileFilterPinned);
+    };
+  }, []);
 
   function openImageViewer(remnant) {
     const nextIndex = modalImageItems.findIndex(
@@ -474,6 +571,41 @@ export default function PublicInventoryClient() {
 
   function closeImageViewer() {
     setSelectedImageIndex(null);
+  }
+
+  function handleImageViewerTouchStart(event) {
+    const touch = event.touches?.[0];
+    if (!touch) return;
+    imageSwipeStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+    };
+  }
+
+  function handleImageViewerTouchEnd(event) {
+    const start = imageSwipeStartRef.current;
+    imageSwipeStartRef.current = null;
+    if (!start || modalImageItems.length <= 1) return;
+
+    const touch = event.changedTouches?.[0];
+    if (!touch) return;
+
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+
+    if (Math.abs(deltaX) < 48 || Math.abs(deltaX) < Math.abs(deltaY)) return;
+
+    if (deltaX < 0) {
+      showNextImage();
+    } else {
+      showPreviousImage();
+    }
+  }
+
+  function openFilterMenu() {
+    const filterMenu = document.getElementById("filter_menu");
+    if (!filterMenu) return;
+    filterMenu.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function showPreviousImage() {
@@ -525,20 +657,20 @@ export default function PublicInventoryClient() {
   }, [modalImageItems.length, selectedImageIndex]);
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#f8f1ea_0%,#f4ede6_26%,#efe7de_100%)] text-[#2d2623]">
+    <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,var(--brand-white)_52%,rgba(247,134,57,0.08)_100%)] text-[var(--brand-ink)]">
       <div className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-[440px] bg-[radial-gradient(circle_at_top_left,rgba(231,139,75,0.22),transparent_36%),radial-gradient(circle_at_top_right,rgba(93,129,118,0.16),transparent_32%)]" />
-        <div className="pointer-events-none absolute left-[-120px] top-[120px] h-[260px] w-[260px] rounded-full bg-[#e7c3a9]/20 blur-3xl" />
-        <div className="pointer-events-none absolute right-[-60px] top-[40px] h-[220px] w-[220px] rounded-full bg-[#b7d1c6]/20 blur-3xl" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[440px] bg-[radial-gradient(circle_at_top_left,rgba(247,134,57,0.22),transparent_36%),radial-gradient(circle_at_top_right,rgba(25,27,28,0.09),transparent_32%)]" />
+        <div className="pointer-events-none absolute left-[-120px] top-[120px] h-[260px] w-[260px] rounded-full bg-[rgba(247,134,57,0.18)] blur-3xl" />
+        <div className="pointer-events-none absolute right-[-60px] top-[40px] h-[220px] w-[220px] rounded-full bg-[rgba(25,27,28,0.08)] blur-3xl" />
 
         <div className="relative mx-auto w-full max-w-[1680px] px-3 py-3 sm:px-4 md:px-6 md:py-5 2xl:px-8">
-          <section className="mb-4 overflow-hidden rounded-[28px] border border-white/70 bg-[linear-gradient(135deg,rgba(255,250,246,0.96),rgba(248,240,233,0.88))] px-4 py-5 shadow-[0_24px_70px_rgba(44,29,18,0.10)] backdrop-blur sm:rounded-[32px] sm:px-6 lg:px-8">
+          <section className="mb-4 overflow-hidden rounded-[28px] border border-[var(--brand-line)] bg-[linear-gradient(135deg,rgba(255,255,255,0.99),rgba(242,242,242,0.96))] px-4 py-5 shadow-[0_24px_70px_rgba(25,27,28,0.10)] backdrop-blur sm:rounded-[32px] sm:px-6 lg:px-8">
             <div className="flex justify-center">
               <div className="mx-auto flex max-w-4xl flex-col items-center text-center">
-                <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-[#9d6f4c] md:text-[15px]">
+                <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-orange)] md:text-[15px]">
                   Remnant Inventory System
                 </p>
-                <h1 className="mt-2 text-balance font-sans text-[1.9rem] font-semibold leading-tight text-[#2c211c] md:text-[2.35rem] lg:text-[2.55rem]">
+                <h1 className="font-display mt-2 text-[1.9rem] font-semibold leading-tight text-[var(--brand-ink)] md:text-[2.15rem] lg:text-[2.35rem] xl:whitespace-nowrap">
                   Find your remnant before someone else does.
                 </h1>
               </div>
@@ -547,15 +679,21 @@ export default function PublicInventoryClient() {
 
           <section
             id="filter_menu"
-            className="mb-4 rounded-[28px] border border-[#ead9cb] bg-[linear-gradient(135deg,rgba(255,250,245,0.98),rgba(249,242,234,0.94))] p-4 shadow-[0_24px_70px_rgba(44,29,18,0.10)] backdrop-blur sm:rounded-[30px] sm:p-5"
+            className="mb-4 rounded-[28px] border border-[var(--brand-line)] bg-[linear-gradient(135deg,rgba(255,255,255,0.99),rgba(242,242,242,0.96))] p-4 shadow-[0_24px_70px_rgba(25,27,28,0.08)] backdrop-blur sm:rounded-[30px] sm:p-5"
           >
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:grid-cols-[fit-content(30rem)_minmax(260px,1fr)_110px_110px_140px] xl:items-end">
               <div className="min-w-0 sm:col-span-2 lg:col-span-1 xl:max-w-[30rem]">
-                <p className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+                <p className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
                   Material Types
                 </p>
-                <div className="rounded-2xl border border-[#d8c7b8] bg-white p-1.5 shadow-sm">
-                  <div className="flex h-9 w-full max-w-full snap-x snap-mandatory items-center gap-2 overflow-x-auto whitespace-nowrap px-1 text-sm text-[#2d2623] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
+                <div className="overflow-hidden rounded-2xl border border-[var(--brand-line)] bg-white px-1.5 py-1 shadow-[0_1px_0_rgba(255,255,255,0.8),0_10px_24px_rgba(25,27,28,0.05)]">
+                  <div
+                    ref={materialRailRef}
+                    onScroll={(event) => {
+                      materialRailScrollRef.current = event.currentTarget.scrollLeft;
+                    }}
+                    className="flex min-h-10 w-full max-w-full snap-x snap-mandatory items-center gap-2 overflow-x-auto whitespace-nowrap px-0.5 text-sm text-[var(--brand-ink)] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+                  >
                     {materialOptions.map((material) => {
                       const checked = filters.materials.includes(material);
                       return (
@@ -566,8 +704,8 @@ export default function PublicInventoryClient() {
                           onClick={() => toggleMaterialFilter(material)}
                           className={`inline-flex shrink-0 snap-start items-center rounded-xl border px-3 py-2 text-[13px] font-medium transition-all ${
                             checked
-                              ? "border-[#d89462] bg-[#fff1e3] text-[#8c4c1c] shadow-sm"
-                              : "border-[#efe2d6] bg-[#fffdfb] text-gray-700 hover:border-[#ead8ca] hover:bg-[#fff7f1]"
+                              ? "border-[var(--brand-orange)] bg-[rgba(247,134,57,0.12)] text-[var(--brand-orange-deep)] shadow-sm"
+                              : "border-[var(--brand-line)] bg-white text-[rgba(25,27,28,0.72)] hover:border-[rgba(247,134,57,0.32)] hover:bg-[var(--brand-shell)]"
                           }`}
                         >
                           {material}
@@ -578,18 +716,18 @@ export default function PublicInventoryClient() {
                 </div>
               </div>
 
-              <label className="block min-w-0 sm:col-span-2 lg:col-span-1 xl:col-span-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+              <label className="block min-w-0 sm:col-span-2 lg:col-span-1 xl:col-span-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
                 Stone / Brand / Color / Finish / ID #
                 <input
                   type="text"
                   value={filters.stone}
                   onChange={(event) => setFilters((current) => ({ ...current, stone: event.target.value }))}
                   placeholder="Search by stone, brand, color, finish or #741"
-                  className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                  className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                 />
               </label>
 
-              <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+              <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
                 Min Width
                 <input
                   type="text"
@@ -597,11 +735,11 @@ export default function PublicInventoryClient() {
                   value={filters.minWidth}
                   onChange={(event) => setFilters((current) => ({ ...current, minWidth: event.target.value }))}
                   placeholder="W"
-                  className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-3 text-sm font-medium text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                  className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-3 text-sm font-medium text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                 />
               </label>
 
-              <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+              <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
                 Min Height
                 <input
                   type="text"
@@ -609,11 +747,11 @@ export default function PublicInventoryClient() {
                   value={filters.minHeight}
                   onChange={(event) => setFilters((current) => ({ ...current, minHeight: event.target.value }))}
                   placeholder="H"
-                  className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-3 text-sm font-medium text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                  className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-3 text-sm font-medium text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                 />
               </label>
 
-              <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+              <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
                 Status
                 <SelectField
                   value={filters.status}
@@ -639,13 +777,13 @@ export default function PublicInventoryClient() {
           ) : error ? (
             <div className="rounded-[28px] border border-rose-200 bg-white/80 px-6 py-10 text-center text-rose-700 shadow-sm">
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-rose-500">Load Failed</p>
-              <h3 className="mt-2 text-xl font-semibold text-rose-800">We couldn&apos;t load the remnants right now.</h3>
+              <h3 className="font-display mt-2 text-xl font-semibold text-rose-800">We couldn&apos;t load the remnants right now.</h3>
               <p className="mt-2 text-sm">{error}</p>
             </div>
           ) : cards.length === 0 ? (
-            <div className="rounded-[28px] border border-dashed border-[#d7c4b6] bg-white/75 px-6 py-12 text-center text-[#6d584b] shadow-sm">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#9c7355]">No Matches</p>
-              <h3 className="mt-2 text-2xl font-semibold text-[#2d2623]">No remnants match these filters.</h3>
+            <div className="rounded-[28px] border border-dashed border-[var(--brand-line)] bg-white/88 px-6 py-12 text-center text-[rgba(35,35,35,0.68)] shadow-sm">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--brand-orange)]">No Matches</p>
+              <h3 className="font-display mt-2 text-2xl font-semibold text-[var(--brand-ink)]">No remnants match these filters.</h3>
               <p className="mt-2 text-sm">Try changing the stone, brand, color, finish, ID, material, or size filters to widen the search.</p>
             </div>
           ) : (
@@ -653,32 +791,78 @@ export default function PublicInventoryClient() {
               {cards.map((remnant, index) => {
                 const image = imageSrc(remnant);
                 const status = statusText(remnant);
+                const metricLayout = publicCardMetricLayout(remnant);
                 return (
                   <article
                     key={`${displayRemnantId(remnant)}-${index}`}
-                    className="group relative overflow-hidden rounded-[24px] border border-white/80 bg-white/94 shadow-[0_14px_30px_rgba(58,37,22,0.07)] transition-transform [contain-intrinsic-size:420px] [content-visibility:auto] hover:-translate-y-1 sm:rounded-[26px]"
+                    className="group relative overflow-hidden rounded-[24px] border border-[var(--brand-line)] bg-[rgba(255,255,255,0.96)] shadow-[0_14px_30px_rgba(25,27,28,0.08)] transition-transform [contain-intrinsic-size:420px] [content-visibility:auto] hover:-translate-y-1 sm:rounded-[26px]"
                   >
                     <div className="relative">
-                      {String(remnant.status || "").toLowerCase() === "available" ? (
-                        <div className="absolute bottom-3 left-3 z-20 flex items-center gap-2 opacity-100 transition-all duration-200 md:translate-y-1 md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100 md:group-focus-within:translate-y-0 md:group-focus-within:opacity-100">
-                          <div className="relative">
+                      <div className="overflow-hidden">
+                        <div className="relative aspect-[4/3] overflow-hidden bg-[linear-gradient(180deg,var(--brand-white)_0%,rgba(255,255,255,0.94)_100%)]">
+                          {image ? (
                             <button
                               type="button"
-                              onClick={() =>
+                              className="absolute inset-0 z-[1] block w-full overflow-hidden text-left"
+                              onClick={() => openImageViewer(remnant)}
+                              aria-label={`Open image for remnant ${displayRemnantId(remnant)}`}
+                            />
+                          ) : null}
+                          <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-24 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.45),transparent_72%)]" />
+                          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-16 bg-[linear-gradient(180deg,rgba(35,35,35,0),rgba(35,35,35,0.18))]" />
+                          <div className="pointer-events-none absolute inset-x-0 top-0 z-[2] flex items-start justify-between gap-2 p-3">
+                            <span className="inline-flex items-center rounded-full border border-white/70 bg-white/88 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-orange-deep)] shadow-sm backdrop-blur">
+                              ID #{displayRemnantId(remnant)}
+                          </span>
+                          <span
+                            className={`inline-flex max-w-[72%] items-center justify-end rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] shadow-sm backdrop-blur ${statusBadgeClass(status)}`}
+                          >
+                            {status}
+                          </span>
+                        </div>
+                          {image ? (
+                          <div className="pointer-events-none flex h-full w-full items-center justify-center overflow-hidden p-1.5 sm:p-2">
+                            <img
+                              src={image}
+                              alt={`Remnant ${displayRemnantId(remnant)}`}
+                              className="h-full w-full scale-[1.05] object-contain object-center transition-transform duration-300 motion-safe:md:group-hover:scale-[1.08]"
+                              decoding="async"
+                              loading={index < 8 ? "eager" : "lazy"}
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-[var(--brand-white)] text-sm font-semibold uppercase tracking-[0.16em] text-[var(--brand-orange)]">
+                            No Image
+                          </div>
+                        )}
+                        {image ? (
+                          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] flex justify-center pb-2 sm:hidden">
+                            <span className="rounded-full border border-white/60 bg-white/78 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[rgba(35,35,35,0.68)] shadow-sm backdrop-blur">
+                              Tap image to enlarge
+                            </span>
+                          </div>
+                        ) : null}
+                        {String(remnant.status || "").toLowerCase() === "available" ? (
+                          <div className="absolute bottom-0 left-0 z-[3] p-3">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
                                 openHoldRequest(remnant).catch((requestError) =>
                                   setNotice({
                                     type: "error",
                                     message: requestError.message,
-                                  }),
-                                )
-                              }
-                              className="peer inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white/94 text-[#8f4c1a] shadow-lg ring-1 ring-white/80 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-[#fff8f1] active:scale-95 sm:h-11 sm:w-11"
-                              aria-label={`Request hold for remnant ${displayRemnantId(remnant)}`}
+                                  })
+                                );
+                              }}
+                              className="group/hold inline-flex h-10 items-center justify-center gap-0 overflow-hidden rounded-2xl border border-[var(--brand-orange)] bg-[rgba(247,134,57,0.94)] pl-2.5 pr-2.5 text-[11px] font-medium text-white shadow-[0_12px_30px_rgba(25,27,28,0.18)] backdrop-blur transition-all hover:-translate-y-0.5 hover:gap-2 hover:bg-[var(--brand-orange-deep)] hover:border-[var(--brand-orange-deep)] active:scale-[0.99]"
+                              aria-label="Request a hold"
+                              title="Request a hold"
                             >
                               <svg
                                 aria-hidden="true"
                                 viewBox="0 0 24 24"
-                                className="h-5 w-5"
+                                className="h-4 w-4"
                                 fill="none"
                                 stroke="currentColor"
                                 strokeWidth="1.9"
@@ -691,105 +875,69 @@ export default function PublicInventoryClient() {
                                 <circle cx="10.85" cy="10.95" r=".72" />
                                 <circle cx="13.2" cy="13.3" r=".72" />
                               </svg>
+                              <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 ease-out group-hover/hold:max-w-[10rem] group-hover/hold:opacity-100">
+                                Request a hold
+                              </span>
                             </button>
-                            <div className="pointer-events-none absolute left-full top-1/2 z-10 ml-2 hidden h-9 -translate-x-2 -translate-y-1/2 items-center whitespace-nowrap rounded-full bg-[#2c211c]/92 px-3 text-[11px] font-semibold text-white opacity-0 shadow-lg backdrop-blur-sm transition-all peer-hover:translate-x-0 peer-hover:opacity-100 peer-focus-visible:translate-x-0 peer-focus-visible:opacity-100 md:inline-flex">
-                              Request a hold
-                            </div>
                           </div>
+                        ) : null}
                         </div>
-                      ) : null}
-
-                      <button
-                        type="button"
-                        className="block w-full overflow-hidden text-left"
-                        onClick={() => image && openImageViewer(remnant)}
-                      >
-                        <div className="relative aspect-[4/3] overflow-hidden bg-[linear-gradient(180deg,#f7efe6_0%,#efe4d7_100%)]">
-                          <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-24 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.45),transparent_72%)]" />
-                          <div className="pointer-events-none absolute inset-x-0 top-0 z-[2] flex items-start justify-between gap-2 p-3">
-                            <span className="inline-flex items-center rounded-full border border-white/70 bg-white/88 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8c6040] shadow-sm backdrop-blur">
-                              ID #{displayRemnantId(remnant)}
-                          </span>
-                          <span
-                            className={`inline-flex max-w-[72%] items-center justify-end rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] shadow-sm backdrop-blur ${statusBadgeClass(status)}`}
-                          >
-                            {status}
-                          </span>
-                        </div>
-                        {image ? (
-                          <div className="flex h-full w-full items-center justify-center overflow-hidden p-1.5 sm:p-2">
-                            <img
-                              src={image}
-                              alt={`Remnant ${displayRemnantId(remnant)}`}
-                              className="h-full w-full scale-[1.05] object-contain object-center transition-transform duration-300 motion-safe:md:group-hover:scale-[1.08]"
-                              decoding="async"
-                              loading={index < 8 ? "eager" : "lazy"}
-                            />
-                          </div>
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-[#f4ece4] text-sm font-semibold uppercase tracking-[0.16em] text-[#9c7355]">
-                            No Image
-                          </div>
-                        )}
-                        </div>
-                      </button>
+                      </div>
                     </div>
 
                     <div className="p-3 text-sm text-[#232323] sm:p-3.5">
-                      <div className="rounded-[22px] border border-[#efe5dc] bg-[linear-gradient(180deg,#fcfaf7_0%,#f7f1eb_100%)] px-3.5 py-3 text-[#4d3d34] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
-                        <div className="flex items-start justify-between gap-3">
+                      <div className="rounded-[22px] border border-[var(--brand-line)] bg-[linear-gradient(180deg,#ffffff_0%,rgba(242,242,242,0.92)_100%)] px-3.5 py-3 text-[var(--brand-ink)] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+                        <div className="min-w-0">
                           <div className="min-w-0">
-                            <h3 className="text-[15px] font-semibold leading-snug text-[#2d2623]">
+                            <h3 className="font-display text-[16px] font-semibold leading-snug text-[var(--brand-ink)] sm:text-[17px]">
                               {publicCardHeading(remnant)}
                             </h3>
                             {publicCardSubheading(remnant) ? (
-                              <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[#7b6759]">
+                              <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgba(35,35,35,0.54)]">
                                 {publicCardSubheading(remnant)}
                               </p>
                             ) : null}
                           </div>
-                          <span className="inline-flex shrink-0 items-center rounded-full border border-[#eadfd7] bg-white/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8c6040]">
-                            #{displayRemnantId(remnant)}
-                          </span>
                         </div>
-                        <div
-                          className={`mt-3 grid gap-2 ${
-                            thicknessText(remnant) && finishText(remnant)
-                              ? "sm:grid-cols-3"
-                              : thicknessText(remnant) || finishText(remnant)
-                                ? "sm:grid-cols-2"
-                                : "sm:grid-cols-1"
-                          }`}
-                        >
-                          <div className="rounded-[16px] border border-[#eadfd7] bg-white/88 px-3 py-2">
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9c7355]">Size</p>
-                            <p className="mt-1 text-[13px] font-semibold text-[#2d2623]">
-                              {cardSizeText(remnant)}
+                        <div className={`mt-3 grid items-stretch gap-2 ${metricLayout.grid}`}>
+                          <div className={`flex min-w-0 flex-col rounded-[16px] border border-[var(--brand-line)] bg-white/88 px-3 py-2 ${metricLayout.sizeTile}`}>
+                            <p className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)] sm:text-[11px]">
+                              Size
+                            </p>
+                            <p className="mt-1 text-[12px] font-semibold leading-tight text-[var(--brand-ink)] sm:text-[13px]">
+                              <CardSizeValue remnant={remnant} />
                             </p>
                           </div>
                           {thicknessText(remnant) ? (
-                            <div className="rounded-[16px] border border-[#eadfd7] bg-white/88 px-3 py-2">
-                              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9c7355]">Thickness</p>
-                              <p className="mt-1 text-[13px] font-semibold text-[#2d2623]">
+                            <div className="flex min-w-0 flex-col rounded-[16px] border border-[var(--brand-line)] bg-white/88 px-3 py-2">
+                              <p
+                                className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)] sm:text-[11px]"
+                                title="Thickness"
+                              >
+                                Thick
+                              </p>
+                              <p className="mt-1 break-words text-[13px] font-semibold leading-tight text-[var(--brand-ink)] sm:text-[14px]">
                                 {thicknessText(remnant)}
                               </p>
                             </div>
                           ) : null}
                           {finishText(remnant) ? (
-                            <div className="rounded-[16px] border border-[#eadfd7] bg-white/88 px-3 py-2">
-                              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9c7355]">Finish</p>
-                              <p className="mt-1 text-[13px] font-semibold text-[#2d2623]">
+                            <div className="flex min-w-0 flex-col rounded-[16px] border border-[var(--brand-line)] bg-white/88 px-3 py-2">
+                              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)] sm:text-[11px]">
+                                Finish
+                              </p>
+                              <p className="mt-1 break-words text-[13px] font-semibold leading-tight text-[var(--brand-ink)] sm:text-[14px]">
                                 {finishText(remnant)}
                               </p>
                             </div>
                           ) : null}
                         </div>
                         {remnantColors(remnant).length ? (
-                          <div className="mt-3 flex flex-wrap gap-2">
+                          <div className="mt-3 flex flex-wrap justify-center gap-2">
                             {remnantColors(remnant).map((color) => (
                               <span
                                 key={`${displayRemnantId(remnant)}-${color}`}
-                                className="inline-flex items-center gap-2 rounded-full border border-[#eadfd7] bg-white/92 px-2.5 py-1 text-[11px] font-semibold text-[#5f4c42]"
+                                className="inline-flex items-center gap-2 rounded-full border border-[var(--brand-line)] bg-white/92 px-2.5 py-1 text-[11px] font-semibold text-[rgba(25,27,28,0.72)]"
                               >
                                 <span
                                   aria-hidden="true"
@@ -812,78 +960,107 @@ export default function PublicInventoryClient() {
       </div>
 
       <footer className="px-3 pb-10 pt-2 md:px-6">
-        <div className="mx-auto max-w-[1680px] rounded-[24px] border border-white/70 bg-white/55 px-4 py-5 text-center shadow-sm backdrop-blur sm:rounded-[28px] sm:px-6">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#9c7355]">Remnant Inventory System</p>
-          <p className="mt-2 text-sm text-[#6d584b]">Live remnant availability with simple hold requests.</p>
+        <div className="mx-auto max-w-[1680px] rounded-[24px] border border-[var(--brand-line)] bg-white/80 px-4 py-5 text-center shadow-sm backdrop-blur sm:rounded-[28px] sm:px-6">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--brand-orange)]">Remnant Inventory System</p>
+          <p className="mt-2 text-sm text-[rgba(25,27,28,0.72)]">Live remnant availability with simple hold requests.</p>
+          <p className="mt-2 text-[11px] font-medium uppercase tracking-[0.18em] text-[rgba(25,27,28,0.48)]">Created by EndoM14</p>
         </div>
       </footer>
 
       {selectedImageRemnant ? (
         <div
-          className="fixed inset-0 z-[70] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_24%),linear-gradient(180deg,rgba(12,12,12,0.86),rgba(8,8,8,0.92))] px-3 py-4 sm:px-4 sm:py-6"
+          className="fixed inset-0 z-[74] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_24%),linear-gradient(180deg,rgba(12,12,12,0.86),rgba(8,8,8,0.92))] px-3 py-4 sm:px-4 sm:py-6"
           onClick={closeImageViewer}
         >
-          <div className="mx-auto flex h-full max-w-7xl flex-col">
-            <div
-              className="mb-4 flex flex-wrap items-start justify-between gap-3 rounded-[30px] border border-white/10 bg-[linear-gradient(135deg,rgba(28,28,28,0.82),rgba(44,44,44,0.58))] px-4 py-4 text-white shadow-[0_24px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:px-5"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center rounded-full border border-white/15 bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85">
-                    ID #{displayRemnantId(selectedImageRemnant)}
-                  </span>
-                  <span className="inline-flex items-center rounded-full border border-white/15 bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
-                    {selectedImageIndex + 1} / {modalImageItems.length}
-                  </span>
+          <div className="mx-auto flex h-full max-w-[1180px] flex-col" onClick={(event) => event.stopPropagation()}>
+            <div className="flex min-h-0 flex-1 items-center justify-center">
+              <div className="flex h-full w-full flex-col overflow-hidden rounded-[34px] border border-white/10 bg-[linear-gradient(180deg,rgba(30,30,30,0.82),rgba(16,16,16,0.9))] shadow-[0_32px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl">
+                <div className="flex items-start justify-between gap-4 border-b border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] px-4 py-4 text-white sm:px-5">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center rounded-full border border-white/15 bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85">
+                        ID #{displayRemnantId(selectedImageRemnant)}
+                      </span>
+                      <span className="inline-flex items-center rounded-full border border-white/15 bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
+                        {selectedImageIndex + 1} / {modalImageItems.length}
+                      </span>
+                      <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${statusBadgeClass(statusText(selectedImageRemnant))}`}>
+                        {statusText(selectedImageRemnant)}
+                      </span>
+                    </div>
+                    <h2 className="font-display mt-3 text-xl font-semibold text-white sm:text-[2rem]">
+                      {publicCardHeading(selectedImageRemnant)}
+                    </h2>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/68">
+                      {publicCardSubheading(selectedImageRemnant) ? (
+                        <span>{publicCardSubheading(selectedImageRemnant)}</span>
+                      ) : null}
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {remnantMetricEntries(selectedImageRemnant).map((entry) => (
+                        <span
+                          key={`${displayRemnantId(selectedImageRemnant)}-${entry.label}`}
+                          title={entry.title}
+                          className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-[11px] text-white/88"
+                        >
+                          <span className="font-semibold uppercase tracking-[0.08em] text-white/60">{entry.label}</span>
+                          <span className="whitespace-nowrap font-medium">{entry.value}</span>
+                        </span>
+                      ))}
+                      {remnantColors(selectedImageRemnant).map((color) => (
+                        <span
+                          key={`${displayRemnantId(selectedImageRemnant)}-viewer-${color}`}
+                          className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-2.5 py-1 text-[11px] font-medium text-white/82"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="h-3 w-3 rounded-full border border-white/20"
+                            style={colorSwatchStyle(color)}
+                          />
+                          {color}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center">
+                    <button
+                      type="button"
+                      onClick={closeImageViewer}
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/8 text-2xl text-white transition-colors hover:border-white/25 hover:bg-white/16"
+                      aria-label="Close image preview"
+                    >
+                      {"\u00D7"}
+                    </button>
+                  </div>
                 </div>
-                <h2 className="mt-3 text-xl font-semibold text-white sm:text-[2rem]">
-                  {cardTitleText(selectedImageRemnant)}
-                </h2>
-                <p className="mt-1 text-sm text-white/72">
-                  {cardSizeText(selectedImageRemnant)}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {modalImageItems.length > 1 ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={showPreviousImage}
-                      className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/15 bg-white/8 px-4 text-sm font-semibold text-white transition hover:border-white/25 hover:bg-white/14"
-                    >
-                      Previous
-                    </button>
-                    <button
-                      type="button"
-                      onClick={showNextImage}
-                      className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/15 bg-white/8 px-4 text-sm font-semibold text-white transition hover:border-white/25 hover:bg-white/14"
-                    >
-                      Next
-                    </button>
-                  </>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={closeImageViewer}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/8 text-2xl text-white transition-colors hover:border-white/25 hover:bg-white/16"
-                  aria-label="Close image preview"
-                >
-                  {"\u00D7"}
-                </button>
-              </div>
-            </div>
-            <div
-              className="flex min-h-0 flex-1 items-center justify-center"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="flex h-full w-full max-w-[1180px] items-center justify-center rounded-[34px] border border-white/10 bg-[linear-gradient(180deg,rgba(30,30,30,0.8),rgba(16,16,16,0.84))] p-3 shadow-[0_32px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-4">
-                <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-[28px] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_26%),linear-gradient(180deg,#1a1a1a_0%,#111111_100%)] p-2 sm:p-3">
-                  <img
-                    src={imageSrc(selectedImageRemnant)}
-                    alt={`Remnant ${displayRemnantId(selectedImageRemnant)}`}
-                    className="max-h-full max-w-full rounded-[24px] object-contain shadow-[0_24px_60px_rgba(0,0,0,0.3)]"
-                  />
+                <div className="flex min-h-0 flex-1 items-center justify-center p-3 sm:p-4">
+                  <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[28px] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_26%),linear-gradient(180deg,#1a1a1a_0%,#111111_100%)] p-2 sm:p-3">
+                    {modalImageItems.length > 1 ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={showPreviousImage}
+                          className="absolute left-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white shadow-lg backdrop-blur transition hover:bg-black/50"
+                          aria-label="Previous image"
+                        >
+                          ‹
+                        </button>
+                        <button
+                          type="button"
+                          onClick={showNextImage}
+                          className="absolute right-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white shadow-lg backdrop-blur transition hover:bg-black/50"
+                          aria-label="Next image"
+                        >
+                          ›
+                        </button>
+                      </>
+                    ) : null}
+                    <img
+                      src={imageSrc(selectedImageRemnant)}
+                      alt={`Remnant ${displayRemnantId(selectedImageRemnant)}`}
+                      className="max-h-full max-w-full rounded-[24px] object-contain shadow-[0_24px_60px_rgba(0,0,0,0.3)]"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -894,72 +1071,108 @@ export default function PublicInventoryClient() {
       {holdRemnant ? (
         <div className="fixed inset-0 z-[72] overflow-y-auto bg-black/50 px-3 py-4 sm:px-4 sm:py-8">
           <div className="mx-auto max-w-2xl overflow-hidden rounded-[28px] border border-white/70 bg-white shadow-[0_24px_70px_rgba(44,29,18,0.10)] sm:rounded-[32px]">
-            <div className="flex items-start justify-between gap-4 border-b border-[#eadfd7] bg-[linear-gradient(135deg,#fffaf6_0%,#f7efe8_100%)] px-4 py-5 sm:px-6">
+            <div className="flex items-start justify-between gap-4 border-b border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,var(--brand-white)_100%)] px-4 py-4 sm:px-6 sm:py-5">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#8a6a54]">Hold Request</p>
-                <h2 className="text-xl font-semibold text-[#2c211c] sm:text-2xl">Request a hold</h2>
-                <p className="mt-1 text-sm text-[#7d6759]">
-                  Send your request and the team will review availability before confirming anything.
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Hold Request</p>
+                <h2 className="font-display text-xl font-semibold text-[var(--brand-ink)] sm:text-2xl">Request this remnant</h2>
+                <p className="mt-1 text-sm text-[rgba(35,35,35,0.68)]">
+                  Send your request and we&apos;ll confirm availability with your sales rep before anything is placed on hold.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setHoldRemnant(null)}
-                className="h-10 w-10 rounded-full border border-[#d8c7b8] bg-white text-xl text-[#5e4b40] transition hover:border-[#c9b39f] hover:bg-[#fff8f2] active:bg-[#f6ede6]"
+                className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)] active:bg-[rgba(247,134,57,0.08)]"
                 aria-label="Close hold request form"
               >
                 {"\u00D7"}
               </button>
             </div>
-            <form onSubmit={submitHoldRequest} className="grid gap-4 p-4 sm:p-6">
-              <section className="rounded-[26px] border border-[#eadfd7] bg-[linear-gradient(135deg,#fffaf6_0%,#fff4ea_100%)] p-4 shadow-[0_16px_38px_rgba(44,29,18,0.06)]">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9c7355]">
-                  Remnant Summary
-                </p>
-                <div className="mt-3 grid gap-4 sm:grid-cols-[minmax(0,1fr)_240px] sm:items-start">
+            <form onSubmit={submitHoldRequest} className="grid gap-3 p-4 sm:gap-4 sm:p-6">
+              <section className="rounded-[26px] border border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,var(--brand-white)_100%)] p-3.5 shadow-[0_16px_38px_rgba(25,27,28,0.06)] sm:p-4">
+                <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_240px] sm:items-start">
                   <div className="min-w-0">
-                    <h3 className="text-lg font-semibold text-[#2c211c] sm:text-xl">
-                      {cardTitleText(holdRemnant)}
-                    </h3>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <span className="inline-flex rounded-full border border-[#ead3c3] bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8f5b35]">
-                        ID #{displayRemnantId(holdRemnant)}
-                      </span>
-                      <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${statusBadgeClass(statusText(holdRemnant))}`}>
-                        {statusText(holdRemnant)}
-                      </span>
-                    </div>
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-[20px] border border-[#eadfd7] bg-white/80 px-4 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
-                          Material
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-orange)]">
+                      Remnant Summary
+                    </p>
+                    <div className="mt-3">
+                      <h3 className="font-display text-lg font-semibold text-[var(--brand-ink)] sm:text-xl">
+                        {publicCardHeading(holdRemnant)}
+                      </h3>
+                      {publicCardSubheading(holdRemnant) ? (
+                        <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgba(35,35,35,0.54)]">
+                          {publicCardSubheading(holdRemnant)}
                         </p>
-                        <p className="mt-1 text-sm font-medium text-[#2c211c]">
-                          {holdRemnant.material_name || holdRemnant.material || "Not listed"}
-                        </p>
+                      ) : null}
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <span className="inline-flex rounded-full border border-[var(--brand-line)] bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-orange-deep)]">
+                          ID #{displayRemnantId(holdRemnant)}
+                        </span>
+                        <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${statusBadgeClass(statusText(holdRemnant))}`}>
+                          {statusText(holdRemnant)}
+                        </span>
                       </div>
-                      <div className="rounded-[20px] border border-[#eadfd7] bg-white/80 px-4 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
-                          Size
-                        </p>
-                        <p className="mt-1 text-sm font-medium text-[#2c211c]">{cardSizeText(holdRemnant)}</p>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-[20px] border border-[var(--brand-line)] bg-white/92 px-4 py-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
+                            Material
+                          </p>
+                          <p className="mt-1 text-sm font-medium text-[var(--brand-ink)]">
+                            {holdRemnant.material_name || holdRemnant.material || "Not listed"}
+                          </p>
+                        </div>
+                        {remnantMetricEntries(holdRemnant).map((entry) => (
+                          <div
+                            key={`${displayRemnantId(holdRemnant)}-hold-${entry.label}`}
+                            className="rounded-[20px] border border-[var(--brand-line)] bg-white/92 px-4 py-3"
+                          >
+                            <p
+                              className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]"
+                              title={entry.title}
+                            >
+                              {entry.label}
+                            </p>
+                            <p className="mt-1 text-sm font-medium text-[var(--brand-ink)]">{entry.value}</p>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
-                  <div className="grid gap-3">
+                  <div className="self-start">
                     {imageSrc(holdRemnant) ? (
-                      <div className="overflow-hidden rounded-[22px] border border-white/80 bg-white shadow-[0_12px_24px_rgba(44,29,18,0.08)]">
+                      <button
+                        type="button"
+                        onClick={() => openImageViewer(holdRemnant)}
+                        className="overflow-hidden rounded-[22px] border border-white/80 bg-white text-left shadow-[0_12px_24px_rgba(25,27,28,0.08)] transition hover:-translate-y-0.5"
+                      >
                         <img
                           src={imageSrc(holdRemnant)}
                           alt={`Remnant ${displayRemnantId(holdRemnant)}`}
-                          className="h-36 w-full object-cover object-center"
+                          className="h-36 w-full bg-[var(--brand-white)] p-2 object-contain object-center"
                         />
-                      </div>
+                      </button>
                     ) : (
-                      <div className="flex h-36 items-center justify-center rounded-[22px] border border-dashed border-[#dccabd] bg-white/70 text-center text-sm text-[#8a6a54]">
+                      <div className="flex h-36 items-center justify-center rounded-[22px] border border-dashed border-[var(--brand-line)] bg-white/80 text-center text-sm text-[rgba(35,35,35,0.62)]">
                         No image available
                       </div>
                     )}
+                    {remnantColors(holdRemnant).length ? (
+                      <div className="mt-3 flex flex-wrap justify-center gap-2">
+                        {remnantColors(holdRemnant).map((color) => (
+                          <span
+                            key={`${displayRemnantId(holdRemnant)}-hold-color-${color}`}
+                            className="inline-flex items-center gap-2 rounded-full border border-[var(--brand-line)] bg-white/92 px-2.5 py-1 text-[11px] font-semibold text-[rgba(25,27,28,0.72)]"
+                          >
+                            <span
+                              aria-hidden="true"
+                              className="h-3 w-3 rounded-full border border-black/10 shadow-inner"
+                              style={colorSwatchStyle(color)}
+                            />
+                            {color}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </section>
@@ -970,8 +1183,8 @@ export default function PublicInventoryClient() {
                 </div>
               ) : null}
 
-              <section className="rounded-[26px] border border-[#eadfd7] bg-white p-4 shadow-[0_12px_28px_rgba(44,29,18,0.05)]">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9c7355]">
+              <section className="rounded-[26px] border border-[var(--brand-line)] bg-white p-3.5 shadow-[0_12px_28px_rgba(25,27,28,0.05)] sm:p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-orange)]">
                   Your Contact
                 </p>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -981,7 +1194,7 @@ export default function PublicInventoryClient() {
                       required
                       value={holdForm.requester_name}
                       onChange={(event) => setHoldForm((current) => ({ ...current, requester_name: event.target.value }))}
-                      className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.10)]"
                       placeholder="Your full name"
                     />
                   </label>
@@ -992,15 +1205,15 @@ export default function PublicInventoryClient() {
                       type="email"
                       value={holdForm.requester_email}
                       onChange={(event) => setHoldForm((current) => ({ ...current, requester_email: event.target.value }))}
-                      className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.10)]"
                       placeholder="you@example.com"
                     />
                   </label>
                 </div>
               </section>
 
-              <section className="rounded-[26px] border border-[#eadfd7] bg-white p-4 shadow-[0_12px_28px_rgba(44,29,18,0.05)]">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9c7355]">
+              <section className="rounded-[26px] border border-[var(--brand-line)] bg-white p-3.5 shadow-[0_12px_28px_rgba(25,27,28,0.05)] sm:p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-orange)]">
                   Request Details
                 </p>
                 <div className="mt-4 grid gap-4">
@@ -1011,7 +1224,7 @@ export default function PublicInventoryClient() {
                       onChange={(event) => setHoldForm((current) => ({ ...current, sales_rep_user_id: event.target.value }))}
                       disabled={salesReps.length === 0}
                       wrapperClassName="relative mt-2"
-                      className="disabled:bg-[#f8f2ec] disabled:text-[#9d8b7f]"
+                      className="disabled:bg-[rgba(35,35,35,0.05)] disabled:text-[rgba(35,35,35,0.42)]"
                     >
                       <option value="">
                         {salesReps.length === 0 ? "No active sales reps available" : "Select sales rep"}
@@ -1030,18 +1243,18 @@ export default function PublicInventoryClient() {
                       rows="4"
                       value={holdForm.notes}
                       onChange={(event) => setHoldForm((current) => ({ ...current, notes: event.target.value }))}
-                      className="mt-2 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 py-3 text-sm text-[#2d2623] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                      className="mt-2 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 py-3 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.10)]"
                       placeholder="Anything the sales rep should know about timing, pickup, or questions"
                     />
                   </label>
                 </div>
               </section>
 
-              <div className="flex flex-col gap-3 rounded-[24px] border border-[#eadfd7] bg-[#fffaf6] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm leading-6 text-[#6d584b]">
+              <div className="flex flex-col gap-3 rounded-[24px] border border-[var(--brand-line)] bg-[var(--brand-white)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm leading-6 text-[rgba(35,35,35,0.68)]">
                   {salesReps.length === 0
                     ? "No active sales reps are set up yet. Create one in the admin workspace first."
-                    : "You’re sending a request only. A sales rep will review it and follow up before any hold is approved."}
+                    : "This is a request only. Your sales rep will review it and follow up with next steps before any hold is approved."}
                 </p>
                 <input
                   type="hidden"
@@ -1051,9 +1264,9 @@ export default function PublicInventoryClient() {
                 <button
                   type="submit"
                   disabled={holdSubmitting || salesReps.length === 0}
-                  className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-[#232323] px-6 text-sm font-semibold uppercase tracking-[0.16em] text-white shadow-lg shadow-[#232323]/15 transition-all hover:-translate-y-0.5 hover:bg-[#E78B4B] disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--brand-orange)_0%,var(--brand-orange-deep)_100%)] px-6 text-sm font-semibold text-white shadow-[0_18px_38px_rgba(247,134,57,0.24)] transition-all hover:-translate-y-0.5 hover:shadow-[0_22px_46px_rgba(247,134,57,0.30)] disabled:cursor-wait disabled:opacity-60 sm:w-auto"
                 >
-                  {holdSubmitting ? "Sending..." : "Send Request"}
+                  {holdSubmitting ? "Sending..." : "Send hold request"}
                 </button>
               </div>
             </form>
@@ -1091,6 +1304,19 @@ export default function PublicInventoryClient() {
               {"\u00D7"}
             </button>
           </div>
+        </div>
+      ) : null}
+
+      {mobileFilterPinned && !isModalOpen ? (
+        <div className="fixed inset-x-3 bottom-4 z-[75] sm:hidden">
+          <button
+            type="button"
+            onClick={openFilterMenu}
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-[var(--brand-line)] bg-white/96 px-4 text-sm font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)] shadow-[0_18px_40px_rgba(25,27,28,0.16)] backdrop-blur"
+          >
+            Filters
+            {activeFilterCount ? <span className="rounded-full bg-[rgba(247,134,57,0.14)] px-2 py-0.5 text-[11px] text-[var(--brand-orange-deep)]">{activeFilterCount}</span> : null}
+          </button>
         </div>
       ) : null}
     </main>

@@ -13,7 +13,7 @@ export default function NotFound() {
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#9c7355]">
             404
           </p>
-          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-[#241c18] sm:text-5xl">
+          <h1 className="font-display mt-4 text-4xl font-semibold tracking-tight text-[#241c18] sm:text-5xl">
             That page does not exist.
           </h1>
           <p className="mt-5 text-base leading-7 text-[#6d584b]">

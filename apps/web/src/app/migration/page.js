@@ -6,7 +6,7 @@ export default function MigrationPage() {
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#f7bf97]">
             Migration Workspace
           </p>
-          <h1 className="mt-3 max-w-3xl text-4xl font-semibold leading-tight">
+          <h1 className="font-display mt-3 max-w-3xl text-4xl font-semibold leading-tight">
             The Next app now has a live public inventory route running against the legacy API.
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-slate-200">
@@ -27,7 +27,7 @@ export default function MigrationPage() {
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a16235]">
                 Status
               </p>
-              <h2 className="mt-3 text-xl font-semibold text-[#18212d]">{item}</h2>
+              <h2 className="font-display mt-3 text-xl font-semibold text-[#18212d]">{item}</h2>
             </article>
           ))}
         </section>
