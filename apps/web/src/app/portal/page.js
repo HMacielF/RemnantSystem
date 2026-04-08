@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import AuthShell, { AuthActions } from "@/components/auth-shell";
+import GoogleSignInButton from "@/components/google-sign-in-button";
 import { createOptionalAuthedContext } from "@/server/private-api";
 
 export const metadata = {
@@ -82,6 +83,15 @@ export default async function PortalPage() {
           Enter Workspace
         </button>
       </form>
+
+      <div className="mt-5">
+        <div className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
+          <span className="h-px flex-1 bg-[#eadccf]" />
+          <span>or</span>
+          <span className="h-px flex-1 bg-[#eadccf]" />
+        </div>
+        <GoogleSignInButton />
+      </div>
 
       <AuthActions
         primary={{ href: "/forgot-password", label: "Forgot your password?" }}
