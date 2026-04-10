@@ -2,6 +2,12 @@ const fs = require("fs");
 const path = require("path");
 const dotenv = require("dotenv");
 const { createClient } = require("@supabase/supabase-js");
+const {
+    startSlabScrapeRun,
+    touchSeenSlabs,
+    deactivateUnseenSlabs,
+    finalizeSlabScrapeRun,
+} = require("./slab_scrape_tracking");
 
 dotenv.config();
 
@@ -88,7 +94,7 @@ function normalizeCatalogName(value) {
 
 function inferBrandNameFromSupplier(supplierName) {
     const normalized = normalizeCatalogName(supplierName);
-    if (normalized === "msi surfaces" || normalized === "msi") return "MSI";
+    if (normalized === "msi") return "Q Quartz";
     if (normalized === "cambria") return "Cambria";
     if (normalized === "caesarstone") return "Caesarstone";
     if (normalized === "laminam") return "Laminam";
@@ -121,11 +127,20 @@ function normalizedFinishList(value) {
 
 function normalizeThickness(value) {
     if (!value || typeof value !== "string") return null;
-    const compact = value.toLowerCase().replace(/\s+/g, "");
-    if (compact === "3cm") return "3cm";
-    if (compact === "2cm") return "2cm";
-    if (compact === "12mm") return "12mm";
-    if (compact === "20mm") return "20mm";
+    const compact = value
+        .toLowerCase()
+        .replace(/\\/g, "")
+        .replace(/"/g, "")
+        .replace(/\s+/g, "");
+    if (!compact) return null;
+    if (compact === "11/4" || compact === "1-1/4") return "3 CM";
+    if (compact === "3/4") return "2 CM";
+    if (compact === "1cm") return "1 CM";
+    if (compact === "1.2cm" || compact === "12mm") return "12 MM";
+    if (compact === "1.5cm" || compact === "15mm") return "15 MM";
+    if (compact === "2cm" || compact === "2.0cm" || compact === "20mm") return "2 CM";
+    if (compact === "3cm" || compact === "3.0cm" || compact === "30mm") return "3 CM";
+    if (compact === "6mm") return "6 MM";
     return value.trim();
 }
 
@@ -162,7 +177,7 @@ function canonicalMsiMergeName(value) {
 function buildMergeKey(row) {
     const supplier = row.supplierName || "";
     const material = row.materialName || "";
-    const nameKey = supplier === "MSI Surfaces"
+    const nameKey = supplier === "MSI"
         ? canonicalMsiMergeName(row.name)
         : String(row.name || "").trim().toLowerCase();
 
@@ -285,7 +300,7 @@ function buildSupplierRecords() {
             accentColors: [],
         })),
         ...[...combinedMsi.values()].map((row) => ({
-            supplierName: "MSI Surfaces",
+            supplierName: "MSI",
             websiteUrl: "https://www.msisurfaces.com",
             name: sanitizeProductName(row.name),
             materialName: "Quartz",
@@ -480,11 +495,11 @@ async function importCatalog() {
     const materialCache = new Map();
     const thicknessCache = new Map();
 
-    await supabase.from("slab_colors").delete().gte("slab_id", 0);
-    await supabase.from("slab_finishes").delete().gte("slab_id", 0);
-    await supabase.from("slab_thicknesses").delete().gte("slab_id", 0);
-    await supabase.from("slabs").delete().gte("id", 0);
+    const supplierRuns = new Map();
+    const seenBySupplierId = new Map();
+    let importedCount = 0;
 
+    try {
     for (const row of sourceRows) {
         if (!supplierCache.has(row.supplierName)) {
             const supplier = await upsertLookup("suppliers", row.supplierName, {
@@ -492,6 +507,14 @@ async function importCatalog() {
                 active: true,
             });
             supplierCache.set(row.supplierName, supplier.id);
+            const run = await startSlabScrapeRun(
+                supabase,
+                supplier.id,
+                "import_slab_catalog",
+                row.websiteUrl || null,
+            );
+            supplierRuns.set(supplier.id, run);
+            seenBySupplierId.set(supplier.id, []);
         }
 
         if (!materialCache.has(row.materialName)) {
@@ -503,6 +526,8 @@ async function importCatalog() {
             supplierCache.get(row.supplierName),
             materialCache.get(row.materialName),
         );
+        seenBySupplierId.get(supplierCache.get(row.supplierName)).push(slab.id);
+        importedCount += 1;
 
         const thicknessRows = [];
         for (const thicknessName of row.thicknesses) {
@@ -543,8 +568,35 @@ async function importCatalog() {
         await upsertStoneProductColors(slab.stone_product_id, colorRows);
     }
 
-    console.log(`Imported ${sourceRows.length} slab records into Supabase.`);
+    for (const [supplierId, run] of supplierRuns.entries()) {
+        const seenIds = seenBySupplierId.get(supplierId) || [];
+        const seenCount = await touchSeenSlabs(supabase, seenIds, run.id, run.startedAt);
+        const deactivatedCount = await deactivateUnseenSlabs(supabase, supplierId, seenIds, run.startedAt);
+        await finalizeSlabScrapeRun(supabase, run.id, {
+            seenCount,
+            insertedCount: 0,
+            updatedCount: seenCount,
+            deactivatedCount,
+            notes: { importer: "import_slab_catalog" },
+        });
+    }
+
+    console.log(`Imported ${importedCount} slab records into Supabase.`);
+  } catch (error) {
+    for (const [supplierId, run] of supplierRuns.entries()) {
+        const seenIds = seenBySupplierId.get(supplierId) || [];
+        await finalizeSlabScrapeRun(supabase, run.id, {
+            status: "failed",
+            seenCount: seenIds.length,
+            insertedCount: 0,
+            updatedCount: seenIds.length,
+            deactivatedCount: 0,
+            notes: { importer: "import_slab_catalog", error: String(error?.message || error) },
+        });
+    }
+    throw error;
   }
+}
 
 importCatalog().catch((error) => {
     console.error(error);

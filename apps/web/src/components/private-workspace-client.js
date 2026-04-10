@@ -374,19 +374,21 @@ function remnantColors(remnant) {
 function colorSwatchStyle(colorName) {
   const normalized = normalizeStoneLookupName(colorName);
   const palette = {
-    beige: { backgroundColor: "#d9c3a5" },
-    black: { backgroundColor: "#2b2928" },
-    blonde: { backgroundColor: "#e8d8b4" },
-    blue: { backgroundColor: "#7d9dbf" },
-    brown: { backgroundColor: "#8b5e3c" },
-    cream: { backgroundColor: "#efe2c7" },
-    gold: { backgroundColor: "#c8a14e" },
-    gray: { backgroundColor: "#8e9096" },
-    "gray-dark": { backgroundColor: "#575b63" },
-    "gray-light": { backgroundColor: "#c9ced6" },
-    green: { backgroundColor: "#758c75" },
-    navy: { backgroundColor: "#2f4a6d" },
-    taupe: { backgroundColor: "#a9927b" },
+    beige: { backgroundColor: "#d7b98c" },
+    black: { backgroundColor: "#1f1d1b" },
+    blonde: { backgroundColor: "#e7c98b" },
+    blue: { backgroundColor: "#5b88d6" },
+    brown: { backgroundColor: "#8b5a2b" },
+    cream: { backgroundColor: "#f4ead2" },
+    gold: { backgroundColor: "#d4af37" },
+    gray: { backgroundColor: "#8b9098" },
+    "gray-dark": { backgroundColor: "#5a5f68" },
+    "gray-light": { backgroundColor: "#cfd4dc" },
+    grey: { backgroundColor: "#8b9098" },
+    green: { backgroundColor: "#6f956f" },
+    navy: { backgroundColor: "#284a7a" },
+    red: { backgroundColor: "#ff3b30" },
+    taupe: { backgroundColor: "#8f7762" },
     white: { backgroundColor: "#ffffff" },
   };
   return palette[normalized] || { backgroundColor: "#d6ccc2" };
@@ -887,6 +889,10 @@ export default function PrivateWorkspaceClient() {
   const [editorColorSaving, setEditorColorSaving] = useState(false);
   const [editorStoneMenuOpen, setEditorStoneMenuOpen] = useState(false);
   const [editorBrandMenuOpen, setEditorBrandMenuOpen] = useState(false);
+  const [editorSlabForm, setEditorSlabForm] = useState(null);
+  const [editorSlabLoading, setEditorSlabLoading] = useState(false);
+  const [editorSlabSaving, setEditorSlabSaving] = useState(false);
+  const [editorSlabError, setEditorSlabError] = useState("");
   const [holdEditor, setHoldEditor] = useState(null);
   const [soldEditor, setSoldEditor] = useState(null);
   const [cropModal, setCropModal] = useState(null);
@@ -907,8 +913,12 @@ export default function PrivateWorkspaceClient() {
   const editorImageInputRef = useRef(null);
   const lastPathnameRef = useRef(pathname);
   const canStructure = canManageStructure(profile);
+  const canEditLinkedSlab = profile?.system_role === "super_admin";
   const isStatusUser = profile?.system_role === "status_user";
   const roleDisplay = humanizeRole(profile?.system_role);
+  const activeLookupColors = Array.isArray(lookups.colors)
+    ? lookups.colors.filter((row) => row?.active !== false && row?.name)
+    : [];
   const profileCompanyName = useMemo(() => {
     const directName = String(
       profile?.company_name || profile?.company?.name || profile?.company || "",
@@ -1428,11 +1438,51 @@ export default function PrivateWorkspaceClient() {
     }
   }
 
+  function resetEditorSlabState() {
+    setEditorSlabForm(null);
+    setEditorSlabLoading(false);
+    setEditorSlabSaving(false);
+    setEditorSlabError("");
+  }
+
+  async function loadLinkedSlabEditor(slabId) {
+    if (!canEditLinkedSlab || !slabId) {
+      resetEditorSlabState();
+      return;
+    }
+
+    try {
+      setEditorSlabLoading(true);
+      setEditorSlabError("");
+      const slab = await apiFetch(`/api/slabs/${slabId}`, { cache: "no-store" });
+      setEditorSlabForm({
+        id: slab.id,
+        name: slab.name || "",
+        width: slab.width || "",
+        height: slab.height || "",
+        detail_url: slab.detail_url || "",
+        image_url: slab.image_url || "",
+        colors: Array.isArray(slab.colors) ? slab.colors : [],
+        finishes: Array.isArray(slab.finishes) ? slab.finishes : [],
+        thicknesses: Array.isArray(slab.thicknesses) ? slab.thicknesses : [],
+        brand_name: slab.brand_name || "",
+        supplier: slab.supplier || "",
+        material: slab.material || "",
+      });
+    } catch (loadError) {
+      setEditorSlabForm(null);
+      setEditorSlabError(loadError.message || "Unable to load linked slab.");
+    } finally {
+      setEditorSlabLoading(false);
+    }
+  }
+
   function openCreateEditor() {
     if (!profile || !canManageStructure(profile)) return;
     setEditorMode("create");
     setEditorForm({
       moraware_remnant_id: nextStoneId ?? "",
+      parent_slab_id: "",
       name: "",
       brand_name: "",
       company_id: profile.system_role === "status_user" ? String(profile.company_id || "") : "",
@@ -1454,6 +1504,7 @@ export default function PrivateWorkspaceClient() {
     setEditorColorDraft("");
     setEditorStoneMenuOpen(false);
     setEditorBrandMenuOpen(false);
+    resetEditorSlabState();
     if (editorImageInputRef.current) editorImageInputRef.current.value = "";
   }
 
@@ -1471,6 +1522,7 @@ export default function PrivateWorkspaceClient() {
     setEditorForm({
       id: remnant.id,
       moraware_remnant_id: remnant.moraware_remnant_id || "",
+      parent_slab_id: remnant.parent_slab_id || "",
       name: remnant.name || "",
       brand_name: remnant.brand_name || "",
       company_id: String(remnant.company_id || ""),
@@ -1492,6 +1544,11 @@ export default function PrivateWorkspaceClient() {
     setEditorColorDraft("");
     setEditorStoneMenuOpen(false);
     setEditorBrandMenuOpen(false);
+    if (canEditLinkedSlab && remnant?.parent_slab_id) {
+      void loadLinkedSlabEditor(remnant.parent_slab_id);
+    } else {
+      resetEditorSlabState();
+    }
     if (editorImageInputRef.current) editorImageInputRef.current.value = "";
   }
 
@@ -1503,6 +1560,7 @@ export default function PrivateWorkspaceClient() {
     setEditorColorSaving(false);
     setEditorStoneMenuOpen(false);
     setEditorBrandMenuOpen(false);
+    resetEditorSlabState();
     setCropModal(null);
     cropImageRef.current = null;
     if (editorImageInputRef.current) editorImageInputRef.current.value = "";
@@ -1537,6 +1595,67 @@ export default function PrivateWorkspaceClient() {
         colors: nextValues,
       };
     });
+  }
+
+  function updateEditorSlabField(key, value) {
+    setEditorSlabForm((current) => current ? ({ ...current, [key]: value }) : current);
+  }
+
+  function toggleEditorSlabListValue(key, value) {
+    setEditorSlabForm((current) => {
+      if (!current) return current;
+      const currentValues = Array.isArray(current[key]) ? current[key] : [];
+      const nextValues = colorListIncludes(currentValues, value)
+        ? currentValues.filter((entry) => normalizeStoneLookupName(entry) !== normalizeStoneLookupName(value))
+        : [...currentValues, value];
+
+      return {
+        ...current,
+        [key]: nextValues,
+      };
+    });
+  }
+
+  async function saveLinkedSlab() {
+    if (!editorSlabForm?.id) return;
+
+    try {
+      clearMessage();
+      setEditorSlabSaving(true);
+      setEditorSlabError("");
+      const updatedSlab = await apiFetch(`/api/slabs/${editorSlabForm.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editorSlabForm.name,
+          width: editorSlabForm.width,
+          height: editorSlabForm.height,
+          detail_url: editorSlabForm.detail_url,
+          image_url: editorSlabForm.image_url,
+          colors: editorSlabForm.colors,
+          finishes: editorSlabForm.finishes,
+          thicknesses: editorSlabForm.thicknesses,
+        }),
+      });
+
+      setEditorSlabForm((current) => current ? ({
+        ...current,
+        name: updatedSlab.name || "",
+        width: updatedSlab.width || "",
+        height: updatedSlab.height || "",
+        detail_url: updatedSlab.detail_url || "",
+        image_url: updatedSlab.image_url || "",
+        colors: Array.isArray(updatedSlab.colors) ? updatedSlab.colors : [],
+        finishes: Array.isArray(updatedSlab.finishes) ? updatedSlab.finishes : [],
+        thicknesses: Array.isArray(updatedSlab.thicknesses) ? updatedSlab.thicknesses : [],
+      }) : current);
+      showSuccessMessage("Linked slab updated.");
+    } catch (saveError) {
+      setEditorSlabError(saveError.message || "Unable to update linked slab.");
+      showErrorMessage(saveError.message || "Unable to update linked slab.");
+    } finally {
+      setEditorSlabSaving(false);
+    }
   }
 
   async function createEditorColor() {
@@ -2146,6 +2265,14 @@ export default function PrivateWorkspaceClient() {
                 </button>
                 {profile?.system_role === "super_admin" ? (
                   <>
+                    <Link
+                      href="/manage/confirm"
+                      className={`inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)] ${
+                        isStatusUser ? "shrink-0 px-3.5" : ""
+                      }`}
+                    >
+                      Confirm
+                    </Link>
                     <Link
                       href="/admin"
                       className={`inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)] ${
@@ -3175,27 +3302,28 @@ export default function PrivateWorkspaceClient() {
                       )}
                     </div>
                     <div className="mt-4 rounded-[22px] border border-[var(--brand-line)] bg-[var(--brand-white)] p-4">
-                      <div className="flex flex-wrap gap-2">
-                        {lookups.colors.map((row) => {
+                      <div className="flex flex-wrap gap-2.5">
+                        {activeLookupColors.map((row) => {
                           const selected = colorListIncludes(editorForm.colors, row.name);
                           return (
                             <button
                               key={`color-${row.id}`}
                               type="button"
                               onClick={() => toggleEditorColor(row.name)}
-                              className={`group relative inline-flex h-10 w-10 items-center justify-center rounded-full border transition ${
+                              className={`group relative inline-flex min-h-10 items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition ${
                                 selected
-                                  ? "border-[var(--brand-orange)] ring-4 ring-[rgba(247,134,57,0.16)] shadow-sm"
-                                  : "border-[var(--brand-line)] hover:border-[rgba(247,134,57,0.35)] hover:scale-[1.03]"
+                                  ? "border-[var(--brand-orange)] bg-white ring-4 ring-[rgba(247,134,57,0.16)] shadow-sm"
+                                  : "border-[var(--brand-line)] bg-white hover:border-[rgba(247,134,57,0.35)] hover:bg-[rgba(255,255,255,0.92)]"
                               }`}
-                              style={colorSwatchStyle(row.name)}
-                              title={row.name}
                               aria-label={row.name}
                               aria-pressed={selected}
                             >
-                              {selected ? (
-                                <span className="h-3.5 w-3.5 rounded-full border border-white/75 bg-white/90 shadow-sm" />
-                              ) : null}
+                              <span
+                                className="h-6 w-6 rounded-full border border-black/10 shadow-inner"
+                                style={colorSwatchStyle(row.name)}
+                                aria-hidden="true"
+                              />
+                              <span className="text-[rgba(35,35,35,0.82)]">{row.name}</span>
                               <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-full bg-[#2c211c]/92 px-3 py-2 text-[11px] font-semibold text-white opacity-0 shadow-lg backdrop-blur-sm transition-all group-hover:opacity-100 group-focus-visible:opacity-100 xl:inline-flex">
                                 {row.name}
                               </span>
@@ -3448,6 +3576,209 @@ export default function PrivateWorkspaceClient() {
                   ) : null}
                 </div>
               </section>
+              {editorMode === "edit" && canEditLinkedSlab ? (
+                <section className="rounded-[26px] border border-[var(--brand-line)] bg-white p-5 shadow-[0_12px_28px_rgba(25,27,28,0.05)] md:col-span-2">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Linked Slab</p>
+                      <p className="mt-1 text-sm text-[rgba(35,35,35,0.62)]">
+                        Temporary super-admin controls for the slab attached to this remnant.
+                      </p>
+                    </div>
+                    {editorForm.parent_slab_id || editorSlabForm?.id ? (
+                      <span className="inline-flex items-center rounded-full border border-[var(--brand-line)] bg-[var(--brand-white)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)]">
+                        Slab #{editorSlabForm?.id || editorForm.parent_slab_id}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {editorSlabLoading ? (
+                    <div className="mt-4 rounded-[22px] border border-[var(--brand-line)] bg-[var(--brand-white)] px-4 py-4 text-sm font-medium text-[rgba(35,35,35,0.72)]">
+                      Loading linked slab…
+                    </div>
+                  ) : null}
+
+                  {!editorSlabLoading && !editorSlabForm ? (
+                    <div className="mt-4 rounded-[22px] border border-dashed border-[var(--brand-line)] bg-[var(--brand-white)] px-4 py-4 text-sm text-[rgba(35,35,35,0.72)]">
+                      {editorSlabError || "This remnant does not have a linked slab yet."}
+                    </div>
+                  ) : null}
+
+                  {editorSlabForm ? (
+                    <>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {editorSlabForm.brand_name ? (
+                          <span className="inline-flex items-center rounded-full border border-[var(--brand-line)] bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[rgba(35,35,35,0.7)]">
+                            Brand · {editorSlabForm.brand_name}
+                          </span>
+                        ) : null}
+                        {editorSlabForm.supplier ? (
+                          <span className="inline-flex items-center rounded-full border border-[var(--brand-line)] bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[rgba(35,35,35,0.7)]">
+                            Supplier · {editorSlabForm.supplier}
+                          </span>
+                        ) : null}
+                        {editorSlabForm.material ? (
+                          <span className="inline-flex items-center rounded-full border border-[var(--brand-line)] bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[rgba(35,35,35,0.7)]">
+                            Material · {editorSlabForm.material}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="mt-4 grid gap-4 xl:grid-cols-12">
+                        <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-4">
+                          Slab Name
+                          <input
+                            type="text"
+                            value={editorSlabForm.name}
+                            onChange={(event) => updateEditorSlabField("name", event.target.value)}
+                            className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                          />
+                        </label>
+                        <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-2">
+                          Width
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={editorSlabForm.width}
+                            onChange={(event) => updateEditorSlabField("width", event.target.value)}
+                            className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                          />
+                        </label>
+                        <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-2">
+                          Height
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={editorSlabForm.height}
+                            onChange={(event) => updateEditorSlabField("height", event.target.value)}
+                            className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                          />
+                        </label>
+                        <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-4">
+                          Supplier URL
+                          <input
+                            type="url"
+                            value={editorSlabForm.detail_url}
+                            onChange={(event) => updateEditorSlabField("detail_url", event.target.value)}
+                            className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                          />
+                        </label>
+                        <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-8">
+                          Image URL
+                          <input
+                            type="url"
+                            value={editorSlabForm.image_url}
+                            onChange={(event) => updateEditorSlabField("image_url", event.target.value)}
+                            className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                          />
+                        </label>
+                      </div>
+
+                      <div className="mt-5 grid gap-4 lg:grid-cols-3">
+                        <div className="rounded-[22px] border border-[var(--brand-line)] bg-[var(--brand-white)] p-4">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Colors</p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {activeLookupColors.map((row) => {
+                              const selected = colorListIncludes(editorSlabForm.colors, row.name);
+                              return (
+                                <button
+                                  key={`slab-color-${row.id}`}
+                                  type="button"
+                                  onClick={() => toggleEditorSlabListValue("colors", row.name)}
+                                  className={`group relative inline-flex h-10 w-10 items-center justify-center rounded-full border transition ${
+                                    selected
+                                      ? "border-[var(--brand-orange)] ring-4 ring-[rgba(247,134,57,0.16)] shadow-sm"
+                                      : "border-[var(--brand-line)] hover:border-[rgba(247,134,57,0.35)] hover:scale-[1.03]"
+                                  }`}
+                                  style={colorSwatchStyle(row.name)}
+                                  title={row.name}
+                                  aria-label={row.name}
+                                  aria-pressed={selected}
+                                >
+                                  {selected ? (
+                                    <span className="h-3.5 w-3.5 rounded-full border border-white/75 bg-white/90 shadow-sm" />
+                                  ) : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="rounded-[22px] border border-[var(--brand-line)] bg-[var(--brand-white)] p-4">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Finishes</p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {lookups.finishes.map((row) => {
+                              const selected = colorListIncludes(editorSlabForm.finishes, row.name);
+                              return (
+                                <button
+                                  key={`slab-finish-${row.id}`}
+                                  type="button"
+                                  onClick={() => toggleEditorSlabListValue("finishes", row.name)}
+                                  className={`inline-flex h-10 items-center justify-center rounded-full border px-3.5 text-sm font-semibold transition ${
+                                    selected
+                                      ? "border-[var(--brand-orange)] bg-white text-[var(--brand-orange)] ring-4 ring-[rgba(247,134,57,0.14)]"
+                                      : "border-[var(--brand-line)] bg-white text-[var(--brand-ink)] hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+                                  }`}
+                                >
+                                  {row.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="rounded-[22px] border border-[var(--brand-line)] bg-[var(--brand-white)] p-4">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Thicknesses</p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {lookups.thicknesses.map((row) => {
+                              const selected = colorListIncludes(editorSlabForm.thicknesses, row.name);
+                              return (
+                                <button
+                                  key={`slab-thickness-${row.id}`}
+                                  type="button"
+                                  onClick={() => toggleEditorSlabListValue("thicknesses", row.name)}
+                                  className={`inline-flex h-10 items-center justify-center rounded-full border px-3.5 text-sm font-semibold transition ${
+                                    selected
+                                      ? "border-[var(--brand-orange)] bg-white text-[var(--brand-orange)] ring-4 ring-[rgba(247,134,57,0.14)]"
+                                      : "border-[var(--brand-line)] bg-white text-[var(--brand-ink)] hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+                                  }`}
+                                >
+                                  {row.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      {editorSlabError ? (
+                        <div className="mt-4 rounded-[20px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                          {editorSlabError}
+                        </div>
+                      ) : null}
+
+                      <div className="mt-5 flex flex-wrap justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => void loadLinkedSlabEditor(editorSlabForm.id)}
+                          disabled={editorSlabLoading || editorSlabSaving}
+                          className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-5 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Refresh Slab
+                        </button>
+                        <button
+                          type="button"
+                          onClick={saveLinkedSlab}
+                          disabled={editorSlabSaving}
+                          className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {editorSlabSaving ? "Saving Slab…" : "Save Linked Slab"}
+                        </button>
+                      </div>
+                    </>
+                  ) : null}
+                </section>
+              ) : null}
               <div className="md:col-span-2 flex flex-wrap justify-center gap-3 pt-2">
                 <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-6 text-sm font-semibold text-white transition hover:bg-[var(--brand-orange)]">
                   {editorMode === "create" ? "Create Remnant" : "Save Changes"}

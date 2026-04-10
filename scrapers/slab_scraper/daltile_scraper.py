@@ -112,6 +112,66 @@ def get_property_value(container, label_text: str) -> str | None:
     return None
 
 
+def normalize_daltile_image_url(image_url: str | None) -> str | None:
+    value = safe_text(image_url)
+    if not value:
+        return None
+
+    # Daltile sometimes points sample rows at a zoom-web derivative.
+    # The carousel product image is cleaner and uses the same base asset id.
+    value = value.replace("_2000_zoom_web", "")
+    return value
+
+
+def collect_product_images(soup: BeautifulSoup) -> list[str]:
+    images: list[str] = []
+    seen: set[str] = set()
+
+    responsive_zoom = normalize_daltile_image_url(
+        soup.select_one("#responsive_zoom").get("src") if soup.select_one("#responsive_zoom") else None
+    )
+    if responsive_zoom and responsive_zoom not in seen:
+        seen.add(responsive_zoom)
+        images.append(responsive_zoom)
+
+    for image in soup.select(".carousel-image-wrapper img[data-lrg-src]"):
+        if safe_text(image.get("data-asset-type")).lower() != "productimage":
+            continue
+        candidate = normalize_daltile_image_url(image.get("data-lrg-src"))
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        images.append(candidate)
+
+    return images
+
+
+def choose_best_product_image(
+    sample_image_url: str | None,
+    product_images: list[str],
+    thickness: str | None,
+) -> str | None:
+    sample_image = normalize_daltile_image_url(sample_image_url)
+
+    thickness_tokens: list[str] = []
+    if thickness:
+        compact = safe_text(thickness).lower().replace(" ", "")
+        for part in compact.split(","):
+            token = part.strip()
+            if token:
+                thickness_tokens.append(token)
+
+    for token in thickness_tokens:
+        for candidate in product_images:
+            if token in candidate.lower():
+                return candidate
+
+    if product_images:
+        return product_images[0]
+
+    return sample_image
+
+
 def collect_series_pages() -> list[DaltileSeriesSource]:
     return [DaltileSeriesSource(material=material, series_url=url) for material, url in SERIES_SOURCES]
 
@@ -159,6 +219,7 @@ def parse_detail_records(
 ) -> list[DaltileSlabRecord]:
     soup = get_soup(session, detail_url, timeout_sec)
     page_series_name = collect_series_name(soup)
+    product_images = collect_product_images(soup)
     rows: list[DaltileSlabRecord] = []
     seen_keys: set[tuple[str, str | None, str | None, str | None, str]] = set()
 
@@ -178,7 +239,11 @@ def parse_detail_records(
             or page_series_name
         )
         color_code = get_input_value(container, "sample.Product.ColorCode")
-        image_url = get_input_value(container, "sample.ImageUrl")
+        image_url = choose_best_product_image(
+            sample_image_url=get_input_value(container, "sample.ImageUrl"),
+            product_images=product_images,
+            thickness=thickness,
+        )
 
         if not name:
             title_node = soup.select_one("h1.page-title")

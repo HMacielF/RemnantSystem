@@ -36,7 +36,22 @@ logging.basicConfig(
 
 
 BASE_URL = "https://www.gramaco.com"
-SUPPORTED_CATEGORIES = ("quartz", "quartzite", "marble", "granite", "soapstone", "porcelain")
+SPECIAL_COLLECTION_URLS = {
+    "hrp": f"{BASE_URL}/quartz/?swoof=1&type_collection=hrp&paged=1",
+    "polarstone": f"{BASE_URL}/quartz/?swoof=1&paged=1&type_collection=polarstone",
+    "smart-quartz": f"{BASE_URL}/quartz/?swoof=1&paged=1&type_collection=smart-quartz",
+}
+SUPPORTED_CATEGORIES = (
+    "quartz",
+    "quartzite",
+    "marble",
+    "granite",
+    "soapstone",
+    "porcelain",
+    "hrp",
+    "polarstone",
+    "smart-quartz",
+)
 PRODUCT_CARD_SELECTOR = ".product-item-inner"
 PRODUCT_LINK_SELECTOR = ".product-thumb a.product-link, a.product-name"
 PRODUCT_NAME_SELECTOR = "a.product-name"
@@ -62,6 +77,7 @@ class GramacoSlabRecord:
     thickness: str | None
     finishes: str | None
     material: str
+    source_collection: str
 
 
 def now_timestamp_slug() -> str:
@@ -69,10 +85,14 @@ def now_timestamp_slug() -> str:
 
 
 def build_listing_url(category_slug: str) -> str:
+    if category_slug in SPECIAL_COLLECTION_URLS:
+        return SPECIAL_COLLECTION_URLS[category_slug]
     return f"{BASE_URL}/type_category/{category_slug.strip('/')}/"
 
 
 def material_label_from_category(category_slug: str) -> str:
+    if category_slug in SPECIAL_COLLECTION_URLS:
+        return "Quartz"
     return " ".join(part.capitalize() for part in category_slug.strip("/").split("-") if part)
 
 
@@ -238,6 +258,7 @@ def collect_detail_record(
         thickness=thickness,
         finishes=finishes,
         material=material.title() if material else material_label_from_category(category_slug),
+        source_collection=category_slug,
     )
 
 
@@ -275,6 +296,7 @@ def export_records(records: list[GramacoSlabRecord], output_dir: Path, category_
             "thickness": record.thickness,
             "finishes": record.finishes,
             "material": record.material,
+            "source_collection": record.source_collection,
         }
         for record in records
     ]
@@ -294,6 +316,7 @@ def export_records(records: list[GramacoSlabRecord], output_dir: Path, category_
                 "thickness",
                 "finishes",
                 "material",
+                "source_collection",
             ],
         )
         writer.writeheader()

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+const ROWS_PAGE_SIZE = 150;
+
 function isAccessDeniedError(message) {
   const normalized = String(message || "").trim().toLowerCase();
   return [
@@ -35,10 +37,39 @@ function identifierKey(identifier) {
   return JSON.stringify(identifier || {});
 }
 
-function prettyCell(value) {
+function formatTimestampDisplay(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function prettyCell(value, column) {
   if (value === null || value === undefined) return "";
+  if (column?.type === "timestamptz") return formatTimestampDisplay(value);
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+}
+
+function sortableCellValue(value, column) {
+  if (value === null || value === undefined || value === "") return null;
+  if (column?.type === "boolean") return value ? 1 : 0;
+  if (["bigint", "integer", "numeric"].includes(column?.type)) {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : String(value).toLowerCase();
+  }
+  if (column?.type === "timestamptz") {
+    const timestamp = new Date(value).getTime();
+    return Number.isNaN(timestamp) ? String(value).toLowerCase() : timestamp;
+  }
+  if (typeof value === "object") return JSON.stringify(value).toLowerCase();
+  return String(value).toLowerCase();
 }
 
 function timestampValueForInput(value) {
@@ -65,15 +96,30 @@ function defaultValueForColumn(column) {
   return column.type === "boolean" ? false : "";
 }
 
+function buildDefaultRow(columns) {
+  return (Array.isArray(columns) ? columns : []).reduce((acc, column) => {
+    acc[column.name] = defaultValueForColumn(column);
+    return acc;
+  }, {});
+}
+
+function editableValuesForRow(columns, row) {
+  return (Array.isArray(columns) ? columns : []).reduce((acc, column) => {
+    if (column.editable === false) return acc;
+    acc[column.name] = row?.[column.name] ?? defaultValueForColumn(column);
+    return acc;
+  }, {});
+}
+
 function AccessNotice({ title, body, ctaHref, ctaLabel }) {
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,#1f3657_0%,#15263f_28%,#0f1727_58%,#edf2f7_58%,#edf2f7_100%)] px-6 py-10 text-[#18212d]">
-      <div className="mx-auto max-w-3xl rounded-[32px] border border-white/15 bg-white/95 p-8 shadow-[0_28px_90px_rgba(11,18,32,0.18)]">
-        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b86f3d]">Super Admin Only</p>
-        <h1 className="mt-3 text-3xl font-semibold text-[#172230]">{title}</h1>
-        <p className="mt-4 text-sm leading-7 text-[#617286]">{body}</p>
+    <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,var(--brand-white)_52%,rgba(247,134,57,0.08)_100%)] px-6 py-10 text-[var(--brand-ink)]">
+      <div className="mx-auto max-w-3xl rounded-[32px] border border-[var(--brand-line)] bg-white/95 p-8 shadow-[0_28px_90px_rgba(25,27,28,0.12)]">
+        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--brand-orange)]">Super Admin Only</p>
+        <h1 className="font-display mt-3 text-3xl font-semibold text-[var(--brand-ink)]">{title}</h1>
+        <p className="mt-4 text-sm leading-7 text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)]">{body}</p>
         <div className="mt-6 flex flex-wrap gap-3">
-          <a href={ctaHref} className="inline-flex h-11 items-center justify-center rounded-2xl bg-[#152238] px-5 text-sm font-semibold text-white transition hover:bg-[#f08b49]">
+          <a href={ctaHref} className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--brand-orange)]">
             {ctaLabel}
           </a>
         </div>
@@ -100,6 +146,10 @@ export default function AdminWorkspaceClient() {
   const [isCreating, setIsCreating] = useState(false);
   const [tableFilter, setTableFilter] = useState("");
   const [rowFilter, setRowFilter] = useState("");
+  const [rowOffset, setRowOffset] = useState(0);
+  const [totalRows, setTotalRows] = useState(0);
+  const [visibleColumnCount, setVisibleColumnCount] = useState(12);
+  const [sortConfig, setSortConfig] = useState({ column: "", direction: "asc" });
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -124,12 +174,68 @@ export default function AdminWorkspaceClient() {
     });
   }, [rowFilter, rows]);
 
+  const sortedRows = useMemo(() => {
+    if (!sortConfig.column || !activeTableMeta) return filteredRows;
+    const sortColumn = activeTableMeta.columns.find((column) => column.name === sortConfig.column);
+    if (!sortColumn) return filteredRows;
+
+    const nextRows = [...filteredRows];
+    nextRows.sort((left, right) => {
+      const leftValue = sortableCellValue(left[sortColumn.name], sortColumn);
+      const rightValue = sortableCellValue(right[sortColumn.name], sortColumn);
+
+      if (leftValue === rightValue) return 0;
+      if (leftValue === null) return 1;
+      if (rightValue === null) return -1;
+      if (leftValue < rightValue) return sortConfig.direction === "asc" ? -1 : 1;
+      if (leftValue > rightValue) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+    return nextRows;
+  }, [activeTableMeta, filteredRows, sortConfig]);
+
   const resettableSelectedRow = useMemo(() => {
     if (isCreating || !selectedIdentifier) return null;
     return rows.find((row) => identifierKey(row._identifier) === identifierKey(selectedIdentifier)) || null;
   }, [isCreating, rows, selectedIdentifier]);
 
   const activeTableName = activeTableMeta?.name || "";
+  const visibleColumns = useMemo(() => {
+    if (!activeTableMeta?.columns) return [];
+    if (visibleColumnCount === Number.POSITIVE_INFINITY) return activeTableMeta.columns;
+    return activeTableMeta.columns.slice(0, visibleColumnCount);
+  }, [activeTableMeta, visibleColumnCount]);
+
+  const defaultSelectedRow = useMemo(
+    () => (activeTableMeta ? buildDefaultRow(activeTableMeta.columns) : null),
+    [activeTableMeta],
+  );
+
+  const hasUnsavedChanges = useMemo(() => {
+    if (!activeTableMeta || !selectedRow) return false;
+    const baseline = isCreating
+      ? editableValuesForRow(activeTableMeta.columns, defaultSelectedRow)
+      : editableValuesForRow(activeTableMeta.columns, resettableSelectedRow);
+    const current = editableValuesForRow(activeTableMeta.columns, selectedRow);
+    return JSON.stringify(current) !== JSON.stringify(baseline);
+  }, [activeTableMeta, defaultSelectedRow, isCreating, resettableSelectedRow, selectedRow]);
+
+  const pageStart = totalRows === 0 ? 0 : rowOffset + 1;
+  const pageEnd = totalRows === 0 ? 0 : Math.min(rowOffset + sortedRows.length, totalRows);
+  const hasPreviousPage = rowOffset > 0;
+  const hasNextPage = rowOffset + ROWS_PAGE_SIZE < totalRows;
+
+  useEffect(() => {
+    if (!message) return undefined;
+    const timeoutId = window.setTimeout(() => setMessage(""), 2600);
+    return () => window.clearTimeout(timeoutId);
+  }, [message]);
+
+  useEffect(() => {
+    if (!error) return undefined;
+    const timeoutId = window.setTimeout(() => setError(""), 4200);
+    return () => window.clearTimeout(timeoutId);
+  }, [error]);
 
   function optionsForColumn(columnName) {
     if (columnName === "company_id") return relationOptions.companies;
@@ -154,6 +260,28 @@ export default function AdminWorkspaceClient() {
     }
     if (/_user_id$/.test(columnName)) return "No users available";
     return "No options available";
+  }
+
+  function setCreateDefaults() {
+    if (!activeTableMeta) return;
+    setSelectedRow(buildDefaultRow(activeTableMeta.columns));
+  }
+
+  function closeEditorModal() {
+    setSelectedRow(null);
+    setIsCreating(false);
+  }
+
+  function toggleSort(columnName) {
+    setSortConfig((current) => {
+      if (current.column === columnName) {
+        return {
+          column: columnName,
+          direction: current.direction === "asc" ? "desc" : "asc",
+        };
+      }
+      return { column: columnName, direction: "asc" };
+    });
   }
 
   useEffect(() => {
@@ -237,9 +365,10 @@ export default function AdminWorkspaceClient() {
     async function loadRows() {
       try {
         setError("");
-        const payload = await apiFetch(`/api/admin/db/${encodeURIComponent(activeTable)}?limit=150`, { cache: "no-store" });
+        const payload = await apiFetch(`/api/admin/db/${encodeURIComponent(activeTable)}?limit=${ROWS_PAGE_SIZE}&offset=${rowOffset}`, { cache: "no-store" });
         const nextRows = Array.isArray(payload.rows) ? payload.rows : [];
         setRows(nextRows);
+        setTotalRows(Number(payload.total) || nextRows.length || 0);
         setSelectedIdentifier(null);
         setSelectedRow(null);
         setIsCreating(false);
@@ -249,19 +378,27 @@ export default function AdminWorkspaceClient() {
     }
 
     loadRows();
-  }, [activeTable, authState]);
+  }, [activeTable, authState, rowOffset]);
+
+  useEffect(() => {
+    setRowOffset(0);
+    setSortConfig({ column: "", direction: "asc" });
+  }, [activeTable]);
 
   function startCreateRow() {
     if (!activeTableMeta) return;
     setIsCreating(true);
     setSelectedIdentifier(null);
-    setSelectedRow(
-      activeTableMeta.columns.reduce((acc, column) => {
-        acc[column.name] = defaultValueForColumn(column);
-        return acc;
-      }, {}),
-    );
+    setCreateDefaults();
     setMessage("");
+  }
+
+  function duplicateSelectedRow() {
+    if (!activeTableMeta || !resettableSelectedRow) return;
+    setIsCreating(true);
+    setSelectedIdentifier(null);
+    setSelectedRow(editableValuesForRow(activeTableMeta.columns, resettableSelectedRow));
+    setMessage("Duplicating the selected row. Review fields before saving.");
   }
 
   function selectRow(row) {
@@ -295,8 +432,10 @@ export default function AdminWorkspaceClient() {
   async function reloadRows() {
     if (!activeTable) return;
     try {
-      const payload = await apiFetch(`/api/admin/db/${encodeURIComponent(activeTable)}?limit=150`, { cache: "no-store" });
-      setRows(Array.isArray(payload.rows) ? payload.rows : []);
+      const payload = await apiFetch(`/api/admin/db/${encodeURIComponent(activeTable)}?limit=${ROWS_PAGE_SIZE}&offset=${rowOffset}`, { cache: "no-store" });
+      const nextRows = Array.isArray(payload.rows) ? payload.rows : [];
+      setRows(nextRows);
+      setTotalRows(Number(payload.total) || nextRows.length || 0);
       setMessage("Rows reloaded.");
     } catch (loadError) {
       setError(loadError.message);
@@ -390,7 +529,7 @@ export default function AdminWorkspaceClient() {
   }
 
   if (authState === "loading") {
-    return <main className="min-h-screen bg-[#edf2f7] px-6 py-10 text-[#18212d]">Loading super-admin workspace...</main>;
+    return <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,var(--brand-white)_52%,rgba(247,134,57,0.08)_100%)] px-6 py-10 text-[var(--brand-ink)]">Loading super-admin workspace...</main>;
   }
 
   if (authState === "forbidden") {
@@ -406,58 +545,81 @@ export default function AdminWorkspaceClient() {
     );
   }
 
-  const visibleColumns = activeTableMeta?.columns.slice(0, 6) || [];
-
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,#1f3657_0%,#15263f_28%,#0f1727_58%,#edf2f7_58%,#edf2f7_100%)] font-sans text-[#18212d]">
-      <div className="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 md:px-6 md:py-6 2xl:px-8">
-        <section className="mb-4 overflow-hidden rounded-[32px] border border-white/15 bg-[linear-gradient(135deg,rgba(11,18,32,0.92),rgba(27,43,69,0.86))] px-6 py-6 text-white shadow-[0_28px_90px_rgba(11,18,32,0.18)]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#f8b98a]">Super Admin Only</p>
-              <h1 className="mt-2 text-3xl font-semibold leading-tight md:text-[2.8rem]">Direct database workspace for live operations.</h1>
-              <p className="mt-3 text-sm text-slate-300 md:text-base">
-                Browse, edit, create, and delete records across the app tables without touching code. This workspace is only available to `super_admin`.
+    <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,var(--brand-white)_52%,rgba(247,134,57,0.08)_100%)] font-sans text-[var(--brand-ink)]">
+      <div className="mx-auto w-full max-w-[1800px] px-3 py-5 sm:px-4 md:px-6 2xl:px-8">
+        <section className="mb-4 overflow-hidden rounded-[32px] border border-[var(--brand-line)] bg-[linear-gradient(135deg,rgba(255,255,255,0.99),rgba(242,242,242,0.96))] px-6 py-5 text-[var(--brand-ink)] shadow-[0_28px_90px_rgba(25,27,28,0.10)]">
+          <div className="grid gap-5 lg:items-start xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,520px)]">
+            <div className="max-w-4xl">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-orange)]">Super Admin Workspace</p>
+              <h1 className="font-display mt-3 max-w-3xl text-[1.9rem] font-semibold leading-tight text-[var(--brand-ink)] md:text-[2.35rem]">
+                Direct database controls for live operations.
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-[rgba(35,35,35,0.72)]">
+                Browse and update live app tables fast. Reserved for `super_admin`.
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm text-white">
-                {profile?.full_name || profile?.email || "User"} · {profile?.system_role}
+
+            <div className="ml-auto w-fit max-w-full rounded-[22px] border border-[var(--brand-line)] bg-white p-3.5 shadow-[0_16px_38px_rgba(25,27,28,0.06)] backdrop-blur xl:min-w-[420px]">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <h2 className="truncate text-base font-semibold text-[var(--brand-ink)]">
+                    {profile?.full_name || profile?.email || "User"} · {profile?.system_role}
+                  </h2>
+                </div>
+                <form method="POST" action="/api/auth/logout" className="shrink-0">
+                  <button
+                    type="submit"
+                    className="inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-3.5 text-center text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)]"
+                  >
+                    Log Out
+                  </button>
+                </form>
               </div>
-              <Link href="/manage" className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-5 text-sm font-semibold text-white transition hover:bg-white/15">
-                Back to Workspace
-              </Link>
+              <div className="mt-3.5 grid grid-cols-3 gap-2.5">
+                <Link
+                  href="/manage"
+                  className="inline-flex h-10 w-full items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)]"
+                >
+                  Remnants
+                </Link>
+                <Link
+                  href="/slabs"
+                  className="inline-flex h-10 w-full items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)]"
+                >
+                  Slabs
+                </Link>
+                <Link
+                  href="/portal"
+                  className="inline-flex h-10 w-full items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)]"
+                >
+                  Portal
+                </Link>
+              </div>
             </div>
           </div>
         </section>
 
-        {message ? (
-          <div className="mb-4 rounded-2xl bg-[#eef6f1] px-4 py-3 text-sm font-medium text-[#27543f]">{message}</div>
-        ) : null}
-        {error ? (
-          <div className="mb-4 rounded-2xl bg-[#fff1f1] px-4 py-3 text-sm font-medium text-[#b42318]">{error}</div>
-        ) : null}
-
-        <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)_380px]">
-          <aside className="rounded-[28px] border border-[#d8e1ea] bg-white/94 p-4 shadow-[0_28px_90px_rgba(11,18,32,0.18)]">
+        <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)]">
+          <aside className="rounded-[28px] border border-[var(--brand-line)] bg-white/94 p-4 shadow-[0_28px_90px_rgba(25,27,28,0.10)]">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#62758a]">Tables</p>
-                <h2 className="mt-1 text-xl font-semibold text-[#172230]">Editable schema</h2>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Tables</p>
+                <h2 className="font-display mt-1 text-xl font-semibold text-[var(--brand-ink)]">Editable schema</h2>
               </div>
-              <button type="button" onClick={() => reloadMeta()} className="inline-flex h-10 items-center justify-center rounded-2xl border border-[#d0dae5] px-4 text-sm font-semibold text-[#233245] transition hover:border-[#f08b49] hover:text-[#111827]">
+              <button type="button" onClick={() => reloadMeta()} className="inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]">
                 Refresh
               </button>
             </div>
             <div className="mt-4">
-              <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[#708296]">
+              <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
                 Filter tables
                 <input
                   value={tableFilter}
                   onChange={(event) => setTableFilter(event.target.value)}
                   type="text"
                   placeholder="Search table names"
-                  className="mt-2 h-11 w-full rounded-2xl border border-[#d8e1ea] bg-[#f8fafc] px-4 text-sm text-[#18212d] outline-none transition focus:border-[#f08b49] focus:ring-4 focus:ring-[#f08b49]/10"
+                  className="mt-2 h-11 w-full rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-shell)] px-4 text-sm text-[var(--brand-ink)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                 />
               </label>
             </div>
@@ -471,86 +633,133 @@ export default function AdminWorkspaceClient() {
                     onClick={() => setActiveTable(table.name)}
                     className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
                       isActive
-                        ? "border-[#f08b49] bg-[#fff4ec] shadow-sm"
-                        : "border-[#e4ebf2] bg-[#f8fafc] hover:border-[#d0dae5] hover:bg-white"
+                        ? "border-[var(--brand-orange)] bg-[rgba(247,134,57,0.12)] shadow-sm"
+                        : "border-[var(--brand-line)] bg-[var(--brand-shell)] hover:border-[rgba(247,134,57,0.32)] hover:bg-white"
                     }`}
                   >
-                    <p className="text-sm font-semibold text-[#172230]">{table.label}</p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#708296]">{table.name}</p>
+                    <p className="text-sm font-semibold text-[var(--brand-ink)]">{table.label}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[color:color-mix(in_srgb,var(--brand-ink)_58%,white)]">{table.name}</p>
                   </button>
                 );
               })}
             </div>
           </aside>
 
-          <section className="rounded-[28px] border border-[#d8e1ea] bg-white/95 p-4 shadow-[0_28px_90px_rgba(11,18,32,0.18)]">
-            <div className="flex flex-col gap-4 border-b border-[#e4ebf2] pb-4 lg:flex-row lg:items-end lg:justify-between">
+          <section className="rounded-[28px] border border-[var(--brand-line)] bg-white/95 p-4 shadow-[0_28px_90px_rgba(25,27,28,0.10)]">
+            <div className="flex flex-col gap-4 border-b border-[var(--brand-line)] pb-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#62758a]">Rows</p>
-                <h2 className="mt-1 text-2xl font-semibold text-[#172230]">{activeTableMeta?.label || "Choose a table"}</h2>
-                <p className="mt-2 text-sm text-[#617286]">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Rows</p>
+                <h2 className="font-display mt-1 text-2xl font-semibold text-[var(--brand-ink)]">{activeTableMeta?.label || "Choose a table"}</h2>
+                <p className="mt-2 text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)]">
                   {activeTableMeta
                     ? `${activeTableMeta.primaryKey.join(" + ")} primary key • ${activeTableMeta.columns.length} columns`
                     : "The newest rows will appear here once a table is selected."}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => reloadRows()} disabled={!activeTable} className="inline-flex h-11 items-center justify-center rounded-2xl border border-[#d0dae5] px-5 text-sm font-semibold text-[#233245] transition hover:border-[#f08b49] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50">
+                <button type="button" onClick={() => reloadRows()} disabled={!activeTable} className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] px-5 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)] disabled:cursor-not-allowed disabled:opacity-50">
                   Reload Rows
                 </button>
-                <button type="button" onClick={startCreateRow} disabled={!activeTableMeta} className="inline-flex h-11 items-center justify-center rounded-2xl bg-[#152238] px-5 text-sm font-semibold text-white transition hover:bg-[#f08b49] disabled:cursor-not-allowed disabled:opacity-50">
+                <button type="button" onClick={duplicateSelectedRow} disabled={!resettableSelectedRow || !activeTableMeta} className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] px-5 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)] disabled:cursor-not-allowed disabled:opacity-50">
+                  Duplicate Row
+                </button>
+                <button type="button" onClick={startCreateRow} disabled={!activeTableMeta} className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-50">
                   New Row
                 </button>
               </div>
             </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-3">
-              <label className="min-w-[220px] flex-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#708296]">
+              <label className="min-w-[220px] flex-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
                 Quick row filter
                 <input
                   value={rowFilter}
                   onChange={(event) => setRowFilter(event.target.value)}
                   type="text"
                   placeholder="Filter loaded rows"
-                  className="mt-2 h-11 w-full rounded-2xl border border-[#d8e1ea] bg-[#f8fafc] px-4 text-sm text-[#18212d] outline-none transition focus:border-[#f08b49] focus:ring-4 focus:ring-[#f08b49]/10"
+                  className="mt-2 h-11 w-full rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-shell)] px-4 text-sm text-[var(--brand-ink)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                 />
               </label>
-              <div className="rounded-2xl border border-[#e4ebf2] bg-[#f8fafc] px-4 py-3 text-sm text-[#4a5c72]">
-                {filteredRows.length} rows loaded
+              <div className="rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-shell)] px-4 py-3 text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)]">
+                {pageStart && pageEnd ? `${pageStart}-${pageEnd} of ${totalRows || sortedRows.length}` : `${sortedRows.length} rows loaded`}
+              </div>
+              <div className="flex items-center gap-2 rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-shell)] px-3 py-2.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Columns</span>
+                <select
+                  value={Number.isFinite(visibleColumnCount) ? String(visibleColumnCount) : "all"}
+                  onChange={(event) => setVisibleColumnCount(event.target.value === "all" ? Number.POSITIVE_INFINITY : Number(event.target.value))}
+                  className="rounded-xl border border-[var(--brand-line)] bg-white px-3 py-1.5 text-sm text-[var(--brand-ink)] outline-none transition focus:border-[var(--brand-orange)]"
+                >
+                  <option value="6">6</option>
+                  <option value="12">12</option>
+                  <option value="18">18</option>
+                  <option value="all">All</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRowOffset((current) => Math.max(current - ROWS_PAGE_SIZE, 0))}
+                  disabled={!hasPreviousPage}
+                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRowOffset((current) => current + ROWS_PAGE_SIZE)}
+                  disabled={!hasNextPage}
+                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Next
+                </button>
               </div>
             </div>
 
-            <div className="mt-4 overflow-hidden rounded-[24px] border border-[#dfe8f0]">
+            <div className="mt-4 overflow-hidden rounded-[24px] border border-[var(--brand-line)]">
               <div className="max-h-[70vh] overflow-auto">
                 <table className="min-w-full border-collapse text-sm">
-                  <thead className="sticky top-0 bg-[#f8fafc] text-left text-[#546679]">
+                  <thead className="sticky top-0 bg-[var(--brand-shell)] text-left text-[color:color-mix(in_srgb,var(--brand-ink)_60%,white)]">
                     <tr>
                       {visibleColumns.map((column) => (
                         <th key={column.name} className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em]">
-                          {column.name}
+                          <button
+                            type="button"
+                            onClick={() => toggleSort(column.name)}
+                            className="inline-flex items-center gap-1 text-left transition hover:text-[var(--brand-ink)]"
+                          >
+                            <span>{column.name}</span>
+                            <span className="text-[10px] text-[color:color-mix(in_srgb,var(--brand-ink)_45%,white)]">
+                              {sortConfig.column === column.name
+                                ? sortConfig.direction === "asc"
+                                  ? "↑"
+                                  : "↓"
+                                : "↕"}
+                            </span>
+                          </button>
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#eef2f6] bg-white">
-                    {filteredRows.length === 0 ? (
+                  <tbody className="divide-y divide-[var(--brand-line)] bg-white">
+                    {sortedRows.length === 0 ? (
                       <tr>
-                        <td colSpan={visibleColumns.length || 1} className="px-4 py-8 text-center text-sm text-[#617286]">
+                        <td colSpan={visibleColumns.length || 1} className="px-4 py-8 text-center text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)]">
                           No rows match the current filter.
                         </td>
                       </tr>
                     ) : (
-                      filteredRows.map((row) => {
+                      sortedRows.map((row) => {
                         const active = identifierKey(row._identifier) === identifierKey(selectedIdentifier) && !isCreating;
                         return (
                           <tr
                             key={identifierKey(row._identifier)}
                             onClick={() => selectRow(row)}
-                            className={`cursor-pointer transition ${active ? "bg-[#fff4ec]" : "hover:bg-[#f8fafc]"}`}
+                            className={`cursor-pointer transition ${active ? "bg-[rgba(247,134,57,0.12)]" : "hover:bg-[var(--brand-shell)]"}`}
                           >
                             {visibleColumns.map((column) => (
-                              <td key={column.name} className="max-w-[240px] px-4 py-3 align-top text-[#172230]">
-                                <div className="truncate">{prettyCell(row[column.name])}</div>
+                              <td key={column.name} className="max-w-[240px] px-4 py-3 align-top text-[var(--brand-ink)]">
+                                <div className="truncate">{prettyCell(row[column.name], column)}</div>
                               </td>
                             ))}
                           </tr>
@@ -563,37 +772,82 @@ export default function AdminWorkspaceClient() {
             </div>
           </section>
 
-          <section className="rounded-[28px] border border-[#d8e1ea] bg-white/96 p-4 shadow-[0_28px_90px_rgba(11,18,32,0.18)]">
-            <div className="border-b border-[#e4ebf2] pb-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#62758a]">Editor</p>
-              <h2 className="mt-1 text-2xl font-semibold text-[#172230]">
-                {!activeTableMeta ? "No row selected" : isCreating ? `Create ${activeTableMeta.label} row` : `Edit ${activeTableMeta.label} row`}
-              </h2>
-              <p className="mt-2 text-sm text-[#617286]">
-                {!activeTableMeta
-                  ? "Select a row or create a new one to edit fields."
-                  : isCreating
-                    ? activeTableName === "profiles"
-                      ? "Saving here sends an invite email and creates the matching auth user and profile."
-                      : "Fill in the fields below and save to create a new record."
-                    : `Primary key: ${activeTableMeta.primaryKey.map((key) => `${key}=${prettyCell(selectedRow?.[key])}`).join(", ")}`}
-              </p>
+        </div>
+      </div>
+
+      <div className="pointer-events-none fixed right-4 top-4 z-[70] flex w-full max-w-sm flex-col gap-3 sm:right-6 sm:top-6">
+        {message ? (
+          <div className="pointer-events-auto rounded-2xl border border-[rgba(60,113,82,0.18)] bg-[#eef6f1]/95 px-4 py-3 text-sm font-medium text-[#27543f] shadow-[0_18px_40px_rgba(39,84,63,0.14)] backdrop-blur">
+            {message}
+          </div>
+        ) : null}
+        {error ? (
+          <div className="pointer-events-auto rounded-2xl border border-[#fecaca] bg-[#fff1f1]/95 px-4 py-3 text-sm font-medium text-[#b42318] shadow-[0_18px_40px_rgba(180,35,24,0.12)] backdrop-blur">
+            {error}
+          </div>
+        ) : null}
+      </div>
+
+      {activeTableMeta && selectedRow ? (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[rgba(17,24,39,0.46)] px-3 py-6 sm:px-4 md:py-10" onClick={closeEditorModal}>
+          <section
+            className="w-full max-w-4xl rounded-[28px] border border-[var(--brand-line)] bg-white/98 p-4 shadow-[0_32px_120px_rgba(25,27,28,0.20)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="border-b border-[var(--brand-line)] pb-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Editor</p>
+                  <h2 className="font-display mt-1 text-2xl font-semibold text-[var(--brand-ink)]">
+                    {isCreating ? `Create ${activeTableMeta.label} row` : `Edit ${activeTableMeta.label} row`}
+                  </h2>
+                  <p className="mt-2 text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)]">
+                    {isCreating
+                      ? activeTableName === "profiles"
+                        ? "Saving here sends an invite email and creates the matching auth user and profile."
+                        : "Fill in the fields below and save to create a new record."
+                      : `Primary key: ${activeTableMeta.primaryKey.map((key) => `${key}=${prettyCell(selectedRow?.[key])}`).join(", ")}`}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeEditorModal}
+                  className="inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)]"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${isCreating ? "border-[rgba(247,134,57,0.28)] bg-[rgba(247,134,57,0.12)] text-[var(--brand-orange-deep)]" : "border-[var(--brand-line)] bg-[var(--brand-shell)] text-[var(--brand-ink)]"}`}>
+                  {isCreating ? "New Row" : "Editing Existing Row"}
+                </span>
+                {hasUnsavedChanges ? (
+                  <span className="rounded-full border border-[rgba(247,134,57,0.28)] bg-[rgba(247,134,57,0.12)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--brand-orange-deep)]">
+                    Unsaved Changes
+                  </span>
+                ) : (
+                  <span className="rounded-full border border-[rgba(60,113,82,0.18)] bg-[#eef6f1] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#27543f]">
+                    In Sync
+                  </span>
+                )}
+              </div>
             </div>
 
             <form onSubmit={saveRow} className="mt-4 space-y-4">
-              <div className="space-y-4">
-                {activeTableMeta?.columns.map((column) => {
+              <div className="grid gap-4 md:grid-cols-2">
+                {activeTableMeta.columns.map((column) => {
                   const value = selectedRow?.[column.name];
-                  const disabled = !activeTableMeta || !selectedRow || !column.editable;
+                  const disabled = !selectedRow || !column.editable;
                   const selectOptions = optionsForColumn(column.name);
+                  const isWideField = column.type === "json" || column.type === "jsonb" || isLongField(column);
                   return (
-                    <label key={column.name} className="block text-sm font-semibold text-[#233245]">
+                    <label key={column.name} className={`block text-sm font-semibold text-[var(--brand-ink)] ${isWideField ? "md:col-span-2" : ""}`}>
                       <span className="flex items-center justify-between gap-3">
                         <span>{column.name}</span>
-                        <span className="text-[11px] uppercase tracking-[0.16em] text-[#8a98aa]">{column.type}</span>
+                        <span className="text-[11px] uppercase tracking-[0.16em] text-[color:color-mix(in_srgb,var(--brand-ink)_50%,white)]">{column.type}</span>
                       </span>
                       {column.type === "boolean" ? (
-                        <span className="mt-2 inline-flex items-center gap-3 rounded-2xl border border-[#d8e1ea] bg-[#f8fafc] px-4 py-3 text-sm text-[#172230]">
+                        <span className="mt-2 inline-flex items-center gap-3 rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-shell)] px-4 py-3 text-sm text-[var(--brand-ink)]">
                           <input
                             type="checkbox"
                             checked={Boolean(value)}
@@ -607,7 +861,7 @@ export default function AdminWorkspaceClient() {
                           value={value ?? ""}
                           disabled={disabled}
                           onChange={(event) => updateSelectedField(column, event.target.value)}
-                          className="mt-2 h-11 w-full rounded-2xl border border-[#d8e1ea] bg-[#f8fafc] px-4 text-sm text-[#172230] outline-none focus:border-[#f08b49] focus:ring-4 focus:ring-[#f08b49]/10"
+                          className="mt-2 h-11 w-full rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-shell)] px-4 text-sm text-[var(--brand-ink)] outline-none focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                         >
                           <option value="">Select</option>
                           {(column.options || []).map((option) => (
@@ -621,7 +875,7 @@ export default function AdminWorkspaceClient() {
                           value={value ?? ""}
                           disabled={disabled || selectOptions.length === 0}
                           onChange={(event) => updateSelectedField(column, event.target.value)}
-                          className="mt-2 h-11 w-full rounded-2xl border border-[#d8e1ea] bg-[#f8fafc] px-4 text-sm text-[#172230] outline-none focus:border-[#f08b49] focus:ring-4 focus:ring-[#f08b49]/10 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="mt-2 h-11 w-full rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-shell)] px-4 text-sm text-[var(--brand-ink)] outline-none focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <option value="">
                             {selectOptions.length === 0 ? relationEmptyMessage(column.name) : "Select"}
@@ -632,7 +886,7 @@ export default function AdminWorkspaceClient() {
                             </option>
                           ))}
                         </select>
-                      ) : column.type === "json" || column.type === "jsonb" || isLongField(column) ? (
+                      ) : isWideField ? (
                         <textarea
                           rows="4"
                           value={column.type === "json" || column.type === "jsonb"
@@ -640,7 +894,7 @@ export default function AdminWorkspaceClient() {
                             : String(value ?? "")}
                           disabled={disabled}
                           onChange={(event) => updateSelectedField(column, event.target.value)}
-                          className="mt-2 w-full rounded-2xl border border-[#d8e1ea] bg-[#f8fafc] px-4 py-3 text-sm text-[#172230] outline-none focus:border-[#f08b49] focus:ring-4 focus:ring-[#f08b49]/10"
+                          className="mt-2 w-full rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-shell)] px-4 py-3 text-sm text-[var(--brand-ink)] outline-none focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                         />
                       ) : (
                         <input
@@ -648,31 +902,26 @@ export default function AdminWorkspaceClient() {
                           value={column.type === "timestamptz" ? timestampValueForInput(value) : String(value ?? "")}
                           disabled={disabled}
                           onChange={(event) => updateSelectedField(column, event.target.value)}
-                          className="mt-2 h-11 w-full rounded-2xl border border-[#d8e1ea] bg-[#f8fafc] px-4 text-sm text-[#172230] outline-none focus:border-[#f08b49] focus:ring-4 focus:ring-[#f08b49]/10"
+                          className="mt-2 h-11 w-full rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-shell)] px-4 text-sm text-[var(--brand-ink)] outline-none focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                         />
                       )}
-                      {!column.editable ? <p className="mt-1 text-xs text-[#8a98aa]">Server-managed field</p> : null}
+                      {!column.editable ? <p className="mt-1 text-xs text-[color:color-mix(in_srgb,var(--brand-ink)_50%,white)]">Server-managed field</p> : null}
                     </label>
                   );
                 })}
               </div>
 
-              <div className="flex flex-wrap gap-2 border-t border-[#e4ebf2] pt-4">
-                <button type="submit" disabled={!activeTableMeta || !selectedRow} className="inline-flex h-11 items-center justify-center rounded-2xl bg-[#152238] px-5 text-sm font-semibold text-white transition hover:bg-[#f08b49] disabled:cursor-not-allowed disabled:opacity-50">
+              <div className="flex flex-wrap gap-2 border-t border-[var(--brand-line)] pt-4">
+                <button type="submit" disabled={!selectedRow} className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-50">
                   Save Changes
                 </button>
                 <button type="button" onClick={() => {
                   if (isCreating && activeTableMeta) {
-                    setSelectedRow(
-                      activeTableMeta.columns.reduce((acc, column) => {
-                        acc[column.name] = defaultValueForColumn(column);
-                        return acc;
-                      }, {}),
-                    );
+                    setCreateDefaults();
                     return;
                   }
                   setSelectedRow(resettableSelectedRow ? JSON.parse(JSON.stringify(resettableSelectedRow)) : null);
-                }} className="inline-flex h-11 items-center justify-center rounded-2xl border border-[#d0dae5] px-5 text-sm font-semibold text-[#233245] transition hover:border-[#f08b49]">
+                }} className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] px-5 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]">
                   Reset
                 </button>
                 <button type="button" onClick={deleteRow} disabled={isCreating || !selectedIdentifier} className="inline-flex h-11 items-center justify-center rounded-2xl border border-[#fecaca] px-5 text-sm font-semibold text-[#b42318] transition hover:bg-[#fff1f1] disabled:cursor-not-allowed disabled:opacity-50">
@@ -682,7 +931,7 @@ export default function AdminWorkspaceClient() {
             </form>
           </section>
         </div>
-      </div>
+      ) : null}
     </main>
   );
 }

@@ -15,7 +15,17 @@ export async function GET(request) {
   }
 
   try {
-    const response = NextResponse.json(await fetchSlabs());
+    const { searchParams } = new URL(request.url);
+    const response = NextResponse.json(await fetchSlabs(authContext.client, {
+      search: searchParams.get("search") || "",
+      brand: searchParams.get("brand") || "",
+      material: searchParams.get("material") || "",
+      finish: searchParams.get("finish") || "",
+      thickness: searchParams.get("thickness") || "",
+      priceSort: searchParams.get("priceSort") || "default",
+      page: searchParams.get("page") || "1",
+      pageSize: searchParams.get("pageSize") || "24",
+    }));
     return applyAuthCookies(response, authContext);
   } catch (error) {
     console.error("Failed to fetch slab catalog:", error);

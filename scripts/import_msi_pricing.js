@@ -5,10 +5,13 @@ const { Client } = require("pg");
 
 dotenv.config();
 
-const WORKBOOK_PATH = process.argv[2] || path.join(process.env.HOME || "", "Downloads", "MSI Price List -Jan 2026.xlsx");
-const PRICE_SOURCE = "msi_price_list_jan_2026";
+const WORKBOOK_PATH = process.argv[2] || path.join(process.env.HOME || "", "Downloads", "Final Q Pricelist March 2026.xlsx");
+const PRICE_SOURCE = "msi_price_list_mar_2026";
+const EFFECTIVE_ON = "2026-03-01";
 const FEE_PERCENT_1 = 0.06;
 const FEE_PERCENT_2 = 0.03;
+const PRICE_BAND_START = 10;
+const PRICE_BAND_SIZE = 5;
 
 function requireEnv(value, message) {
   if (!value) throw new Error(message);
@@ -39,10 +42,40 @@ function parseNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function normalizeDimensionToken(value) {
+  return normalizeWhitespace(value)
+    .replace(/["”“]/g, "")
+    .replace(/′/g, "")
+    .trim();
+}
+
+function formatDimensionValue(value) {
+  const cleaned = normalizeDimensionToken(value);
+  return cleaned ? `${cleaned}″` : "";
+}
+
+function parseSizeLabel(sizeLabel) {
+  const pairs = [];
+  for (const segment of String(sizeLabel || "").split(",")) {
+    const cleaned = normalizeWhitespace(segment).replace(/\s+/g, "");
+    if (!cleaned) continue;
+    const match = /^([0-9.]+)x([0-9.]+)$/i.exec(cleaned);
+    if (!match) continue;
+    const width = formatDimensionValue(match[1]);
+    const height = formatDimensionValue(match[2]);
+    if (width && height) {
+      pairs.push({ width, height });
+    }
+  }
+  return pairs;
+}
+
 function normalizeSlabLookup(value) {
   return normalizeWhitespace(value)
     .replace(/[®™*]/g, "")
     .replace(/\(discontinued\)/gi, "")
+    .replace(/\bbook-?match\b/gi, "")
+    .replace(/\bunbook-?match\b/gi, "")
     .replace(/\bnew\b/gi, "")
     .replace(/\b(2cm|3cm|1\.5cm|1\.6cm)\b/gi, "")
     .replace(/\s*-\s*(concrete|matte|honed|brushed)\b/gi, "")
@@ -71,6 +104,8 @@ function stripVariantSuffixes(name) {
   return normalizeWhitespace(name)
     .replace(/[®™*]/g, "")
     .replace(/\(discontinued\)/gi, "")
+    .replace(/\bbook-?match\b/gi, "")
+    .replace(/\bunbook-?match\b/gi, "")
     .replace(/\bnew\b/gi, "")
     .replace(/\b(2cm|3cm|1\.5cm|1\.6cm)\b/gi, "")
     .replace(/\s*-\s*(concrete|matte|honed|brushed)\b/gi, "")
@@ -93,6 +128,35 @@ function codeFromIndex(index) {
     value = Math.floor(value / 26) - 1;
   } while (value >= 0);
   return code;
+}
+
+function bandSortOrderFromPrice(price) {
+  const normalized = Number(Number(price).toFixed(4));
+  if (!Number.isFinite(normalized)) return null;
+  if (normalized <= PRICE_BAND_START) return 0;
+  return Math.floor((normalized - PRICE_BAND_START) / PRICE_BAND_SIZE);
+}
+
+function formatBandUpperBound(value) {
+  const rounded = Math.floor(Number(value) * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
+}
+
+function getPriceBand(price) {
+  const normalized = Number(Number(price).toFixed(4));
+  const sortOrder = bandSortOrderFromPrice(normalized);
+  if (!Number.isFinite(normalized) || sortOrder === null) return null;
+
+  const minPrice = Number((PRICE_BAND_START + sortOrder * PRICE_BAND_SIZE).toFixed(4));
+  const maxPrice = Number((minPrice + PRICE_BAND_SIZE - 0.0001).toFixed(4));
+
+  return {
+    code: codeFromIndex(sortOrder),
+    sortOrder,
+    minPrice,
+    maxPrice,
+    notes: `MSI quartz price band $${minPrice}-${formatBandUpperBound(maxPrice)} before fees.`,
+  };
 }
 
 function loadWorkbookRows(filePath) {
@@ -145,7 +209,7 @@ function loadWorkbookRows(filePath) {
 async function loadLookupMaps(client) {
   await client.query(`
     insert into public.thicknesses (name, active)
-    values ('2cm', true), ('3cm', true)
+    values ('2 CM', true), ('3 CM', true)
     on conflict (name) do update
     set active = true
   `);
@@ -161,7 +225,7 @@ async function loadLookupMaps(client) {
       p.name as supplier_name
     from public.slabs s
     join public.suppliers p on p.id = s.supplier_id
-    where p.name = 'MSI Surfaces'
+    where p.name = 'MSI'
   `);
 
   return {
@@ -176,16 +240,17 @@ async function loadLookupMaps(client) {
 }
 
 function buildEntries(rows, lookups) {
-  const supplierId = lookups.supplierByName.get("MSI Surfaces");
+  const supplierId = lookups.supplierByName.get("MSI");
   const materialId = lookups.materialByName.get("Quartz");
   const polishedFinishId = lookups.finishByName.get("Polished") || null;
-  const thickness2cmId = lookups.thicknessByName.get("2cm") || null;
-  const thickness3cmId = lookups.thicknessByName.get("3cm") || null;
+  const thickness2cmId = lookups.thicknessByName.get("2 CM") || null;
+  const thickness3cmId = lookups.thicknessByName.get("3 CM") || null;
 
-  if (!supplierId) throw new Error("Supplier MSI Surfaces not found");
+  if (!supplierId) throw new Error("Supplier MSI not found");
   if (!materialId) throw new Error("Material Quartz not found");
 
   const entries = [];
+  const catalogBySlabId = new Map();
   const unmatched = [];
 
   for (const row of rows) {
@@ -199,9 +264,24 @@ function buildEntries(rows, lookups) {
     }
 
     const finishId = lookups.finishByName.get(row.finish_name) || polishedFinishId;
+    const existingCatalogEntry = catalogBySlabId.get(slabMatch.id) || {
+      slab_id: slabMatch.id,
+      sizes: [],
+      thicknessIds: new Set(),
+      finishIds: new Set(),
+    };
+    for (const pair of parseSizeLabel(row.size_label)) {
+      existingCatalogEntry.sizes.push(pair);
+    }
+    if (finishId) {
+      existingCatalogEntry.finishIds.add(finishId);
+    }
 
     if (row.price_2cm !== null || row.item_2cm) {
       if (row.price_2cm !== null) {
+        if (thickness2cmId) {
+          existingCatalogEntry.thicknessIds.add(thickness2cmId);
+        }
         entries.push({
           supplier_id: supplierId,
           slab_id: slabMatch.id,
@@ -221,6 +301,9 @@ function buildEntries(rows, lookups) {
 
     if (row.price_3cm !== null || row.item_3cm) {
       if (row.price_3cm !== null) {
+        if (thickness3cmId) {
+          existingCatalogEntry.thicknessIds.add(thickness3cmId);
+        }
         entries.push({
           supplier_id: supplierId,
           slab_id: slabMatch.id,
@@ -237,13 +320,38 @@ function buildEntries(rows, lookups) {
         });
       }
     }
+
+    catalogBySlabId.set(slabMatch.id, existingCatalogEntry);
   }
 
-  return { entries, unmatched, supplierId, materialId };
+  const catalogUpdates = [...catalogBySlabId.values()].map((entry) => {
+    const uniquePairs = [];
+    const seenPairs = new Set();
+    for (const pair of entry.sizes) {
+      const key = `${pair.width}|${pair.height}`;
+      if (seenPairs.has(key)) continue;
+      seenPairs.add(key);
+      uniquePairs.push(pair);
+    }
+    return {
+      slab_id: entry.slab_id,
+      widths: uniquePairs.map((pair) => pair.width),
+      heights: uniquePairs.map((pair) => pair.height),
+      thickness_ids: [...entry.thicknessIds],
+      finish_ids: [...entry.finishIds],
+    };
+  });
+
+  return { entries, unmatched, supplierId, materialId, catalogUpdates };
 }
 
 async function replacePricing(client, payload) {
-  const uniquePrices = [...new Set(payload.entries.map((entry) => Number(entry.list_price_per_sqft.toFixed(4))))].sort((a, b) => a - b);
+  const uniqueBands = [...new Map(
+    payload.entries
+      .map((entry) => getPriceBand(entry.list_price_per_sqft))
+      .filter(Boolean)
+      .map((band) => [band.code, band]),
+  ).values()].sort((a, b) => a.sortOrder - b.sortOrder);
 
   await client.query("begin");
   try {
@@ -257,8 +365,7 @@ async function replacePricing(client, payload) {
     );
 
     const tierIdByPrice = new Map();
-    for (const [index, price] of uniquePrices.entries()) {
-      const code = codeFromIndex(index);
+    for (const band of uniqueBands) {
       const result = await client.query(
         `
           insert into public.supplier_price_tiers (
@@ -267,29 +374,36 @@ async function replacePricing(client, payload) {
             code,
             sort_order,
             base_price_per_sqft,
+            min_price_per_sqft,
+            max_price_per_sqft,
+            fixed_fee_per_sqft,
             fee_percent_1,
             fee_percent_2,
             notes
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
           returning id
         `,
         [
           payload.supplierId,
           payload.materialId,
-          code,
-          index,
-          price,
+          band.code,
+          band.sortOrder,
+          band.minPrice,
+          band.minPrice,
+          band.maxPrice,
+          0,
           FEE_PERCENT_1,
           FEE_PERCENT_2,
-          "MSI vendor cost. Effective price includes 6% and 3% fees.",
+          band.notes,
         ],
       );
-      tierIdByPrice.set(price, result.rows[0].id);
+      tierIdByPrice.set(band.code, result.rows[0].id);
     }
 
     for (const entry of payload.entries) {
       const rawPrice = Number(entry.list_price_per_sqft.toFixed(4));
+      const band = getPriceBand(rawPrice);
       await client.query(
         `
           insert into public.slab_supplier_prices (
@@ -320,7 +434,7 @@ async function replacePricing(client, payload) {
           entry.material_id,
           entry.finish_id,
           entry.thickness_id,
-          tierIdByPrice.get(rawPrice),
+          tierIdByPrice.get(band?.code),
           entry.supplier_sku,
           entry.supplier_product_name,
           entry.source_group_number,
@@ -329,13 +443,55 @@ async function replacePricing(client, payload) {
           entry.size_label,
           rawPrice,
           PRICE_SOURCE,
-          "2026-01-01",
+          EFFECTIVE_ON,
         ],
       );
     }
 
+    for (const update of payload.catalogUpdates || []) {
+      const widthValue = update.widths.length ? update.widths.join(", ") : null;
+      const heightValue = update.heights.length ? update.heights.join(", ") : null;
+
+      await client.query(
+        `
+          update public.slabs
+          set width = $2,
+              height = $3,
+              updated_at = now()
+          where id = $1
+        `,
+        [update.slab_id, widthValue, heightValue],
+      );
+
+      await client.query(`delete from public.slab_thicknesses where slab_id = $1`, [update.slab_id]);
+      for (const thicknessId of update.thickness_ids) {
+        await client.query(
+          `
+            insert into public.slab_thicknesses (slab_id, thickness_id)
+            values ($1, $2)
+            on conflict do nothing
+          `,
+          [update.slab_id, thicknessId],
+        );
+      }
+
+      if (update.finish_ids.length) {
+        await client.query(`delete from public.slab_finishes where slab_id = $1`, [update.slab_id]);
+        for (const finishId of update.finish_ids) {
+          await client.query(
+            `
+              insert into public.slab_finishes (slab_id, finish_id)
+              values ($1, $2)
+              on conflict do nothing
+            `,
+            [update.slab_id, finishId],
+          );
+        }
+      }
+    }
+
     await client.query("commit");
-    return { uniquePrices };
+    return { uniquePrices: uniqueBands };
   } catch (error) {
     await client.query("rollback");
     throw error;
