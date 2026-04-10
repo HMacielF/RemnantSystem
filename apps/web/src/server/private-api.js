@@ -2493,6 +2493,12 @@ function normalizeInventoryCheckOutcome(value) {
   const normalized = String(value || "").trim().toLowerCase();
   if (normalized === "seen" || normalized === "exists" || normalized === "confirmed") return "seen";
   if (normalized === "missing" || normalized === "not_found" || normalized === "not-found") return "missing";
+  if (normalized === "issue" || normalized === "review" || normalized === "needs_review" || normalized === "needs-review") {
+    return "issue";
+  }
+  if (normalized === "not_in_db" || normalized === "not-in-db" || normalized === "unuploaded" || normalized === "unknown") {
+    return "not_in_db";
+  }
   const error = new Error("Invalid inventory check outcome");
   error.statusCode = 400;
   throw error;
@@ -2510,16 +2516,12 @@ function sanitizeInventorySessionId(value) {
 
 async function fetchInventoryCheckAuditRows(client, authed, sessionId) {
   const writeClient = getWriteClient(client);
-  let query = writeClient
+  const query = writeClient
     .from("audit_logs")
     .select("*")
     .eq("event_type", REMNANT_INVENTORY_CHECK_EVENT)
     .contains("meta", { session_id: sessionId })
     .order("created_at", { ascending: false });
-
-  if (authed?.user?.id || authed?.profile?.id) {
-    query = query.eq("actor_user_id", authed.user?.id || authed.profile?.id);
-  }
 
   const { data, error } = await query;
   if (error) throw error;
@@ -2573,17 +2575,54 @@ export async function lookupInventoryCheckRemnant(client, number, authed, sessio
 }
 
 export async function recordInventoryCheck(client, authed, body) {
+  const sessionId = sanitizeInventorySessionId(body?.session_id);
+  const outcome = normalizeInventoryCheckOutcome(body?.outcome);
+  const enteredNumber = extractRemnantIdSearch(body?.entered_number);
+  if (!enteredNumber) {
+    const error = new Error("Entered number is required");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const writeClient = getWriteClient(client);
   const remnantId = asNumber(body?.remnant_id);
+
+  if (outcome === "not_in_db") {
+    await writeAuditLog(writeClient, authed, {
+      event_type: REMNANT_INVENTORY_CHECK_EVENT,
+      entity_type: "remnant_inventory_unknown",
+      entity_id: null,
+      remnant_id: null,
+      company_id: null,
+      message: `Marked remnant #${enteredNumber} as physically present but missing from the database`,
+      new_data: {
+        remnant_id: null,
+        moraware_remnant_id: enteredNumber,
+        outcome,
+        session_id: sessionId,
+        entered_number: enteredNumber,
+      },
+      meta: {
+        source: "manage_confirm",
+        session_id: sessionId,
+        outcome,
+        entered_number: enteredNumber,
+      },
+    });
+
+    return {
+      ok: true,
+      outcome,
+      remnant: null,
+    };
+  }
+
   if (!remnantId) {
     const error = new Error("Remnant id is required");
     error.statusCode = 400;
     throw error;
   }
 
-  const sessionId = sanitizeInventorySessionId(body?.session_id);
-  const outcome = normalizeInventoryCheckOutcome(body?.outcome);
-  const enteredNumber = extractRemnantIdSearch(body?.entered_number);
-  const writeClient = getWriteClient(client);
   const { data: remnant, error } = await writeClient
     .from("remnants")
     .select(REMNANT_WITH_STONE_SELECT)
@@ -2600,7 +2639,9 @@ export async function recordInventoryCheck(client, authed, body) {
 
   const message = outcome === "seen"
     ? `Confirmed remnant #${remnant.moraware_remnant_id || remnant.id} in inventory`
-    : `Marked remnant #${remnant.moraware_remnant_id || remnant.id} as not seen in inventory`;
+    : outcome === "issue"
+      ? `Flagged remnant #${remnant.moraware_remnant_id || remnant.id} for review`
+      : `Marked remnant #${remnant.moraware_remnant_id || remnant.id} as not seen in inventory`;
 
   await writeAuditLog(writeClient, authed, {
     event_type: REMNANT_INVENTORY_CHECK_EVENT,
@@ -2637,7 +2678,12 @@ export async function fetchInventoryCheckSession(client, authed, sessionId) {
   const auditRows = await fetchInventoryCheckAuditRows(client, authed, normalizedSessionId);
 
   const latestByRemnantId = new Map();
+  const notInDbRows = [];
   for (const row of auditRows) {
+    if ((row?.meta?.outcome || null) === "not_in_db") {
+      notInDbRows.push(row);
+      continue;
+    }
     const key = Number(row.remnant_id);
     if (!key || latestByRemnantId.has(key)) continue;
     latestByRemnantId.set(key, row);
@@ -2647,6 +2693,8 @@ export async function fetchInventoryCheckSession(client, authed, sessionId) {
   const checkedCount = checkedRemnantIds.length;
   const seenCount = [...latestByRemnantId.values()].filter((row) => row?.meta?.outcome === "seen").length;
   const missingCount = [...latestByRemnantId.values()].filter((row) => row?.meta?.outcome === "missing").length;
+  const issueCount = [...latestByRemnantId.values()].filter((row) => row?.meta?.outcome === "issue").length;
+  const notInDbCount = notInDbRows.length;
 
   const { count: totalCount, error: totalError } = await writeClient
     .from("remnants")
@@ -2686,6 +2734,8 @@ export async function fetchInventoryCheckSession(client, authed, sessionId) {
       checked_count: checkedCount,
       seen_count: seenCount,
       missing_count: missingCount,
+      issue_count: issueCount,
+      not_in_db_count: notInDbCount,
       unchecked_count: Math.max((totalCount || 0) - checkedCount, 0),
     },
     unseen_preview: unseenRows.map((row) => ({
