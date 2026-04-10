@@ -41,6 +41,28 @@ const REMNANT_WITH_STONE_SELECT = `
     )
   )
 `;
+const SLAB_SELECT = `
+  id,
+  name,
+  width,
+  height,
+  color_tone,
+  detail_url,
+  image_url,
+  stone_product:stone_products(
+    id,
+    brand_name,
+    stone_product_colors(
+      role,
+      color:colors(id,name)
+    )
+  ),
+  supplier:suppliers(id,name,website_url),
+  material:materials(id,name),
+  slab_colors(role,color:colors(id,name)),
+  slab_finishes(finish:finishes(id,name)),
+  slab_thicknesses(thickness:thicknesses(id,name))
+`;
 const HOLD_SELECT = `
   id,
   remnant_id,
@@ -71,6 +93,7 @@ const SALE_SELECT = `
   updated_at,
   sold_by_profile:profiles!sold_by_user_id(id,email,full_name,email)
 `;
+const REMNANT_INVENTORY_CHECK_EVENT = "remnant_inventory_confirmed";
 
 const requireEnv = (value, message) => {
   if (!value) {
@@ -269,6 +292,48 @@ function chooseBestSlabPrice(remnant, priceRows = []) {
   return normalizedRows[0]?.list_price_per_sqft ?? null;
 }
 
+const PRICE_BAND_START = 10;
+const PRICE_BAND_SIZE = 5;
+
+function bandSortOrderFromPrice(pricePerSqft) {
+  const normalizedPrice = parsePricePerSqft(pricePerSqft);
+  if (normalizedPrice === null) return null;
+  if (normalizedPrice <= PRICE_BAND_START) return 0;
+  return Math.floor((normalizedPrice - PRICE_BAND_START) / PRICE_BAND_SIZE);
+}
+
+function codeFromSortOrder(index) {
+  let value = Number(index);
+  if (!Number.isInteger(value) || value < 0) return null;
+
+  let code = "";
+  do {
+    code = String.fromCharCode(65 + (value % 26)) + code;
+    value = Math.floor(value / 26) - 1;
+  } while (value >= 0);
+  return code;
+}
+
+function describePriceBand(pricePerSqft) {
+  const sortOrder = bandSortOrderFromPrice(pricePerSqft);
+  if (sortOrder === null) return null;
+
+  const minPrice = Number((PRICE_BAND_START + sortOrder * PRICE_BAND_SIZE).toFixed(4));
+  const maxPrice = Number((minPrice + PRICE_BAND_SIZE - 0.0001).toFixed(4));
+
+  return {
+    code: codeFromSortOrder(sortOrder),
+    sortOrder,
+    minPrice,
+    maxPrice,
+  };
+}
+
+function formatPriceBandUpperBound(value) {
+  const rounded = Math.floor(Number(value) * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
+}
+
 async function withRemnantPriceFallback(client, rows) {
   const normalizedRows = Array.isArray(rows) ? rows : [];
   const slabIds = [...new Set(normalizedRows.map((row) => asNumber(row?.parent_slab_id)).filter((value) => value !== null))];
@@ -384,14 +449,16 @@ async function ensureManualPriceTier(writeClient, supplierId, materialId, priceP
   const numericSupplierId = asNumber(supplierId);
   const numericMaterialId = asNumber(materialId);
   const normalizedPrice = parsePricePerSqft(pricePerSqft);
-  if (numericSupplierId === null || numericMaterialId === null || normalizedPrice === null) return null;
+  const band = describePriceBand(normalizedPrice);
+  if (numericSupplierId === null || numericMaterialId === null || normalizedPrice === null || !band?.code) return null;
 
   const { data: existing, error: existingError } = await writeClient
     .from("supplier_price_tiers")
     .select("id")
     .eq("supplier_id", numericSupplierId)
     .eq("material_id", numericMaterialId)
-    .eq("base_price_per_sqft", normalizedPrice)
+    .eq("code", band.code)
+    .eq("fixed_fee_per_sqft", 0)
     .eq("fee_percent_1", 0)
     .eq("fee_percent_2", 0)
     .order("id", { ascending: true })
@@ -401,18 +468,20 @@ async function ensureManualPriceTier(writeClient, supplierId, materialId, priceP
   if (existingError) throw existingError;
   if (existing?.id) return asNumber(existing.id);
 
-  const code = `MANUAL_${String(normalizedPrice).replace(".", "_")}`;
   const { data: created, error: createError } = await writeClient
     .from("supplier_price_tiers")
     .insert({
       supplier_id: numericSupplierId,
       material_id: numericMaterialId,
-      code,
-      sort_order: 999,
-      base_price_per_sqft: normalizedPrice,
+      code: band.code,
+      sort_order: band.sortOrder,
+      base_price_per_sqft: band.minPrice,
+      min_price_per_sqft: band.minPrice,
+      max_price_per_sqft: band.maxPrice,
+      fixed_fee_per_sqft: 0,
       fee_percent_1: 0,
       fee_percent_2: 0,
-      notes: "Created from manage remnant pricing editor",
+      notes: `Manual price band $${band.minPrice}-${formatPriceBandUpperBound(band.maxPrice)}.`,
     })
     .select("id")
     .single();
@@ -2420,6 +2489,215 @@ export async function fetchAuditLogs(client, searchParams) {
   return data || [];
 }
 
+function normalizeInventoryCheckOutcome(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "seen" || normalized === "exists" || normalized === "confirmed") return "seen";
+  if (normalized === "missing" || normalized === "not_found" || normalized === "not-found") return "missing";
+  const error = new Error("Invalid inventory check outcome");
+  error.statusCode = 400;
+  throw error;
+}
+
+function sanitizeInventorySessionId(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized || normalized.length > 120) {
+    const error = new Error("Session id is required");
+    error.statusCode = 400;
+    throw error;
+  }
+  return normalized;
+}
+
+async function fetchInventoryCheckAuditRows(client, authed, sessionId) {
+  const writeClient = getWriteClient(client);
+  let query = writeClient
+    .from("audit_logs")
+    .select("*")
+    .eq("event_type", REMNANT_INVENTORY_CHECK_EVENT)
+    .contains("meta", { session_id: sessionId })
+    .order("created_at", { ascending: false });
+
+  if (authed?.user?.id || authed?.profile?.id) {
+    query = query.eq("actor_user_id", authed.user?.id || authed.profile?.id);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function lookupInventoryCheckRemnant(client, number, authed, sessionId) {
+  const numeric = extractRemnantIdSearch(number);
+  if (!numeric) {
+    const error = new Error("Enter a remnant number");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const writeClient = getWriteClient(client);
+  const { data, error } = await writeClient
+    .from("remnants")
+    .select(REMNANT_WITH_STONE_SELECT)
+    .is("deleted_at", null)
+    .or(`moraware_remnant_id.eq.${numeric},id.eq.${numeric}`)
+    .order("moraware_remnant_id", { ascending: true, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  const priorRows = sessionId
+    ? await fetchInventoryCheckAuditRows(client, authed, sanitizeInventorySessionId(sessionId))
+    : [];
+  const priorMatch = priorRows.find((row) => Number(row.remnant_id) === Number(data?.id));
+
+  if (!data) {
+    return {
+      entered_number: numeric,
+      remnant: null,
+      existing_check: null,
+    };
+  }
+
+  return {
+    entered_number: numeric,
+    remnant: formatRemnant(data),
+    existing_check: priorMatch
+      ? {
+          outcome: priorMatch?.meta?.outcome || null,
+          created_at: priorMatch.created_at,
+          note: priorMatch.message || null,
+        }
+      : null,
+  };
+}
+
+export async function recordInventoryCheck(client, authed, body) {
+  const remnantId = asNumber(body?.remnant_id);
+  if (!remnantId) {
+    const error = new Error("Remnant id is required");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const sessionId = sanitizeInventorySessionId(body?.session_id);
+  const outcome = normalizeInventoryCheckOutcome(body?.outcome);
+  const enteredNumber = extractRemnantIdSearch(body?.entered_number);
+  const writeClient = getWriteClient(client);
+  const { data: remnant, error } = await writeClient
+    .from("remnants")
+    .select(REMNANT_WITH_STONE_SELECT)
+    .eq("id", remnantId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!remnant) {
+    const nextError = new Error("Remnant not found");
+    nextError.statusCode = 404;
+    throw nextError;
+  }
+
+  const message = outcome === "seen"
+    ? `Confirmed remnant #${remnant.moraware_remnant_id || remnant.id} in inventory`
+    : `Marked remnant #${remnant.moraware_remnant_id || remnant.id} as not seen in inventory`;
+
+  await writeAuditLog(writeClient, authed, {
+    event_type: REMNANT_INVENTORY_CHECK_EVENT,
+    entity_type: "remnant_inventory_check",
+    entity_id: remnant.id,
+    remnant_id: remnant.id,
+    company_id: remnant.company_id,
+    message,
+    new_data: {
+      remnant_id: remnant.id,
+      moraware_remnant_id: remnant.moraware_remnant_id,
+      outcome,
+      session_id: sessionId,
+      entered_number: enteredNumber,
+    },
+    meta: {
+      source: "manage_confirm",
+      session_id: sessionId,
+      outcome,
+      entered_number: enteredNumber,
+    },
+  });
+
+  return {
+    ok: true,
+    outcome,
+    remnant: formatRemnant(remnant),
+  };
+}
+
+export async function fetchInventoryCheckSession(client, authed, sessionId) {
+  const normalizedSessionId = sanitizeInventorySessionId(sessionId);
+  const writeClient = getWriteClient(client);
+  const auditRows = await fetchInventoryCheckAuditRows(client, authed, normalizedSessionId);
+
+  const latestByRemnantId = new Map();
+  for (const row of auditRows) {
+    const key = Number(row.remnant_id);
+    if (!key || latestByRemnantId.has(key)) continue;
+    latestByRemnantId.set(key, row);
+  }
+
+  const checkedRemnantIds = [...latestByRemnantId.keys()].filter(Boolean);
+  const checkedCount = checkedRemnantIds.length;
+  const seenCount = [...latestByRemnantId.values()].filter((row) => row?.meta?.outcome === "seen").length;
+  const missingCount = [...latestByRemnantId.values()].filter((row) => row?.meta?.outcome === "missing").length;
+
+  const { count: totalCount, error: totalError } = await writeClient
+    .from("remnants")
+    .select("id", { count: "exact", head: true })
+    .is("deleted_at", null);
+  if (totalError) throw totalError;
+
+  let unseenRows = [];
+  let unseenQuery = writeClient
+    .from("remnants")
+    .select("id,moraware_remnant_id,name,status")
+    .is("deleted_at", null)
+    .order("moraware_remnant_id", { ascending: true, nullsFirst: false })
+    .limit(30);
+
+  if (checkedRemnantIds.length) {
+    unseenQuery = unseenQuery.not("id", "in", `(${checkedRemnantIds.join(",")})`);
+  }
+
+  const { data: unseenData, error: unseenError } = await unseenQuery;
+  if (unseenError) throw unseenError;
+  unseenRows = unseenData || [];
+
+  const recent = auditRows.slice(0, 20).map((row) => ({
+    id: row.id,
+    remnant_id: row.remnant_id,
+    outcome: row?.meta?.outcome || null,
+    entered_number: row?.meta?.entered_number || null,
+    created_at: row.created_at,
+    message: row.message,
+  }));
+
+  return {
+    session_id: normalizedSessionId,
+    summary: {
+      total_count: totalCount || 0,
+      checked_count: checkedCount,
+      seen_count: seenCount,
+      missing_count: missingCount,
+      unchecked_count: Math.max((totalCount || 0) - checkedCount, 0),
+    },
+    unseen_preview: unseenRows.map((row) => ({
+      id: row.id,
+      moraware_remnant_id: row.moraware_remnant_id,
+      name: row.name,
+      status: row.status,
+    })),
+    recent,
+  };
+}
+
 export async function processHoldExpirations(client, authed) {
   const writeClient = getWriteClient(client);
   const { data, error } = await writeClient
@@ -2477,23 +2755,93 @@ export async function processHoldExpirations(client, authed) {
   return { expired };
 }
 
-export async function fetchSlabs(client = getPublicReadClient()) {
-  const { data, error } = await client
+function uniqueSortedStrings(values = []) {
+  return [...new Set((Array.isArray(values) ? values : []).filter(Boolean))].sort((a, b) =>
+    String(a).localeCompare(String(b)),
+  );
+}
+
+function buildSlabCatalogOptions(rows = []) {
+  return {
+    brands: uniqueSortedStrings(rows.map((row) => row.brand_name || row.supplier)),
+    materials: uniqueSortedStrings(rows.map((row) => row.material)),
+    finishes: uniqueSortedStrings(rows.flatMap((row) => row.finishes || [])),
+    thicknesses: uniqueSortedStrings(rows.flatMap((row) => row.thicknesses || [])),
+    colors: uniqueSortedStrings(
+      rows.flatMap((row) => [
+        ...(Array.isArray(row?.primary_colors) ? row.primary_colors : []),
+        ...(Array.isArray(row?.accent_colors) ? row.accent_colors : []),
+      ]),
+    ),
+  };
+}
+
+function applySlabCatalogFilters(rows = [], filters = {}) {
+  const search = String(filters?.search || "").trim().toLowerCase();
+  const brand = String(filters?.brand || "").trim();
+  const material = String(filters?.material || "").trim();
+  const finish = String(filters?.finish || "").trim();
+  const thickness = String(filters?.thickness || "").trim();
+
+  return rows.filter((row) => {
+    if (brand && (row.brand_name || row.supplier) !== brand) return false;
+    if (material && row.material !== material) return false;
+    if (finish && !(Array.isArray(row.finishes) ? row.finishes : []).includes(finish)) return false;
+    if (thickness && !(Array.isArray(row.thicknesses) ? row.thicknesses : []).includes(thickness)) return false;
+
+    if (!search) return true;
+    const haystack = [
+      row.name,
+      row.brand_name,
+      row.supplier,
+      row.material,
+      row.width,
+      row.height,
+      row.color_tone,
+      ...(row.pricing_codes || []),
+      ...(row.primary_colors || []),
+      ...(row.accent_colors || []),
+      ...(row.finishes || []),
+      ...(row.thicknesses || []),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return haystack.includes(search);
+  });
+}
+
+function sortSlabCatalogRows(rows = [], priceSort = "default") {
+  if (priceSort !== "low" && priceSort !== "high") {
+    return rows;
+  }
+
+  return [...rows].sort((left, right) => {
+    const leftPrice = normalizePriceValue(left?.price_per_sqft);
+    const rightPrice = normalizePriceValue(right?.price_per_sqft);
+
+    if (leftPrice === null && rightPrice === null) return 0;
+    if (leftPrice === null) return 1;
+    if (rightPrice === null) return -1;
+
+    return priceSort === "low" ? leftPrice - rightPrice : rightPrice - leftPrice;
+  });
+}
+
+function filterPricedSlabCatalogRows(rows = [], priceSort = "default") {
+  if (priceSort !== "low" && priceSort !== "high") {
+    return rows;
+  }
+
+  return rows.filter((row) => normalizePriceValue(row?.price_per_sqft) !== null);
+}
+
+export async function fetchSlabs(client = null, options = {}) {
+  const readClient = client ? getWriteClient(client) : getReadClient();
+  const { data, error } = await readClient
     .from("slabs")
-    .select(`
-      id,
-      name,
-      width,
-      height,
-      color_tone,
-      detail_url,
-      image_url,
-      supplier:suppliers(id,name,website_url),
-      material:materials(id,name),
-      slab_colors(role,color:colors(id,name)),
-      slab_finishes(finish:finishes(id,name)),
-      slab_thicknesses(thickness:thicknesses(id,name))
-    `)
+    .select(SLAB_SELECT)
     .eq("active", true)
     .order("name", { ascending: true });
 
@@ -2501,8 +2849,27 @@ export async function fetchSlabs(client = getPublicReadClient()) {
 
   const slabIds = (data || []).map((row) => Number(row.id)).filter(Boolean);
   const priceCodeMap = new Map();
+  const slabPriceMap = new Map();
 
   if (slabIds.length > 0) {
+    const { data: slabPriceRows, error: slabPriceError } = await getReadClient()
+      .from("slab_supplier_prices")
+      .select("slab_id,list_price_per_sqft,active")
+      .in("slab_id", slabIds)
+      .eq("active", true);
+
+    if (slabPriceError) throw slabPriceError;
+
+    for (const row of slabPriceRows || []) {
+      const slabId = Number(row?.slab_id);
+      const price = normalizePriceValue(row?.list_price_per_sqft);
+      if (!slabId || price === null) continue;
+      const current = slabPriceMap.get(slabId);
+      if (current === undefined || price < current) {
+        slabPriceMap.set(slabId, price);
+      }
+    }
+
     const { data: priceRows, error: priceError } = await getReadClient()
       .from("slab_price_codes")
       .select("slab_id,finish_id,thickness_id,size_label,price_code,price_code_sort_order")
@@ -2519,7 +2886,62 @@ export async function fetchSlabs(client = getPublicReadClient()) {
     }
   }
 
-  return (data || []).map((row) => normalizeSlabRow(row, priceCodeMap.get(Number(row.id)) || []));
+  const normalizedRows = (data || [])
+    .map((row) =>
+      normalizeSlabRow(
+        row,
+        priceCodeMap.get(Number(row.id)) || [],
+        slabPriceMap.get(Number(row.id)) ?? null,
+      ),
+    )
+    .filter((row) => Boolean(row.image_url));
+
+  const catalogOptions = buildSlabCatalogOptions(normalizedRows);
+  const filteredRows = applySlabCatalogFilters(normalizedRows, options);
+  const pricedRows = filterPricedSlabCatalogRows(filteredRows, options?.priceSort);
+  const sortedRows = sortSlabCatalogRows(pricedRows, options?.priceSort);
+
+  const requestedPage = Number.parseInt(String(options?.page || "1"), 10);
+  const requestedPageSize = Number.parseInt(String(options?.pageSize || "24"), 10);
+  const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const pageSize = Number.isFinite(requestedPageSize) && requestedPageSize > 0
+    ? Math.min(requestedPageSize, 60)
+    : 24;
+  const start = (page - 1) * pageSize;
+  const rows = sortedRows.slice(start, start + pageSize);
+
+  return {
+    rows,
+    total: sortedRows.length,
+    page,
+    pageSize,
+    hasMore: start + rows.length < sortedRows.length,
+    options: catalogOptions,
+  };
+}
+
+export async function fetchSlabById(client, slabId) {
+  const numericSlabId = asNumber(slabId);
+  if (numericSlabId === null) {
+    const error = new Error("Invalid slab id");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const { data, error } = await getWriteClient(client)
+    .from("slabs")
+    .select(SLAB_SELECT)
+    .eq("id", numericSlabId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) {
+    const nextError = new Error("Slab not found");
+    nextError.statusCode = 404;
+    throw nextError;
+  }
+
+  return normalizeEditableSlabRow(data);
 }
 
 export async function proxyImage(target) {
@@ -3137,19 +3559,151 @@ async function replaceStoneProductColors(writeClient, stoneProductId, colorNames
   if (insertError) throw insertError;
 }
 
-function normalizeSlabRow(row, priceRows = []) {
+async function replaceSlabColors(writeClient, slabId, colorNames) {
+  const numericSlabId = asNumber(slabId);
+  if (numericSlabId === null) return;
+
+  const allNames = dedupeColorList(colorNames);
+  let colorRows = [];
+  if (allNames.length) {
+    const { data, error } = await writeClient
+      .from("colors")
+      .select("id,name")
+      .in("name", allNames);
+
+    if (error) throw error;
+    colorRows = data || [];
+  }
+
+  const colorIdByName = new Map(colorRows.map((row) => [row.name, row.id]));
+  const missingNames = allNames.filter((name) => !colorIdByName.has(name));
+  if (missingNames.length) {
+    throw new Error(`Unknown colors: ${missingNames.join(", ")}`);
+  }
+
+  const { error: deleteError } = await writeClient
+    .from("slab_colors")
+    .delete()
+    .eq("slab_id", numericSlabId);
+
+  if (deleteError) throw deleteError;
+  if (!allNames.length) return;
+
+  const rowsToInsert = allNames.map((name) => ({
+    slab_id: numericSlabId,
+    color_id: colorIdByName.get(name),
+    role: "primary",
+  }));
+
+  const { error: insertError } = await writeClient
+    .from("slab_colors")
+    .insert(rowsToInsert);
+
+  if (insertError) throw insertError;
+}
+
+async function replaceSlabFinishes(writeClient, slabId, finishNames) {
+  const numericSlabId = asNumber(slabId);
+  if (numericSlabId === null) return;
+
+  const allNames = dedupeStringList(finishNames);
+  let finishRows = [];
+  if (allNames.length) {
+    const { data, error } = await writeClient
+      .from("finishes")
+      .select("id,name")
+      .in("name", allNames);
+
+    if (error) throw error;
+    finishRows = data || [];
+  }
+
+  const finishIdByName = new Map(finishRows.map((row) => [row.name, row.id]));
+  const missingNames = allNames.filter((name) => !finishIdByName.has(name));
+  if (missingNames.length) {
+    throw new Error(`Unknown finishes: ${missingNames.join(", ")}`);
+  }
+
+  const { error: deleteError } = await writeClient
+    .from("slab_finishes")
+    .delete()
+    .eq("slab_id", numericSlabId);
+
+  if (deleteError) throw deleteError;
+  if (!allNames.length) return;
+
+  const rowsToInsert = allNames.map((name) => ({
+    slab_id: numericSlabId,
+    finish_id: finishIdByName.get(name),
+  }));
+
+  const { error: insertError } = await writeClient
+    .from("slab_finishes")
+    .insert(rowsToInsert);
+
+  if (insertError) throw insertError;
+}
+
+async function replaceSlabThicknesses(writeClient, slabId, thicknessNames) {
+  const numericSlabId = asNumber(slabId);
+  if (numericSlabId === null) return;
+
+  const allNames = dedupeStringList(thicknessNames);
+  let thicknessRows = [];
+  if (allNames.length) {
+    const { data, error } = await writeClient
+      .from("thicknesses")
+      .select("id,name")
+      .in("name", allNames);
+
+    if (error) throw error;
+    thicknessRows = data || [];
+  }
+
+  const thicknessIdByName = new Map(thicknessRows.map((row) => [row.name, row.id]));
+  const missingNames = allNames.filter((name) => !thicknessIdByName.has(name));
+  if (missingNames.length) {
+    throw new Error(`Unknown thicknesses: ${missingNames.join(", ")}`);
+  }
+
+  const { error: deleteError } = await writeClient
+    .from("slab_thicknesses")
+    .delete()
+    .eq("slab_id", numericSlabId);
+
+  if (deleteError) throw deleteError;
+  if (!allNames.length) return;
+
+  const rowsToInsert = allNames.map((name) => ({
+    slab_id: numericSlabId,
+    thickness_id: thicknessIdByName.get(name),
+  }));
+
+  const { error: insertError } = await writeClient
+    .from("slab_thicknesses")
+    .insert(rowsToInsert);
+
+  if (insertError) throw insertError;
+}
+
+function normalizeSlabRow(row, priceRows = [], pricePerSqft = null) {
   const slabColors = Array.isArray(row?.slab_colors) ? row.slab_colors : [];
+  const stoneProductColors = Array.isArray(row?.stone_product?.stone_product_colors)
+    ? row.stone_product.stone_product_colors
+    : [];
   const slabFinishes = Array.isArray(row?.slab_finishes) ? row.slab_finishes : [];
   const slabThicknesses = Array.isArray(row?.slab_thicknesses) ? row.slab_thicknesses : [];
 
-  const primary_colors = slabColors
-    .filter((item) => item?.role === "primary" && item?.color?.name)
-    .map((item) => item.color.name);
-  const accent_colors = slabColors
-    .filter((item) => item?.role === "accent" && item?.color?.name)
-    .map((item) => item.color.name);
-  const finishes = slabFinishes.map((item) => item?.finish?.name).filter(Boolean);
-  const thicknesses = slabThicknesses.map((item) => item?.thickness?.name).filter(Boolean);
+  const colorSource = slabColors.length ? slabColors : stoneProductColors;
+  const normalizedColors = dedupeColorList(
+    colorSource.map((item) => item?.color?.name).filter(Boolean),
+  );
+  const finishes = dedupeStringList(
+    slabFinishes.map((item) => item?.finish?.name).filter(Boolean),
+  );
+  const thicknesses = dedupeStringList(
+    slabThicknesses.map((item) => item?.thickness?.name).filter(Boolean),
+  );
   const pricing_codes = [...new Set(
     (Array.isArray(priceRows) ? priceRows : [])
       .map((item) => item?.price_code)
@@ -3164,14 +3718,27 @@ function normalizeSlabRow(row, priceRows = []) {
     color_tone: row.color_tone || "",
     detail_url: sanitizeExternalHttpUrl(row.detail_url),
     image_url: sanitizeExternalHttpUrl(row.image_url),
+    brand_name: row.stone_product?.brand_name || "",
     supplier: row.supplier?.name || "",
     supplier_website_url: row.supplier?.website_url || "",
     material: row.material?.name || "",
-    primary_colors,
-    accent_colors,
+    primary_colors: normalizedColors,
+    accent_colors: [],
     finishes,
     thicknesses,
     pricing_codes,
+    price_per_sqft: pricePerSqft,
+  };
+}
+
+function normalizeEditableSlabRow(row) {
+  const normalized = normalizeSlabRow(row);
+  return {
+    ...normalized,
+    supplier_id: row?.supplier?.id || null,
+    material_id: row?.material?.id || null,
+    stone_product_id: row?.stone_product?.id || null,
+    colors: normalized.primary_colors,
   };
 }
 
@@ -3247,6 +3814,25 @@ function normalizePayload(body) {
   return parsed;
 }
 
+function normalizeSlabPayload(body) {
+  return {
+    name: body.name ? String(body.name).trim() : "",
+    width:
+      body.width === "" || body.width === undefined || body.width === null
+        ? null
+        : parseMeasurement(body.width),
+    height:
+      body.height === "" || body.height === undefined || body.height === null
+        ? null
+        : parseMeasurement(body.height),
+    detail_url: sanitizeExternalHttpUrl(body.detail_url),
+    image_url: sanitizeExternalHttpUrl(body.image_url),
+    colors: dedupeColorList(body.colors),
+    finishes: dedupeStringList(body.finishes),
+    thicknesses: dedupeStringList(body.thicknesses),
+  };
+}
+
 function validateRemnantPayload(payload) {
   if (!payload.name || !payload.company_id || !payload.material_id || !payload.thickness_id) {
     return "Company, material, thickness, and stone name are required";
@@ -3255,6 +3841,100 @@ function validateRemnantPayload(payload) {
     return "Width and height are required";
   }
   return null;
+}
+
+function validateSlabPayload(payload, body) {
+  if (!payload.name) {
+    return "Slab name is required";
+  }
+
+  if (body?.width !== undefined && body?.width !== null && String(body.width).trim() !== "" && payload.width === null) {
+    return "Slab width is invalid";
+  }
+
+  if (body?.height !== undefined && body?.height !== null && String(body.height).trim() !== "" && payload.height === null) {
+    return "Slab height is invalid";
+  }
+
+  return null;
+}
+
+export async function updateSlab(client, authed, slabId, body) {
+  const numericSlabId = asNumber(slabId);
+  if (numericSlabId === null) {
+    const error = new Error("Invalid slab id");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const writeClient = getWriteClient(client);
+  const payload = normalizeSlabPayload(body || {});
+  const validationError = validateSlabPayload(payload, body || {});
+  if (validationError) {
+    const error = new Error(validationError);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const { data: existingSlab, error: existingError } = await writeClient
+    .from("slabs")
+    .select(SLAB_SELECT)
+    .eq("id", numericSlabId)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+  if (!existingSlab) {
+    const error = new Error("Slab not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const { error: updateError } = await writeClient
+    .from("slabs")
+    .update({
+      name: payload.name,
+      width: payload.width,
+      height: payload.height,
+      detail_url: payload.detail_url,
+      image_url: payload.image_url,
+    })
+    .eq("id", numericSlabId);
+
+  if (updateError) throw updateError;
+
+  await replaceSlabColors(writeClient, numericSlabId, payload.colors);
+  await replaceSlabFinishes(writeClient, numericSlabId, payload.finishes);
+  await replaceSlabThicknesses(writeClient, numericSlabId, payload.thicknesses);
+
+  const { data: refreshedSlab, error: refreshedError } = await writeClient
+    .from("slabs")
+    .select(SLAB_SELECT)
+    .eq("id", numericSlabId)
+    .maybeSingle();
+
+  if (refreshedError) throw refreshedError;
+  if (!refreshedSlab) {
+    const error = new Error("Slab not found after update");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  runBestEffort(async () => {
+    await writeAuditLog(writeClient, authed, {
+      event_type: "slab_updated",
+      entity_type: "slab",
+      entity_id: numericSlabId,
+      message: `Updated slab #${numericSlabId}`,
+      old_data: existingSlab,
+      new_data: refreshedSlab,
+      meta: {
+        source: "api",
+        action: "update",
+      },
+    });
+  }, "Update slab audit");
+
+  return normalizeEditableSlabRow(refreshedSlab);
 }
 
 export async function fetchAdminTableRows(client, tableName, searchParams) {

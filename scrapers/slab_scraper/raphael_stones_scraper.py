@@ -285,6 +285,13 @@ def collect_gallery_image_candidates(soup: BeautifulSoup) -> list[str]:
     return candidates
 
 
+def normalize_image_url(image_url: str | None) -> str | None:
+    cleaned = safe_text(image_url)
+    if not cleaned:
+        return None
+    return re.sub(r"-(?:\d+)x(?:\d+)(?=\.(?:jpg|jpeg|png|webp)$)", "", cleaned, flags=re.IGNORECASE)
+
+
 def image_candidate_score(image_url: str, position: int) -> int:
     filename = Path(urlparse(image_url).path).name.lower()
     score = 0
@@ -324,6 +331,9 @@ def image_candidate_score(image_url: str, position: int) -> int:
         if token in filename:
             score -= 8
 
+    if re.search(r"-(?:\d+)x(?:\d+)(?=\.(?:jpg|jpeg|png|webp)$)", filename):
+        score -= 12
+
     if re.search(r"\b\d{3,4}x\d{2,4}\b", filename):
         score += 4
 
@@ -335,7 +345,7 @@ def choose_best_image_url(variation_image_url: str | None, soup: BeautifulSoup) 
     seen: set[str] = set()
 
     for image_url in [variation_image_url, *collect_gallery_image_candidates(soup)]:
-        cleaned = safe_text(image_url)
+        cleaned = normalize_image_url(image_url)
         if not cleaned or cleaned in seen:
             continue
         seen.add(cleaned)

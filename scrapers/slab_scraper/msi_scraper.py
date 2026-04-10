@@ -1,5 +1,5 @@
 """
-MSI Surfaces slab scraper.
+MSI slab scraper.
 
 Current scope:
 - Quartz collections listing

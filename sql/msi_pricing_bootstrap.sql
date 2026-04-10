@@ -5,10 +5,13 @@ create table if not exists public.supplier_price_tiers (
   code text not null,
   sort_order integer not null,
   base_price_per_sqft numeric(10,4) not null,
+  min_price_per_sqft numeric(10,4) not null default 0,
+  max_price_per_sqft numeric(10,4) not null default 0,
+  fixed_fee_per_sqft numeric(10,4) not null default 0,
   fee_percent_1 numeric(8,6) not null default 0.06,
   fee_percent_2 numeric(8,6) not null default 0.03,
   adjusted_price_per_sqft numeric(10,4) generated always as (
-    round((base_price_per_sqft * (1 + fee_percent_1) * (1 + fee_percent_2))::numeric, 4)
+    round((((base_price_per_sqft + fixed_fee_per_sqft) * (1 + fee_percent_1) * (1 + fee_percent_2))::numeric), 4)
   ) stored,
   notes text,
   created_at timestamptz not null default now(),
@@ -18,6 +21,7 @@ create table if not exists public.supplier_price_tiers (
     supplier_id,
     material_id,
     base_price_per_sqft,
+    fixed_fee_per_sqft,
     fee_percent_1,
     fee_percent_2
   )
