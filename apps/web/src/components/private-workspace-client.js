@@ -1034,24 +1034,24 @@ export default function PrivateWorkspaceClient() {
   );
   const workspaceCopy = isStatusUser
     ? {
-        eyebrow: "Status Workspace",
-        title: "Update live inventory fast.",
+        eyebrow: "Inventory Workspace",
+        title: "Keep live inventory up to date.",
         description:
-          "Review requests, change status, and keep your company feed current.",
+          "Review requests, update remnant status, and keep your company feed accurate.",
         boardEyebrow: "Your Inventory Lane",
         boardTitle: "Status updates and request work",
         queueTitle: "Requests",
         queueDescription: "Requests that need a quick approve or deny pass from your lane.",
       }
     : {
-        eyebrow: "Private Workspace",
-        title: "Manage your live inventory.",
+        eyebrow: "Inventory Workspace",
+        title: "Manage live inventory with confidence.",
         description:
-          "Review requests, update remnants, and keep the feed current.",
+          "Review requests, update remnant details, and keep the live feed accurate.",
         boardEyebrow: "Workspace Board",
         boardTitle: "Inventory and quick controls",
-        queueTitle: "Pending hold requests",
-        queueDescription: "Review incoming requests without leaving the management workspace.",
+        queueTitle: "Incoming hold requests",
+        queueDescription: "Review and respond to requests without leaving the inventory workspace.",
       };
 
   useBodyScrollLock(isModalOpen);
@@ -2271,7 +2271,7 @@ export default function PrivateWorkspaceClient() {
                         isStatusUser ? "shrink-0 px-3.5" : ""
                       }`}
                     >
-                      Confirm
+                      Inventory Check
                     </Link>
                     <Link
                       href="/admin"

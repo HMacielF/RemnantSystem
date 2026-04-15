@@ -2613,6 +2613,7 @@ export async function recordInventoryCheck(client, authed, body) {
     return {
       ok: true,
       outcome,
+      message: `Marked remnant #${enteredNumber} as physically present but missing from the database`,
       remnant: null,
     };
   }
@@ -2637,8 +2638,25 @@ export async function recordInventoryCheck(client, authed, body) {
     throw nextError;
   }
 
+  if (outcome === "seen") {
+    const nextRemnantStatus = String(remnant.status || "").trim().toLowerCase() === "sold"
+      ? remnant.status
+      : "available";
+    const { error: updateError } = await writeClient
+      .from("remnants")
+      .update({
+        last_seen_at: new Date().toISOString(),
+        status: nextRemnantStatus,
+      })
+      .eq("id", remnant.id)
+      .is("deleted_at", null);
+    if (updateError) throw updateError;
+  }
+
   const message = outcome === "seen"
-    ? `Confirmed remnant #${remnant.moraware_remnant_id || remnant.id} in inventory`
+    ? String(remnant.status || "").trim().toLowerCase() === "sold"
+      ? `Confirmed remnant #${remnant.moraware_remnant_id || remnant.id} in inventory and kept it marked sold`
+      : `Confirmed remnant #${remnant.moraware_remnant_id || remnant.id} in inventory and marked it available`
     : outcome === "issue"
       ? `Flagged remnant #${remnant.moraware_remnant_id || remnant.id} for review`
       : `Marked remnant #${remnant.moraware_remnant_id || remnant.id} as not seen in inventory`;
@@ -2668,6 +2686,7 @@ export async function recordInventoryCheck(client, authed, body) {
   return {
     ok: true,
     outcome,
+    message,
     remnant: formatRemnant(remnant),
   };
 }
