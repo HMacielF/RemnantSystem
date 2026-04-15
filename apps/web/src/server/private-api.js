@@ -2638,6 +2638,46 @@ export async function recordInventoryCheck(client, authed, body) {
     throw nextError;
   }
 
+  let updatedHold = null;
+  if (outcome === "seen") {
+    const currentHold = await fetchRelevantHoldForRemnant(writeClient, remnant.id);
+    if (currentHold?.status === "active") {
+      const { data: releasedHold, error: holdError } = await writeClient
+        .from("holds")
+        .update({
+          status: "released",
+          released_at: new Date().toISOString(),
+          released_by_user_id: authed.profile.id,
+        })
+        .eq("id", currentHold.id)
+        .select(HOLD_SELECT)
+        .single();
+
+      if (holdError) throw holdError;
+      updatedHold = formatHold(releasedHold);
+
+      runBestEffort(async () => {
+        await cancelPendingHoldNotifications(writeClient, currentHold.id);
+        await writeAuditLog(writeClient, authed, {
+          event_type: "hold_released",
+          entity_type: "hold",
+          entity_id: currentHold.id,
+          remnant_id: remnant.id,
+          company_id: remnant.company_id,
+          message: `Released hold for remnant #${remnant.moraware_remnant_id || remnant.id}`,
+          old_data: currentHold,
+          new_data: updatedHold,
+          meta: {
+            source: "manage_confirm",
+            action: "inventory_check_release",
+            override: isPrivilegedProfile(authed.profile)
+              && String(currentHold.hold_owner_user_id) !== String(authed.profile.id),
+          },
+        });
+      }, "Release hold from inventory check");
+    }
+  }
+
   if (outcome === "seen") {
     const nextRemnantStatus = String(remnant.status || "").trim().toLowerCase() === "sold"
       ? remnant.status
@@ -2687,7 +2727,10 @@ export async function recordInventoryCheck(client, authed, body) {
     ok: true,
     outcome,
     message,
-    remnant: formatRemnant(remnant),
+    remnant: {
+      ...formatRemnant(remnant),
+      current_hold: updatedHold,
+    },
   };
 }
 
