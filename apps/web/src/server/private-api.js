@@ -20,6 +20,7 @@ const REMNANT_SELECT = `
   l_width,
   l_height,
   status,
+  location,
   image,
   source_image_url,
   updated_at,
@@ -2578,6 +2579,7 @@ export async function recordInventoryCheck(client, authed, body) {
   const sessionId = sanitizeInventorySessionId(body?.session_id);
   const outcome = normalizeInventoryCheckOutcome(body?.outcome);
   const enteredNumber = extractRemnantIdSearch(body?.entered_number);
+  const location = String(body?.location || "").trim() || null;
   if (!enteredNumber) {
     const error = new Error("Entered number is required");
     error.statusCode = 400;
@@ -2687,7 +2689,15 @@ export async function recordInventoryCheck(client, authed, body) {
       .update({
         last_seen_at: new Date().toISOString(),
         status: nextRemnantStatus,
+        location,
       })
+      .eq("id", remnant.id)
+      .is("deleted_at", null);
+    if (updateError) throw updateError;
+  } else {
+    const { error: updateError } = await writeClient
+      .from("remnants")
+      .update({ location })
       .eq("id", remnant.id)
       .is("deleted_at", null);
     if (updateError) throw updateError;
@@ -2714,12 +2724,14 @@ export async function recordInventoryCheck(client, authed, body) {
       outcome,
       session_id: sessionId,
       entered_number: enteredNumber,
+      location,
     },
     meta: {
       source: "manage_confirm",
       session_id: sessionId,
       outcome,
       entered_number: enteredNumber,
+      location,
     },
   });
 
@@ -2728,7 +2740,10 @@ export async function recordInventoryCheck(client, authed, body) {
     outcome,
     message,
     remnant: {
-      ...formatRemnant(remnant),
+      ...formatRemnant({
+        ...remnant,
+        location,
+      }),
       current_hold: updatedHold,
     },
   };

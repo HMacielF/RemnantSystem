@@ -79,6 +79,7 @@ function friendlyErrorMessage(error, fallback) {
 export default function RemnantConfirmClient() {
   const [sessionId, setSessionId] = useState("");
   const [lookupValue, setLookupValue] = useState("");
+  const [locationValue, setLocationValue] = useState("");
   const [lookupLoading, setLookupLoading] = useState(false);
   const [savingOutcome, setSavingOutcome] = useState("");
   const [message, setMessage] = useState("");
@@ -182,11 +183,14 @@ export default function RemnantConfirmClient() {
       if (lookupRequestIdRef.current !== requestId) return;
       setLookupResult(payload);
       if (payload?.remnant) {
+        setLocationValue(String(payload.remnant.location || ""));
         setLastResolvedLookup({
           remnant: payload.remnant,
           existingCheck: payload.existing_check || null,
           enteredNumber: payload.entered_number || nextValue,
         });
+      } else {
+        setLocationValue("");
       }
       if (!payload?.remnant) {
         setMessage(`No remnant found for #${nextValue}. If it exists physically, mark it as not in the database.`);
@@ -241,6 +245,7 @@ export default function RemnantConfirmClient() {
           session_id: sessionId,
           remnant_id: currentRemnant.id,
           entered_number: lookupResult?.entered_number || lookupValue.trim(),
+          location: locationValue,
           outcome,
         }),
       });
@@ -254,6 +259,7 @@ export default function RemnantConfirmClient() {
       ));
       setLocalCheckedCount((count) => count + 1);
       setLookupValue("");
+      setLocationValue("");
       setLookupResult(null);
       pulseInputReadyState();
       inputRef.current?.focus();
@@ -285,6 +291,7 @@ export default function RemnantConfirmClient() {
       showTransientMessage(payload?.message || `Marked remnant #${lookupValue.trim()} as physically present but missing from the DB.`);
       setLocalCheckedCount((count) => count + 1);
       setLookupValue("");
+      setLocationValue("");
       pulseInputReadyState();
       inputRef.current?.focus();
     } catch (nextError) {
@@ -300,6 +307,7 @@ export default function RemnantConfirmClient() {
     setMessage("");
     setError("");
     setLookupValue(String(lastResolvedLookup.enteredNumber || displayRemnantId(lastResolvedLookup.remnant)));
+    setLocationValue(String(lastResolvedLookup.remnant.location || ""));
     setLookupResult({
       entered_number: lastResolvedLookup.enteredNumber || displayRemnantId(lastResolvedLookup.remnant),
       remnant: lastResolvedLookup.remnant,
@@ -464,6 +472,17 @@ export default function RemnantConfirmClient() {
                           <span className="inline-flex items-center rounded-full bg-[var(--brand-shell)] px-3 py-1 text-xs font-medium text-[rgba(25,27,28,0.72)]">
                             {seenHint}
                           </span>
+                        </div>
+                        <div className="mt-4">
+                          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-[var(--brand-orange)]">
+                            Location
+                          </label>
+                          <input
+                            value={locationValue}
+                            onChange={(event) => setLocationValue(event.target.value)}
+                            placeholder="Shelf, rack, yard, or shop area"
+                            className="h-11 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                          />
                         </div>
                       </div>
                       {existingCheck ? (

@@ -3,6 +3,9 @@
 alter table public.holds
   add column if not exists customer_name text;
 
+alter table public.remnants
+  add column if not exists location text;
+
 create or replace function public.soft_delete_remnant(p_remnant_id bigint)
 returns public.remnants
 language plpgsql
@@ -54,7 +57,8 @@ select
   r.material_id,
   r.thickness_id,
   r.parent_slab_id,
-  r.stone_product_id
+  r.stone_product_id,
+  r.location
 from public.remnants r
 left join public.companies c on c.id = r.company_id
 left join public.materials m on m.id = r.material_id

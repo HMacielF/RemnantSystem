@@ -62,6 +62,7 @@ const ADMIN_DB_TABLES = {
             l_width: { type: "numeric" },
             l_height: { type: "numeric" },
             status: { type: "enum", required: true, options: ["available", "hold", "sold"], defaultValue: "available" },
+            location: { type: "text" },
             hash: { type: "text" },
             image: { type: "text" },
             updated_at: { type: "timestamptz", editable: false },

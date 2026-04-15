@@ -139,6 +139,7 @@ create table if not exists public.remnants (
   l_width numeric(10,2) check (l_width is null or l_width > 0),
   l_height numeric(10,2) check (l_height is null or l_height > 0),
   status text not null default 'available' check (status in ('available', 'hold', 'sold')),
+  location text,
   hash text not null,
   image text,
   updated_at timestamptz,
