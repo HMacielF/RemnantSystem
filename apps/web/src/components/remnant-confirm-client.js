@@ -34,9 +34,9 @@ function displayRemnantId(remnant) {
 function sizeText(remnant) {
   if (!remnant) return "";
   if (remnant.l_shape) {
-    return `${remnant.width}" x ${remnant.height}" + ${remnant.l_width}" x ${remnant.l_height}"`;
+    return `${remnant.width}" × ${remnant.height}" + ${remnant.l_width}" × ${remnant.l_height}"`;
   }
-  return remnant.width && remnant.height ? `${remnant.width}" x ${remnant.height}"` : "";
+  return remnant.width && remnant.height ? `${remnant.width}" × ${remnant.height}"` : "";
 }
 
 function statusText(value) {
@@ -54,11 +54,11 @@ function compactSuccessMessage(text) {
   const value = String(text || "").trim();
   if (!value) return "";
   return value
-    .replace(" in inventory and marked it available", " set available")
-    .replace(" in inventory and kept it marked sold", " confirmed, kept sold")
-    .replace(" as physically present but missing from the database", " marked not in DB")
-    .replace(" as not seen in inventory", " marked missing")
-    .replace(" for review", " sent to review");
+    .replace(" in inventory and marked it available", " → available")
+    .replace(" in inventory and kept it marked sold", " → kept sold")
+    .replace(" as physically present but missing from the database", " → not in DB")
+    .replace(" as not seen in inventory", " → missing")
+    .replace(" for review", " → review");
 }
 
 function friendlyErrorMessage(error, fallback) {
@@ -83,6 +83,7 @@ export default function RemnantConfirmClient() {
   const [lookupLoading, setLookupLoading] = useState(false);
   const [savingOutcome, setSavingOutcome] = useState("");
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState("success");
   const [error, setError] = useState("");
   const [lookupResult, setLookupResult] = useState(null);
   const [localCheckedCount, setLocalCheckedCount] = useState(0);
@@ -114,15 +115,16 @@ export default function RemnantConfirmClient() {
     }
   }
 
-  function showTransientMessage(text) {
+  function showTransientMessage(text, tone = "success") {
     const nextMessage = compactSuccessMessage(text);
     clearPendingMessageTimeout();
     setMessage(nextMessage);
+    setMessageTone(tone);
     if (nextMessage) {
       messageTimeoutRef.current = window.setTimeout(() => {
         setMessage("");
         messageTimeoutRef.current = null;
-      }, 1800);
+      }, 2200);
     }
   }
 
@@ -157,11 +159,6 @@ export default function RemnantConfirmClient() {
   const existingCheck = lookupResult?.existing_check || null;
   const canConfirm = Boolean(currentRemnant?.id) && !savingOutcome;
   const currentStatus = String(currentRemnant?.status || "").trim().toLowerCase();
-  const seenHint = currentStatus === "sold"
-    ? "Seen will keep this remnant sold."
-    : currentStatus === "hold"
-      ? "Seen will move this remnant back to available."
-      : "Seen will refresh this remnant as available.";
 
   runLookupRef.current = async (rawValue) => {
     const nextValue = String(rawValue || "").trim();
@@ -191,7 +188,8 @@ export default function RemnantConfirmClient() {
         });
       }
       if (!payload?.remnant) {
-        setMessage(`No remnant found for #${nextValue}. If it exists physically, mark it as not in the database.`);
+        setMessage(`No remnant found for #${nextValue}. Mark it below if it exists physically.`);
+        setMessageTone("warn");
       }
     } catch (nextError) {
       if (lookupRequestIdRef.current !== requestId) return;
@@ -250,11 +248,11 @@ export default function RemnantConfirmClient() {
       triggerSuccessFeedback();
       showTransientMessage(payload?.message || (
         outcome === "seen"
-          ? `Confirmed remnant #${displayRemnantId(currentRemnant)}.`
+          ? `#${displayRemnantId(currentRemnant)} confirmed`
           : outcome === "issue"
-            ? `Flagged remnant #${displayRemnantId(currentRemnant)} for review.`
-            : `Marked remnant #${displayRemnantId(currentRemnant)} as not seen.`
-      ));
+            ? `#${displayRemnantId(currentRemnant)} flagged for review`
+            : `#${displayRemnantId(currentRemnant)} marked missing`
+      ), outcome === "missing" ? "warn" : "success");
       setLocalCheckedCount((count) => count + 1);
       setLookupValue("");
       setLookupResult(null);
@@ -285,7 +283,7 @@ export default function RemnantConfirmClient() {
       });
       setLookupResult(null);
       triggerSuccessFeedback();
-      showTransientMessage(payload?.message || `Marked remnant #${lookupValue.trim()} as physically present but missing from the DB.`);
+      showTransientMessage(payload?.message || `#${lookupValue.trim()} → not in DB`, "warn");
       setLocalCheckedCount((count) => count + 1);
       setLookupValue("");
       pulseInputReadyState();
@@ -312,103 +310,170 @@ export default function RemnantConfirmClient() {
   }
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#f8f1ea_0%,#f4ede6_26%,#efe7de_100%)] px-3 py-4 text-[var(--brand-ink)] sm:px-5 sm:py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto flex w-full max-w-[760px] flex-col gap-4 sm:gap-5">
-        <section className="rounded-[28px] border border-[var(--brand-line)] bg-white/94 p-4 shadow-[0_24px_70px_rgba(25,27,28,0.08)] sm:rounded-[34px] sm:p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Inventory Check</p>
-              <h1 className="mt-2 font-display text-[1.85rem] font-semibold leading-tight text-[var(--brand-ink)] sm:text-[2.5rem]">Fast remnant confirmation</h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-[rgba(25,27,28,0.72)]">
-                Enter a number, confirm what you see, and move straight to the next remnant.
-              </p>
-              <div className="mt-3 inline-flex items-center rounded-full bg-[var(--brand-shell)] px-3 py-1 text-xs font-semibold text-[var(--brand-ink)]">
-                This device checked: {localCheckedCount}
-              </div>
-            </div>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:gap-3">
-              <Link
-                href="/manage"
-                className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-shell)] sm:w-auto"
-              >
-                Back to Workspace
-              </Link>
-            </div>
-          </div>
-        </section>
+    <main className="min-h-screen bg-[linear-gradient(180deg,#f8f1ea_0%,#f0e9e1_100%)] text-[var(--brand-ink)]">
 
-        <section className="rounded-[26px] border border-[var(--brand-line)] bg-white/96 p-4 shadow-[0_24px_70px_rgba(25,27,28,0.08)] sm:rounded-[30px] sm:p-5">
-          <div className="mb-4 flex items-end gap-3">
-            <div className="w-24 shrink-0">
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
-                Zone
-              </label>
-              <input
-                ref={locationRef}
-                value={locationValue}
-                onChange={(event) => setLocationValue(event.target.value.toUpperCase().slice(0, 2))}
-                placeholder="A"
-                maxLength={2}
-                className="h-14 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-center text-[1.4rem] font-bold text-[var(--brand-ink)] uppercase outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] sm:h-12"
-              />
-            </div>
-            {locationValue ? (
-              <div className="mb-[3px] flex items-center gap-2 rounded-full bg-[var(--brand-shell)] px-3 py-1.5">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                <span className="text-xs font-semibold text-[var(--brand-ink)]">Logging to zone {locationValue}</span>
-              </div>
-            ) : (
-              <p className="mb-[3px] text-xs text-[rgba(25,27,28,0.52)]">Set a zone letter to log all remnants to the same location.</p>
-            )}
+      {/* ── Top bar ───────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-20 border-b border-[var(--brand-line)] bg-white/90 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-[760px] items-center justify-between px-4">
+          <Link
+            href="/manage"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:text-[var(--brand-orange)]"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M12 16l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Workspace
+          </Link>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Inventory Check</span>
+            {localCheckedCount > 0 ? (
+              <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-emerald-100 px-3 text-xs font-bold text-emerald-800">
+                <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                  <path d="M2.5 8.5l3.5 3.5 7-7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {localCheckedCount}
+              </span>
+            ) : null}
           </div>
-          <form onSubmit={handleLookupSubmit} className="flex flex-col gap-3 sm:flex-row">
-            <div className="min-w-0 flex-1">
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
-                Remnant Number
-              </label>
-              <div className="relative">
+        </div>
+      </header>
+
+      <div className="mx-auto w-full max-w-[760px] px-3 py-5 sm:px-5 sm:py-6">
+
+        {/* ── Scan section ─────────────────────────────────────────── */}
+        <section className="rounded-[28px] border border-[var(--brand-line)] bg-white shadow-[0_8px_32px_rgba(25,27,28,0.07)] sm:rounded-[32px]">
+
+          {/* Zone + number inputs */}
+          <div className="p-4 sm:p-5">
+            <form onSubmit={handleLookupSubmit} className="flex items-end gap-3">
+              {/* Zone tile */}
+              <div className="shrink-0">
+                <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--brand-orange)]">
+                  Zone
+                </label>
                 <input
-                  ref={inputRef}
-                  value={lookupValue}
-                  onChange={(event) => setLookupValue(normalizeLookupValue(event.target.value))}
-                  placeholder="Enter remnant #"
-                  inputMode="numeric"
-                  className={`h-14 w-full rounded-2xl border bg-white px-4 pr-11 text-[1.2rem] font-semibold text-[var(--brand-ink)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] sm:h-12 sm:text-lg ${
-                    inputPulse
-                      ? "border-emerald-400 ring-4 ring-emerald-100"
-                      : "border-[var(--brand-line)]"
+                  ref={locationRef}
+                  value={locationValue}
+                  onChange={(event) => setLocationValue(event.target.value.toUpperCase().slice(0, 2))}
+                  placeholder="A"
+                  maxLength={2}
+                  className={`h-14 w-16 rounded-2xl border text-center text-2xl font-black uppercase outline-none transition-colors focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] sm:h-12 sm:w-14 sm:text-xl ${
+                    locationValue
+                      ? "border-[var(--brand-orange)] bg-[rgba(247,134,57,0.06)] text-[var(--brand-orange)] focus:border-[var(--brand-orange)]"
+                      : "border-[var(--brand-line)] bg-[var(--brand-shell)] text-[rgba(25,27,28,0.38)] focus:border-[var(--brand-orange)]"
                   }`}
                 />
-                {lookupLoading ? (
-                  <span className="pointer-events-none absolute inset-y-0 right-3 inline-flex items-center justify-center">
-                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-[rgba(25,27,28,0.16)] border-t-[var(--brand-orange)]" />
-                  </span>
-                ) : null}
               </div>
-            </div>
-            <button
-              type="submit"
-              disabled={lookupLoading || !lookupValue.trim()}
-              className="inline-flex h-14 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-5 text-base font-semibold text-white transition-colors hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-60 sm:h-12 sm:self-end sm:text-sm"
-            >
-              {lookupLoading ? "Looking up…" : "Check"}
-            </button>
-          </form>
 
+              {/* Remnant # */}
+              <div className="min-w-0 flex-1">
+                <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--brand-orange)]">
+                  Remnant #
+                </label>
+                <div className="relative">
+                  <input
+                    ref={inputRef}
+                    value={lookupValue}
+                    onChange={(event) => setLookupValue(normalizeLookupValue(event.target.value))}
+                    placeholder="Enter number"
+                    inputMode="numeric"
+                    className={`h-14 w-full rounded-2xl border bg-white px-4 pr-11 text-[1.25rem] font-bold text-[var(--brand-ink)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] sm:h-12 sm:text-lg ${
+                      inputPulse
+                        ? "border-emerald-400 bg-emerald-50 ring-4 ring-emerald-100"
+                        : "border-[var(--brand-line)]"
+                    }`}
+                  />
+                  {lookupLoading ? (
+                    <span className="pointer-events-none absolute inset-y-0 right-3 inline-flex items-center">
+                      <span className="h-5 w-5 animate-spin rounded-full border-2 border-[rgba(25,27,28,0.12)] border-t-[var(--brand-orange)]" />
+                    </span>
+                  ) : lookupValue.trim() ? (
+                    <button
+                      type="button"
+                      onClick={() => { setLookupValue(""); setLookupResult(null); inputRef.current?.focus(); }}
+                      className="absolute inset-y-0 right-3 inline-flex items-center text-[rgba(25,27,28,0.32)] transition-colors hover:text-[var(--brand-ink)]"
+                      aria-label="Clear"
+                    >
+                      <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+                      </svg>
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={lookupLoading || !lookupValue.trim()}
+                className="h-14 shrink-0 rounded-2xl bg-[var(--brand-ink)] px-5 text-sm font-bold text-white transition-colors hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-50 sm:h-12"
+              >
+                Check
+              </button>
+            </form>
+
+            {/* Zone status line */}
+            <div className="mt-3 flex items-center gap-2">
+              {locationValue ? (
+                <>
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className="text-xs font-semibold text-[rgba(25,27,28,0.68)]">
+                    Logging all remnants to zone <span className="text-[var(--brand-ink)]">{locationValue}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { setLocationValue(""); locationRef.current?.focus(); }}
+                    className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-[rgba(25,27,28,0.38)] transition-colors hover:text-rose-500"
+                  >
+                    clear
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="h-2 w-2 rounded-full bg-[rgba(25,27,28,0.18)]" />
+                  <span className="text-xs text-[rgba(25,27,28,0.45)]">No zone set — enter a letter above to log location</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Toast messages */}
           {message ? (
-            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900">
+            <div className={`mx-4 mb-4 rounded-2xl px-4 py-3 text-sm font-semibold sm:mx-5 ${
+              messageTone === "warn"
+                ? "border border-amber-200 bg-amber-50 text-amber-900"
+                : "border border-emerald-200 bg-emerald-50 text-emerald-900"
+            }`}>
               {message}
             </div>
           ) : null}
           {error ? (
-            <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-900">
+            <div className="mx-4 mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-900 sm:mx-5">
               {error}
             </div>
           ) : null}
+
+          {/* Not-in-DB banner */}
+          {!currentRemnant && lookupValue.trim() && !lookupLoading ? (
+            <div className="mx-4 mb-4 flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 sm:mx-5">
+              <p className="text-sm font-medium text-amber-950">
+                #{lookupValue.trim()} not found — exists physically?
+              </p>
+              <button
+                type="button"
+                onClick={handleNotInDb}
+                disabled={savingOutcome === "not_in_db"}
+                className="shrink-0 rounded-xl bg-amber-500 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-amber-400 disabled:opacity-60"
+              >
+                {savingOutcome === "not_in_db" ? "Saving…" : "Not in DB"}
+              </button>
+            </div>
+          ) : null}
+
+          {/* Last remnant restore */}
           {!currentRemnant && !lookupValue.trim() && lastResolvedLookup?.remnant ? (
-            <div className="mt-4 flex items-center justify-between gap-3 rounded-[22px] border border-[var(--brand-line)] bg-[var(--brand-shell)] px-4 py-3">
+            <div className="mx-4 mb-4 flex items-center justify-between gap-3 rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-shell)] px-4 py-3 sm:mx-5">
               <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--brand-orange)]">Last Remnant</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[rgba(25,27,28,0.45)]">Last scanned</p>
                 <p className="truncate text-sm font-semibold text-[var(--brand-ink)]">
                   #{displayRemnantId(lastResolvedLookup.remnant)} · {lastResolvedLookup.remnant.name || "Unnamed"}
                 </p>
@@ -416,166 +481,184 @@ export default function RemnantConfirmClient() {
               <button
                 type="button"
                 onClick={restoreLastLookup}
-                className="inline-flex h-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-white)]"
+                className="shrink-0 rounded-xl border border-[var(--brand-line)] bg-white px-3 py-1.5 text-xs font-bold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-shell)]"
               >
                 Reopen
               </button>
             </div>
           ) : null}
-          {!currentRemnant && lookupValue.trim() ? (
-            <div className="mt-4 rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-4">
-              <p className="text-sm font-medium text-amber-950">
-                If remnant #{lookupValue.trim()} exists physically but is not in the system, save it below.
-              </p>
-              <button
-                type="button"
-                onClick={handleNotInDb}
-                disabled={savingOutcome === "not_in_db"}
-                className="mt-3 inline-flex h-12 items-center justify-center rounded-2xl bg-amber-500 px-5 text-sm font-semibold text-white transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {savingOutcome === "not_in_db" ? "Saving…" : "Exists, Not In DB"}
-              </button>
+
+          {/* Empty state */}
+          {!currentRemnant && !lookupValue.trim() && !lastResolvedLookup?.remnant ? (
+            <div className="mx-4 mb-4 rounded-2xl border border-dashed border-[rgba(25,27,28,0.14)] bg-[var(--brand-shell)] px-5 py-8 text-center sm:mx-5">
+              <p className="text-sm font-medium text-[rgba(25,27,28,0.45)]">Enter a remnant number above to begin scanning</p>
             </div>
           ) : null}
+        </section>
 
-          <div className="mt-5">
-            {!currentRemnant ? (
-              <div className="rounded-[24px] border border-dashed border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,var(--brand-white)_100%)] px-5 py-8 text-center text-sm leading-6 text-[rgba(25,27,28,0.62)] sm:rounded-[26px] sm:px-6 sm:py-10">
-                Enter a remnant number to begin.
+        {/* ── Remnant result card ───────────────────────────────────── */}
+        {currentRemnant ? (
+          <section className="mt-4 overflow-hidden rounded-[28px] border border-[var(--brand-line)] bg-white shadow-[0_8px_32px_rgba(25,27,28,0.09)] sm:rounded-[32px]">
+
+            {/* Card header bar */}
+            <div className="flex items-center justify-between border-b border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,var(--brand-white)_100%)] px-5 py-3">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
+                  #{displayRemnantId(currentRemnant)}
+                </span>
+                {existingCheck ? (
+                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                    existingCheck.outcome === "seen"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : existingCheck.outcome === "issue"
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-rose-100 text-rose-800"
+                  }`}>
+                    Already {existingCheck.outcome === "seen" ? "seen" : existingCheck.outcome === "issue" ? "flagged" : "missing"}
+                  </span>
+                ) : null}
               </div>
-            ) : (
-              <div className="overflow-hidden rounded-[24px] border border-[var(--brand-line)] bg-white shadow-[0_24px_70px_rgba(25,27,28,0.08)] sm:rounded-[28px]">
-                <div className="grid gap-0 md:grid-cols-[180px_minmax(0,1fr)]">
-                  <div className="hidden border-r border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,var(--brand-white)_100%)] p-4 md:block">
-                    {currentRemnant.image ? (
-                      <img
-                        src={currentRemnant.image}
-                        alt={currentRemnant.name}
-                        className="h-40 w-full rounded-[20px] border border-[var(--brand-line)] bg-white object-contain"
-                      />
-                    ) : (
-                      <div className="flex h-40 items-center justify-center rounded-[20px] border border-[var(--brand-line)] bg-white text-xs font-semibold uppercase tracking-[0.2em] text-[var(--brand-orange)]">
-                        No image
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4 sm:p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
-                          Remnant #{displayRemnantId(currentRemnant)}
-                        </p>
-                        <h2 className="mt-2 font-display text-[1.55rem] font-semibold leading-tight text-[var(--brand-ink)] sm:text-[2rem]">
-                          {currentRemnant.name || "Unnamed"}
-                        </h2>
-                        <p className="mt-2 text-sm leading-6 text-[rgba(25,27,28,0.68)]">
-                          {[
-                            currentRemnant.company_name,
-                            currentRemnant.material_name,
-                            currentRemnant.thickness_name,
-                            sizeText(currentRemnant),
-                            statusText(currentRemnant.status),
-                          ].filter(Boolean).join(" · ")}
-                        </p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
-                            currentStatus === "sold"
-                              ? "bg-stone-900 text-white"
-                              : currentStatus === "hold"
-                                ? "bg-amber-100 text-amber-950"
-                                : "bg-emerald-100 text-emerald-900"
-                          }`}>
-                            Current status: {statusText(currentRemnant.status)}
-                          </span>
-                          <span className="inline-flex items-center rounded-full bg-[var(--brand-shell)] px-3 py-1 text-xs font-medium text-[rgba(25,27,28,0.72)]">
-                            {seenHint}
-                          </span>
-                          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-                            currentRemnant.location
-                              ? "bg-sky-50 text-sky-700"
-                              : "bg-[var(--brand-shell)] text-[rgba(25,27,28,0.52)]"
-                          }`}>
-                            DB location: {currentRemnant.location || "N/A"}
-                          </span>
-                          {locationValue ? (
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(247,134,57,0.10)] px-3 py-1 text-xs font-semibold text-[var(--brand-orange)]">
-                              <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-orange)]" />
-                              Zone {locationValue}
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-                      {existingCheck ? (
-                        <div className={`hidden rounded-full px-3 py-2 text-xs font-semibold sm:inline-flex ${
-                          existingCheck.outcome === "seen"
-                            ? "bg-emerald-100 text-emerald-900"
-                            : existingCheck.outcome === "issue"
-                              ? "bg-amber-100 text-amber-950"
-                              : "bg-rose-100 text-rose-900"
-                        }`}>
-                          Already marked {existingCheck.outcome === "seen" ? "seen" : existingCheck.outcome === "issue" ? "needs review" : "missing"}
-                        </div>
-                      ) : null}
-                    </div>
+              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                currentStatus === "sold"
+                  ? "bg-stone-900 text-white"
+                  : currentStatus === "hold"
+                    ? "bg-amber-100 text-amber-900"
+                    : "bg-emerald-100 text-emerald-900"
+              }`}>
+                {statusText(currentRemnant.status)}
+              </span>
+            </div>
 
-                    <div className="mt-6 hidden gap-3 sm:grid">
-                      <button
-                        type="button"
-                        disabled={!canConfirm}
-                        onClick={() => handleConfirm("seen")}
-                        className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {savingOutcome === "seen" ? "Saving…" : "Seen"}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!canConfirm}
-                        onClick={() => handleConfirm("issue")}
-                        className="inline-flex h-12 items-center justify-center rounded-2xl bg-amber-500 px-5 text-sm font-semibold text-white transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {savingOutcome === "issue" ? "Saving…" : "Needs Review"}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!canConfirm}
-                        onClick={() => handleConfirm("missing")}
-                        className="inline-flex h-12 items-center justify-center rounded-2xl bg-rose-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {savingOutcome === "missing" ? "Saving…" : "Missing"}
-                      </button>
-                    </div>
-                  </div>
+            <div className="p-4 sm:p-5">
+              {/* Name + meta */}
+              <div className="flex gap-4">
+                {currentRemnant.image ? (
+                  <img
+                    src={currentRemnant.image}
+                    alt={currentRemnant.name}
+                    className="h-20 w-20 shrink-0 rounded-2xl border border-[var(--brand-line)] bg-white object-contain sm:h-24 sm:w-24"
+                  />
+                ) : null}
+                <div className="min-w-0">
+                  <h2 className="font-display text-[1.5rem] font-semibold leading-tight text-[var(--brand-ink)] sm:text-[1.85rem]">
+                    {currentRemnant.name || "Unnamed"}
+                  </h2>
+                  <p className="mt-1 text-sm text-[rgba(25,27,28,0.60)]">
+                    {[
+                      currentRemnant.company_name,
+                      currentRemnant.material_name,
+                      currentRemnant.thickness_name,
+                      sizeText(currentRemnant),
+                    ].filter(Boolean).join(" · ")}
+                  </p>
                 </div>
               </div>
-            )}
-          </div>
-        </section>
+
+              {/* Location row */}
+              <div className="mt-4 flex items-center gap-2 rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-shell)] px-4 py-3">
+                <svg className="h-4 w-4 shrink-0 text-[rgba(25,27,28,0.38)]" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+                  <path d="M8 1.5C5.515 1.5 3.5 3.515 3.5 6c0 3.75 4.5 8.5 4.5 8.5s4.5-4.75 4.5-8.5c0-2.485-2.015-4.5-4.5-4.5z" />
+                  <circle cx="8" cy="6" r="1.5" />
+                </svg>
+                <span className="text-xs font-semibold text-[rgba(25,27,28,0.55)]">DB location:</span>
+                <span className={`text-xs font-bold ${currentRemnant.location ? "text-sky-700" : "text-[rgba(25,27,28,0.35)]"}`}>
+                  {currentRemnant.location || "N/A"}
+                </span>
+                {locationValue && locationValue !== currentRemnant.location ? (
+                  <>
+                    <svg className="h-3.5 w-3.5 shrink-0 text-[rgba(25,27,28,0.28)]" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <path d="M4 8h8M9 5l3 3-3 3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span className="text-xs font-bold text-[var(--brand-orange)]">will update to {locationValue}</span>
+                  </>
+                ) : locationValue && locationValue === currentRemnant.location ? (
+                  <>
+                    <svg className="h-3.5 w-3.5 shrink-0 text-[rgba(25,27,28,0.28)]" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <path d="M4 8h8M9 5l3 3-3 3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span className="text-xs font-bold text-emerald-600">matches zone {locationValue} ✓</span>
+                  </>
+                ) : null}
+              </div>
+
+              {/* Desktop action buttons */}
+              <div className="mt-4 hidden grid-cols-3 gap-3 sm:grid">
+                <button
+                  type="button"
+                  disabled={!canConfirm}
+                  onClick={() => handleConfirm("seen")}
+                  className="inline-flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl bg-emerald-600 text-sm font-bold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                    <path d="M4 10.5l4 4 8-8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  {savingOutcome === "seen" ? "Saving…" : "Seen"}
+                </button>
+                <button
+                  type="button"
+                  disabled={!canConfirm}
+                  onClick={() => handleConfirm("issue")}
+                  className="inline-flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl bg-amber-500 text-sm font-bold text-white transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                    <path d="M10 6v5M10 14h.01" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M3 17L10 3l7 14H3z" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  {savingOutcome === "issue" ? "Saving…" : "Needs Review"}
+                </button>
+                <button
+                  type="button"
+                  disabled={!canConfirm}
+                  onClick={() => handleConfirm("missing")}
+                  className="inline-flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl bg-rose-600 text-sm font-bold text-white transition-colors hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                    <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
+                  </svg>
+                  {savingOutcome === "missing" ? "Saving…" : "Missing"}
+                </button>
+              </div>
+            </div>
+          </section>
+        ) : null}
       </div>
+
+      {/* ── Mobile bottom action bar ──────────────────────────────── */}
       {currentRemnant ? (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--brand-line)] bg-white/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 shadow-[0_-18px_40px_rgba(25,27,28,0.10)] backdrop-blur sm:hidden">
-          <div className="mx-auto grid max-w-[760px] grid-cols-3 gap-2">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--brand-line)] bg-white/96 px-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2.5 shadow-[0_-12px_32px_rgba(25,27,28,0.10)] backdrop-blur sm:hidden">
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               disabled={!canConfirm}
               onClick={() => handleConfirm("seen")}
-              className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl bg-emerald-600 text-xs font-bold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
+              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                <path d="M4 10.5l4 4 8-8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
               {savingOutcome === "seen" ? "Saving…" : "Seen"}
             </button>
             <button
               type="button"
               disabled={!canConfirm}
               onClick={() => handleConfirm("issue")}
-              className="inline-flex h-12 items-center justify-center rounded-2xl bg-amber-500 px-3 text-sm font-semibold text-white transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl bg-amber-500 text-xs font-bold text-white transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
+              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                <path d="M10 6v5M10 14h.01" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M3 17L10 3l7 14H3z" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
               {savingOutcome === "issue" ? "Saving…" : "Review"}
             </button>
             <button
               type="button"
               disabled={!canConfirm}
               onClick={() => handleConfirm("missing")}
-              className="inline-flex h-12 items-center justify-center rounded-2xl bg-rose-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl bg-rose-600 text-xs font-bold text-white transition-colors hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
+              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
+              </svg>
               {savingOutcome === "missing" ? "Saving…" : "Missing"}
             </button>
           </div>
