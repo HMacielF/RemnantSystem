@@ -2769,13 +2769,14 @@ export async function bulkInventoryHold(client, authed) {
 
   if (!availableRemnants?.length) return { ok: true, count: 0 };
 
-  const now = new Date().toISOString();
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
   const holdRows = availableRemnants.map((r) => ({
     remnant_id: r.id,
     company_id: r.company_id,
     hold_owner_user_id: authed.profile.id,
-    hold_started_at: now,
-    expires_at: null,
+    hold_started_at: now.toISOString(),
+    expires_at: expiresAt,
     status: "active",
     customer_name: "Inventory Double Check",
     notes: "Bulk hold for inventory re-verification",
