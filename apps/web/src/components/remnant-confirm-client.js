@@ -186,6 +186,7 @@ export default function RemnantConfirmClient() {
           existingCheck: payload.existing_check || null,
           enteredNumber: payload.entered_number || nextValue,
         });
+        inputRef.current?.blur();
       }
       if (!payload?.remnant) {
         setMessage(`No remnant found for #${nextValue}. Mark it below if it exists physically.`);
