@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import {
   applyAuthCookies,
+  bulkInventoryHold,
   createRequiredAuthedContext,
   fetchInventoryCheckSession,
+  fetchInventoryHoldCount,
   lookupInventoryCheckRemnant,
   recordInventoryCheck,
 } from "@/server/private-api";
@@ -19,6 +21,14 @@ export async function GET(request) {
     if (number) {
       return applyAuthCookies(
         NextResponse.json(await lookupInventoryCheckRemnant(authed.client, number, authed, sessionId)),
+        authed,
+      );
+    }
+
+    const holdCount = searchParams.get("hold_count");
+    if (holdCount === "1") {
+      return applyAuthCookies(
+        NextResponse.json(await fetchInventoryHoldCount(authed.client)),
         authed,
       );
     }
@@ -45,6 +55,12 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
+    if (body?.action === "bulk_inventory_hold") {
+      return applyAuthCookies(
+        NextResponse.json(await bulkInventoryHold(authed.client, authed)),
+        authed,
+      );
+    }
     return applyAuthCookies(
       NextResponse.json(await recordInventoryCheck(authed.client, authed, body)),
       authed,

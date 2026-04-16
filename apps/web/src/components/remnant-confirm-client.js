@@ -89,6 +89,9 @@ export default function RemnantConfirmClient() {
   const [localCheckedCount, setLocalCheckedCount] = useState(0);
   const [inputPulse, setInputPulse] = useState(false);
   const [lastResolvedLookup, setLastResolvedLookup] = useState(null);
+  const [holdCount, setHoldCount] = useState(null);
+  const [holdConfirmOpen, setHoldConfirmOpen] = useState(false);
+  const [holdStarting, setHoldStarting] = useState(false);
   const inputRef = useRef(null);
   const locationRef = useRef(null);
   const lookupRequestIdRef = useRef(0);
@@ -154,6 +157,38 @@ export default function RemnantConfirmClient() {
     clearPendingMessageTimeout();
     clearInputPulseTimeout();
   }, []);
+
+  async function refreshHoldCount() {
+    try {
+      const payload = await apiFetch("/api/remnant-checks?hold_count=1", { cache: "no-store" });
+      setHoldCount(payload?.count ?? 0);
+    } catch (_err) {
+      /* best effort */
+    }
+  }
+
+  useEffect(() => {
+    refreshHoldCount();
+  }, []);
+
+  async function startInventoryDoubleCheck() {
+    setHoldStarting(true);
+    setError("");
+    try {
+      const payload = await apiFetch("/api/remnant-checks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "bulk_inventory_hold" }),
+      });
+      setHoldCount(payload?.count ?? 0);
+      setHoldConfirmOpen(false);
+      showTransientMessage(`${payload?.count ?? 0} remnants placed on hold — scan each to restore`, "warn");
+    } catch (nextError) {
+      setError(friendlyErrorMessage(nextError, "Failed to start inventory double check."));
+    } finally {
+      setHoldStarting(false);
+    }
+  }
 
   const currentRemnant = lookupResult?.remnant || null;
   const existingCheck = lookupResult?.existing_check || null;
@@ -258,6 +293,7 @@ export default function RemnantConfirmClient() {
       setLookupResult(null);
       pulseInputReadyState();
       inputRef.current?.focus();
+      refreshHoldCount();
     } catch (nextError) {
       setError(friendlyErrorMessage(nextError, "Failed to save confirmation."));
     } finally {
@@ -338,7 +374,73 @@ export default function RemnantConfirmClient() {
         </div>
       </header>
 
+      {/* ── Inventory Double Check confirmation dialog ───────────── */}
+      {holdConfirmOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
+          <div className="w-full max-w-sm rounded-[28px] border border-[var(--brand-line)] bg-white p-6 shadow-2xl">
+            <div className="mb-1 flex items-center gap-2">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                <svg className="h-5 w-5 text-amber-600" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M10 6v5M10 14h.01" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M3 17L10 3l7 14H3z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+              <h2 className="text-base font-bold text-[var(--brand-ink)]">Start Inventory Double Check?</h2>
+            </div>
+            <p className="mt-3 text-sm text-[rgba(25,27,28,0.65)]">
+              All <strong>available</strong> remnants will be placed on hold. As you scan each one and confirm
+              it as <strong>Seen</strong>, it will be restored to available. Any remnants not scanned will
+              remain on hold until you update them manually.
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setHoldConfirmOpen(false)}
+                disabled={holdStarting}
+                className="flex-1 rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-shell)] py-3 text-sm font-bold text-[var(--brand-ink)] transition-colors hover:bg-[rgba(25,27,28,0.06)] disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={startInventoryDoubleCheck}
+                disabled={holdStarting}
+                className="flex-1 rounded-2xl bg-amber-500 py-3 text-sm font-bold text-white transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {holdStarting ? "Starting…" : "Yes, Hold All"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="mx-auto w-full max-w-[760px] px-3 py-5 sm:px-5 sm:py-6">
+
+        {/* ── Inventory Double Check active banner ─────────────────── */}
+        {holdCount !== null && holdCount > 0 ? (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-200">
+                <svg className="h-4 w-4 text-amber-700" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                  <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 3a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 018 4zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                </svg>
+              </span>
+              <div>
+                <p className="text-xs font-bold text-amber-900">Inventory Double Check in progress</p>
+                <p className="text-xs text-amber-700">
+                  <span className="font-bold">{holdCount}</span> remnant{holdCount === 1 ? "" : "s"} still on hold — scan each to restore to available
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : holdCount === 0 && localCheckedCount > 0 ? (
+          <div className="mb-4 flex items-center gap-2.5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+            <svg className="h-5 w-5 shrink-0 text-emerald-600" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+              <path d="M4 10.5l4 4 8-8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <p className="text-xs font-bold text-emerald-900">All inventory holds cleared — double check complete!</p>
+          </div>
+        ) : null}
 
         {/* ── Scan section ─────────────────────────────────────────── */}
         <section className="rounded-[28px] border border-[var(--brand-line)] bg-white shadow-[0_8px_32px_rgba(25,27,28,0.07)] sm:rounded-[32px]">
@@ -492,6 +594,19 @@ export default function RemnantConfirmClient() {
           {!currentRemnant && !lookupValue.trim() && !lastResolvedLookup?.remnant ? (
             <div className="mx-4 mb-4 rounded-2xl border border-dashed border-[rgba(25,27,28,0.14)] bg-[var(--brand-shell)] px-5 py-8 text-center sm:mx-5">
               <p className="text-sm font-medium text-[rgba(25,27,28,0.45)]">Enter a remnant number above to begin scanning</p>
+              {holdCount === null || holdCount === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setHoldConfirmOpen(true)}
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800 transition-colors hover:bg-amber-100"
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <rect x="3" y="7" width="10" height="8" rx="1.5" />
+                    <path d="M5.5 7V5a2.5 2.5 0 015 0v2" strokeLinecap="round" />
+                  </svg>
+                  Start Inventory Double Check
+                </button>
+              ) : null}
             </div>
           ) : null}
         </section>
@@ -502,10 +617,19 @@ export default function RemnantConfirmClient() {
 
             {/* Card header bar */}
             <div className="flex items-center justify-between border-b border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,var(--brand-white)_100%)] px-5 py-3">
-              <div className="flex items-center gap-2.5">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
                   #{displayRemnantId(currentRemnant)}
                 </span>
+                {currentRemnant.inventory_hold ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">
+                    <svg className="h-3 w-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <rect x="3" y="7" width="10" height="8" rx="1.5" />
+                      <path d="M5.5 7V5a2.5 2.5 0 015 0v2" strokeLinecap="round" />
+                    </svg>
+                    Inventory Hold
+                  </span>
+                ) : null}
                 {existingCheck ? (
                   <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
                     existingCheck.outcome === "seen"

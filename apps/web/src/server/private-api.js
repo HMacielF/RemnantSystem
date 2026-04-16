@@ -20,6 +20,7 @@ const REMNANT_SELECT = `
   l_width,
   l_height,
   status,
+  inventory_hold,
   location,
   image,
   source_image_url,
@@ -2683,16 +2684,21 @@ export async function recordInventoryCheck(client, authed, body) {
   }
 
   if (outcome === "seen") {
-    const nextRemnantStatus = String(remnant.status || "").trim().toLowerCase() === "sold"
+    const currentStatus = String(remnant.status || "").trim().toLowerCase();
+    const nextRemnantStatus = currentStatus === "sold"
       ? remnant.status
-      : "available";
+      : (currentStatus === "hold" && !remnant.inventory_hold)
+        ? remnant.status
+        : "available";
+    const seenUpdate = {
+      last_seen_at: new Date().toISOString(),
+      status: nextRemnantStatus,
+      location,
+    };
+    if (remnant.inventory_hold) seenUpdate.inventory_hold = false;
     const { error: updateError } = await writeClient
       .from("remnants")
-      .update({
-        last_seen_at: new Date().toISOString(),
-        status: nextRemnantStatus,
-        location,
-      })
+      .update(seenUpdate)
       .eq("id", remnant.id)
       .is("deleted_at", null);
     if (updateError) throw updateError;
@@ -2749,6 +2755,42 @@ export async function recordInventoryCheck(client, authed, body) {
       current_hold: updatedHold,
     },
   };
+}
+
+export async function bulkInventoryHold(client, authed) {
+  const writeClient = getWriteClient(client);
+  const { data, error } = await writeClient
+    .from("remnants")
+    .update({ status: "hold", inventory_hold: true })
+    .eq("status", "available")
+    .is("deleted_at", null)
+    .select("id");
+  if (error) throw error;
+  const count = data?.length ?? 0;
+  runBestEffort(async () => {
+    await writeAuditLog(writeClient, authed, {
+      event_type: "inventory_double_check_started",
+      entity_type: "remnant_bulk",
+      entity_id: null,
+      remnant_id: null,
+      company_id: null,
+      message: `Started inventory double check — placed ${count} available remnants on hold`,
+      new_data: { count, affected_ids: data?.map((r) => r.id) ?? [] },
+      meta: { source: "manage_confirm", action: "bulk_inventory_hold" },
+    });
+  }, "Audit bulk inventory hold");
+  return { ok: true, count };
+}
+
+export async function fetchInventoryHoldCount(client) {
+  const writeClient = getWriteClient(client);
+  const { count, error } = await writeClient
+    .from("remnants")
+    .select("id", { count: "exact", head: true })
+    .eq("inventory_hold", true)
+    .is("deleted_at", null);
+  if (error) throw error;
+  return { count: count ?? 0 };
 }
 
 export async function fetchInventoryCheckSession(client, authed, sessionId) {
