@@ -15,7 +15,7 @@ BRAND_PREFIX_RULES = [
     {
         "pattern": re.compile(r"^(msi)\s+(.+)$", re.IGNORECASE),
         "brand_name": "MSI",
-        "supplier_name": "MSI",
+        "supplier_name": "MSI Surfaces",
     },
     {
         "pattern": re.compile(r"^(cambria)\s+(.+)$", re.IGNORECASE),

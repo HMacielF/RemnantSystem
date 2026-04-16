@@ -8,6 +8,7 @@ dotenv.config();
 const WORKBOOK_PATH = process.argv[2] || path.join(process.env.HOME || "", "Downloads", "Final Q Pricelist March 2026.xlsx");
 const PRICE_SOURCE = "msi_price_list_mar_2026";
 const EFFECTIVE_ON = "2026-03-01";
+const MSI_SUPPLIER_NAME = "MSI Surfaces";
 const FEE_PERCENT_1 = 0.06;
 const FEE_PERCENT_2 = 0.03;
 const PRICE_BAND_START = 10;
@@ -225,8 +226,8 @@ async function loadLookupMaps(client) {
       p.name as supplier_name
     from public.slabs s
     join public.suppliers p on p.id = s.supplier_id
-    where p.name = 'MSI'
-  `);
+    where p.name = $1
+  `, [MSI_SUPPLIER_NAME]);
 
   return {
     supplierByName: new Map(suppliers.rows.map((row) => [row.name, row.id])),
@@ -240,13 +241,13 @@ async function loadLookupMaps(client) {
 }
 
 function buildEntries(rows, lookups) {
-  const supplierId = lookups.supplierByName.get("MSI");
+  const supplierId = lookups.supplierByName.get(MSI_SUPPLIER_NAME);
   const materialId = lookups.materialByName.get("Quartz");
   const polishedFinishId = lookups.finishByName.get("Polished") || null;
   const thickness2cmId = lookups.thicknessByName.get("2 CM") || null;
   const thickness3cmId = lookups.thicknessByName.get("3 CM") || null;
 
-  if (!supplierId) throw new Error("Supplier MSI not found");
+  if (!supplierId) throw new Error(`Supplier ${MSI_SUPPLIER_NAME} not found`);
   if (!materialId) throw new Error("Material Quartz not found");
 
   const entries = [];

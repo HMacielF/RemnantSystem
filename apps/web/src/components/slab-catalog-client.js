@@ -18,6 +18,41 @@ function uniqueSorted(values) {
   );
 }
 
+const THICKNESS_ORDER = new Map([
+  ["6 MM", 1],
+  ["10 MM", 2],
+  ["12 MM", 3],
+  ["15 MM", 4],
+  ["2 CM", 5],
+  ["3 CM", 6],
+]);
+
+function normalizeThicknessLabel(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, " ");
+}
+
+function compareThicknessLabels(left, right) {
+  const normalizedLeft = normalizeThicknessLabel(left);
+  const normalizedRight = normalizeThicknessLabel(right);
+  const leftRank = THICKNESS_ORDER.get(normalizedLeft);
+  const rightRank = THICKNESS_ORDER.get(normalizedRight);
+
+  if (leftRank !== undefined || rightRank !== undefined) {
+    if (leftRank === undefined) return 1;
+    if (rightRank === undefined) return -1;
+    if (leftRank !== rightRank) return leftRank - rightRank;
+  }
+
+  return normalizedLeft.localeCompare(normalizedRight);
+}
+
+function uniqueSortedThicknesses(values) {
+  return [...new Set((values || []).filter(Boolean))].sort(compareThicknessLabels);
+}
+
 function slabColors(row) {
   return uniqueSorted([
     ...(Array.isArray(row?.primary_colors) ? row.primary_colors : []),
@@ -76,7 +111,7 @@ function sizeValues(row) {
 }
 
 function thicknessValues(row) {
-  return uniqueSorted(
+  return uniqueSortedThicknesses(
     Array.isArray(row?.thicknesses)
       ? row.thicknesses
       : splitMetricValues(row?.thickness),
@@ -87,17 +122,25 @@ function isPorcelainMaterial(value) {
   return String(value || "").trim().toLowerCase() === "porcelain";
 }
 
-const DIRECT_IMAGE_HOSTS = new Set([
+const PROXIED_IMAGE_HOSTS = new Set([
   "www.gramaco.com",
   "gramaco.com",
 ]);
 
-function shouldUseDirectImage(url) {
+function displayImageUrl(url) {
+  const normalized = String(url || "").trim();
+  if (!normalized) return "";
+
   try {
-    return DIRECT_IMAGE_HOSTS.has(new URL(url).hostname);
+    const parsed = new URL(normalized);
+    if (PROXIED_IMAGE_HOSTS.has(parsed.hostname)) {
+      return `/api/image-proxy?url=${encodeURIComponent(normalized)}`;
+    }
   } catch {
-    return false;
+    return normalized;
   }
+
+  return normalized;
 }
 
 function finishValues(row) {
@@ -228,8 +271,9 @@ export default function SlabCatalogClient() {
   const [rows, setRows] = useState([]);
   const [catalogOptions, setCatalogOptions] = useState({
     brands: [],
+    suppliers: [],
     materials: [],
-    finishes: [],
+    finishFilters: [],
     thicknesses: [],
     colors: [],
   });
@@ -237,13 +281,20 @@ export default function SlabCatalogClient() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const [lightbox, setLightbox] = useState(null);
+  const [groupViewer, setGroupViewer] = useState(null);
   const [editor, setEditor] = useState(null);
-  const [editorLookupColors, setEditorLookupColors] = useState([]);
+  const [editorLookups, setEditorLookups] = useState({
+    colors: [],
+    finishes: [],
+    suppliers: [],
+    materials: [],
+  });
   const [editorLoading, setEditorLoading] = useState(false);
   const [editorSaving, setEditorSaving] = useState(false);
   const [editorError, setEditorError] = useState("");
   const [search, setSearch] = useState("");
   const [brand, setBrand] = useState("");
+  const [supplier, setSupplier] = useState("");
   const [material, setMaterial] = useState("");
   const [finish, setFinish] = useState("");
   const [thickness, setThickness] = useState("");
@@ -251,9 +302,10 @@ export default function SlabCatalogClient() {
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
   const deferredSearch = useDeferredValue(search);
 
-  useBodyScrollLock(Boolean(lightbox || editor));
+  useBodyScrollLock(Boolean(lightbox || groupViewer || editor));
 
   useEffect(() => {
     let active = true;
@@ -269,6 +321,7 @@ export default function SlabCatalogClient() {
         const params = new URLSearchParams({
           search: deferredSearch.trim(),
           brand,
+          supplier,
           material,
           finish,
           thickness,
@@ -286,14 +339,17 @@ export default function SlabCatalogClient() {
         setRows((current) => {
           const nextRows = Array.isArray(data?.rows) ? data.rows : [];
           if (page <= 1) return nextRows;
-          const seen = new Set(current.map((row) => Number(row.id)));
-          return [...current, ...nextRows.filter((row) => !seen.has(Number(row.id)))];
+          const seen = new Set(current.map((row) => String(row.id)));
+          return [...current, ...nextRows.filter((row) => !seen.has(String(row.id)))];
         });
         setCatalogOptions({
           brands: uniqueSorted(data?.options?.brands || []),
+          suppliers: uniqueSorted(data?.options?.suppliers || []),
           materials: uniqueSorted(data?.options?.materials || []),
-          finishes: uniqueSorted(data?.options?.finishes || []),
-          thicknesses: uniqueSorted(data?.options?.thicknesses || []),
+          finishFilters: Array.isArray(data?.options?.finish_filters)
+            ? data.options.finish_filters.filter((option) => option?.value)
+            : [],
+          thicknesses: uniqueSortedThicknesses(data?.options?.thicknesses || []),
           colors: uniqueSorted(data?.options?.colors || []),
         });
         setTotalCount(Number(data?.total || 0));
@@ -314,15 +370,20 @@ export default function SlabCatalogClient() {
     return () => {
       active = false;
     };
-  }, [brand, deferredSearch, finish, material, page, priceSort, thickness]);
+  }, [brand, deferredSearch, finish, material, page, priceSort, reloadTick, supplier, thickness]);
 
   const modalImageItems = useMemo(
     () =>
       rows
+        .flatMap((row) => (
+          row?.is_group && Array.isArray(row?.group_rows)
+            ? row.group_rows
+            : [row]
+        ))
         .filter((row) => row.image_url)
         .map((row) => ({
           id: row.id,
-          src: row.image_url,
+          src: displayImageUrl(row.image_url),
           alt: row.name || "Slab preview",
           name: row.name || "Slab preview",
           supplier: row.supplier || "",
@@ -346,6 +407,15 @@ export default function SlabCatalogClient() {
       : priceSort === "high"
         ? "Price: High to Low"
         : "Sort by Price";
+
+  function openGroupViewer(row) {
+    if (!row?.is_group) return;
+    setGroupViewer(row);
+  }
+
+  function closeGroupViewer() {
+    setGroupViewer(null);
+  }
 
   function cyclePriceSort() {
     setPage(1);
@@ -389,14 +459,29 @@ export default function SlabCatalogClient() {
         slabResponse.json(),
         lookupResponse.json(),
       ]);
-      setEditorLookupColors(
-        Array.isArray(lookupPayload?.colors)
+      setEditorLookups({
+        colors: Array.isArray(lookupPayload?.colors)
           ? lookupPayload.colors.filter((row) => row?.active !== false && row?.name)
           : [],
-      );
+        finishes: Array.isArray(lookupPayload?.finishes)
+          ? lookupPayload.finishes.filter((row) => row?.active !== false && row?.name)
+          : [],
+        suppliers: Array.isArray(lookupPayload?.suppliers)
+          ? lookupPayload.suppliers.filter((row) => row?.active !== false && row?.name)
+          : [],
+        materials: Array.isArray(lookupPayload?.materials)
+          ? lookupPayload.materials.filter((row) => row?.active !== false && row?.name)
+          : [],
+      });
       setEditor({
         id: data.id,
+        active: data.active !== false,
         name: data.name || "",
+        brand_name: data.brand_name || "",
+        supplier: data.supplier || "",
+        supplier_id: data.supplier_id ? String(data.supplier_id) : "",
+        material: data.material || "",
+        material_id: data.material_id ? String(data.material_id) : "",
         width: editableDimensionToken(data.width || ""),
         height: editableDimensionToken(data.height || ""),
         detail_url: data.detail_url || "",
@@ -404,9 +489,6 @@ export default function SlabCatalogClient() {
         colors: Array.isArray(data.colors) ? data.colors : [],
         finishes: Array.isArray(data.finishes) ? data.finishes : [],
         thicknesses: Array.isArray(data.thicknesses) ? data.thicknesses : [],
-        brand_name: data.brand_name || "",
-        supplier: data.supplier || "",
-        material: data.material || "",
       });
     } catch (loadError) {
       console.error(loadError);
@@ -418,7 +500,7 @@ export default function SlabCatalogClient() {
 
   function closeEditor() {
     setEditor(null);
-    setEditorLookupColors([]);
+    setEditorLookups({ colors: [], finishes: [], suppliers: [], materials: [] });
     setEditorError("");
     setEditorLoading(false);
     setEditorSaving(false);
@@ -446,24 +528,29 @@ export default function SlabCatalogClient() {
     });
   }
 
-  async function saveEditor() {
+  async function saveEditor(overrides = {}) {
     if (!editor?.id) return;
+    const nextEditor = { ...editor, ...overrides };
 
     try {
       setEditorSaving(true);
       setEditorError("");
-      const response = await fetch(`/api/slabs/${editor.id}`, {
+      const response = await fetch(`/api/slabs/${nextEditor.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: editor.name,
-          width: editor.width,
-          height: editor.height,
-          detail_url: editor.detail_url,
-          image_url: editor.image_url,
-          colors: editor.colors,
-          finishes: editor.finishes,
-          thicknesses: editor.thicknesses,
+          name: nextEditor.name,
+          brand_name: nextEditor.brand_name,
+          supplier_id: nextEditor.supplier_id,
+          material_id: nextEditor.material_id,
+          active: nextEditor.active,
+          width: nextEditor.width,
+          height: nextEditor.height,
+          detail_url: nextEditor.detail_url,
+          image_url: nextEditor.image_url,
+          colors: nextEditor.colors,
+          finishes: nextEditor.finishes,
+          thicknesses: nextEditor.thicknesses,
         }),
       });
 
@@ -472,28 +559,8 @@ export default function SlabCatalogClient() {
         throw new Error(payload?.error || `Slab update failed with ${response.status}`);
       }
 
-      setRows((currentRows) =>
-        currentRows.map((row) =>
-          Number(row.id) === Number(editor.id)
-            ? {
-                ...row,
-                name: payload.name || row.name,
-                width: payload.width || "",
-                height: payload.height || "",
-                detail_url: payload.detail_url || "",
-                image_url: payload.image_url || "",
-                brand_name: payload.brand_name || row.brand_name || "",
-                supplier: payload.supplier || row.supplier || "",
-                material: payload.material || row.material || "",
-                primary_colors: Array.isArray(payload.colors) ? payload.colors : [],
-                accent_colors: [],
-                finishes: Array.isArray(payload.finishes) ? payload.finishes : [],
-                thicknesses: Array.isArray(payload.thicknesses) ? payload.thicknesses : [],
-              }
-            : row,
-        ),
-      );
-
+      setPage(1);
+      setReloadTick((current) => current + 1);
       closeEditor();
     } catch (saveError) {
       console.error(saveError);
@@ -503,10 +570,17 @@ export default function SlabCatalogClient() {
     }
   }
 
+  async function archiveEditor() {
+    if (!editor?.id) return;
+    if (!window.confirm(`Archive slab "${editor.name}"?`)) return;
+    await saveEditor({ active: false });
+  }
+
   useEffect(() => {
     function handleViewerKeys(event) {
       if (event.key === "Escape") {
         setLightbox(null);
+        setGroupViewer(null);
         return;
       }
       if (!lightbox) return;
@@ -562,7 +636,7 @@ export default function SlabCatalogClient() {
             </section>
 
             <section className="mb-4 rounded-[30px] border border-[var(--brand-line)] bg-white/92 p-5 shadow-[0_24px_70px_rgba(25,27,28,0.08)]">
-              <div className="grid gap-3 xl:grid-cols-[minmax(280px,1.3fr)_220px_220px_220px_220px] xl:items-end">
+              <div className="grid gap-3 xl:grid-cols-[minmax(280px,1.3fr)_220px_220px_220px_220px_220px] xl:items-end">
                 <label className={FILTER_LABEL_CLASS}>
                   Search
                   <input
@@ -597,6 +671,25 @@ export default function SlabCatalogClient() {
                 </label>
 
                 <label className={FILTER_LABEL_CLASS}>
+                  Supplier
+                  <select
+                    className={FILTER_SELECT_CLASS}
+                    value={supplier}
+                    onChange={(event) => {
+                      setSupplier(event.target.value);
+                      setPage(1);
+                    }}
+                  >
+                    <option value="">All suppliers</option>
+                    {catalogOptions.suppliers.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className={FILTER_LABEL_CLASS}>
                   Material
                   <select
                     className={FILTER_SELECT_CLASS}
@@ -616,7 +709,7 @@ export default function SlabCatalogClient() {
                 </label>
 
                 <label className={FILTER_LABEL_CLASS}>
-                  Finish
+                  Basic Finish
                   <select
                     className={FILTER_SELECT_CLASS}
                     value={finish}
@@ -625,10 +718,10 @@ export default function SlabCatalogClient() {
                       setPage(1);
                     }}
                   >
-                    <option value="">All finishes</option>
-                    {catalogOptions.finishes.map((value) => (
-                      <option key={value} value={value}>
-                        {value}
+                    <option value="">All basic finishes</option>
+                    {catalogOptions.finishFilters.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.value}
                       </option>
                     ))}
                   </select>
@@ -673,7 +766,7 @@ export default function SlabCatalogClient() {
                   {priceSortLabel}
                 </button>
                 <div className="rounded-full border border-[var(--brand-line)] bg-white px-4 py-2 text-sm font-semibold text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)] shadow-sm">
-                  {loading ? "Loading..." : error ? "Unavailable" : `${totalCount} slabs`}
+                  {loading ? "Loading..." : error ? "Unavailable" : `${totalCount} results`}
                 </div>
               </div>
             </section>
@@ -708,6 +801,8 @@ export default function SlabCatalogClient() {
                   const dimensions = sizeValues(row);
                   const thicknesses = thicknessValues(row);
                   const finishes = finishValues(row);
+                  const isGroupedNaturalStone = Boolean(row?.is_group);
+                  const groupedSuppliers = Array.isArray(row?.suppliers) ? row.suppliers : [];
 
                   return (
                     <article
@@ -719,10 +814,14 @@ export default function SlabCatalogClient() {
                           <button
                             type="button"
                             className="group relative block h-full w-full overflow-hidden text-left"
-                            onClick={() =>
+                            onClick={() => {
+                              if (isGroupedNaturalStone) {
+                                openGroupViewer(row);
+                                return;
+                              }
                               setLightbox({
                                 id: row.id,
-                                src: row.image_url,
+                                src: displayImageUrl(row.image_url),
                                 alt: row.name || "Slab preview",
                                 name: row.name || "Slab preview",
                                 brand_name: row.brand_name || row.supplier || "",
@@ -731,38 +830,26 @@ export default function SlabCatalogClient() {
                                 rotateImage: isPorcelainMaterial(row.material),
                                 width: formatDimensionToken(row.width || ""),
                                 height: formatDimensionToken(row.height || ""),
-                              thicknesses: row.thicknesses || [],
-                              finishes: row.finishes || [],
-                              colors,
-                              detail_url: row.detail_url || "",
-                            })
-                          }
-                            aria-label={`Open image for ${row.name}`}
+                                thicknesses: row.thicknesses || [],
+                                finishes: row.finishes || [],
+                                colors,
+                                detail_url: row.detail_url || "",
+                              });
+                            }}
+                            aria-label={isGroupedNaturalStone ? `Open slab group for ${row.name}` : `Open image for ${row.name}`}
                           >
-                            {shouldUseDirectImage(row.image_url) ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={row.image_url}
-                                alt={row.name}
-                                className={`h-full w-full ${
-                                  isPorcelainMaterial(row.material)
-                                    ? "object-contain object-center p-1 transition duration-300 rotate-90 scale-[2.1] group-hover:rotate-90 group-hover:scale-[2.18]"
-                                    : "object-cover object-center transition duration-300 group-hover:scale-[1.03]"
-                                }`}
-                              />
-                            ) : (
-                              <Image
-                                src={row.image_url}
-                                alt={row.name}
-                                fill
-                                sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-                                className={
-                                  isPorcelainMaterial(row.material)
-                                    ? "object-contain object-center p-1 transition duration-300 rotate-90 scale-[2.1] group-hover:rotate-90 group-hover:scale-[2.18]"
-                                    : "object-cover object-center transition duration-300 group-hover:scale-[1.03]"
-                                }
-                              />
-                            )}
+                            <Image
+                              src={displayImageUrl(row.image_url)}
+                              alt={row.name}
+                              fill
+                              unoptimized={String(displayImageUrl(row.image_url || "")).startsWith("/api/image-proxy?")}
+                              sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                              className={
+                                isPorcelainMaterial(row.material)
+                                  ? "object-contain object-center p-1 transition duration-300 rotate-90 scale-[2.1] group-hover:rotate-90 group-hover:scale-[2.18]"
+                                  : "object-cover object-center transition duration-300 group-hover:scale-[1.03]"
+                              }
+                            />
                           </button>
                         ) : (
                           <div className="flex h-full items-center justify-center text-sm font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
@@ -770,31 +857,46 @@ export default function SlabCatalogClient() {
                           </div>
                         )}
                         <div className="absolute right-3 top-3 z-[2] flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void openEditor(row);
-                            }}
-                            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/80 bg-white/92 text-[var(--brand-ink)] shadow-sm backdrop-blur transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
-                            aria-label={`Edit ${row.name}`}
-                            title="Edit slab"
-                          >
-                            <svg
-                              aria-hidden="true"
-                              viewBox="0 0 24 24"
-                              className="h-4.5 w-4.5"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
+                          {isGroupedNaturalStone ? (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openGroupViewer(row);
+                              }}
+                              className="inline-flex h-10 items-center justify-center rounded-2xl border border-white/80 bg-white/92 px-4 text-sm font-semibold text-[var(--brand-ink)] shadow-sm backdrop-blur transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
+                              aria-label={`View slabs for ${row.name}`}
+                              title="View slab group"
                             >
-                              <path d="m12 20 9-9" />
-                              <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z" />
-                            </svg>
-                          </button>
-                        {row.detail_url ? (
+                              View Slabs
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void openEditor(row);
+                              }}
+                              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/80 bg-white/92 text-[var(--brand-ink)] shadow-sm backdrop-blur transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
+                              aria-label={`Edit ${row.name}`}
+                              title="Edit slab"
+                            >
+                              <svg
+                                aria-hidden="true"
+                                viewBox="0 0 24 24"
+                                className="h-4.5 w-4.5"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="m12 20 9-9" />
+                                <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z" />
+                              </svg>
+                            </button>
+                          )}
+                        {!isGroupedNaturalStone && row.detail_url ? (
                             <a
                               href={row.detail_url}
                               target="_blank"
@@ -831,7 +933,9 @@ export default function SlabCatalogClient() {
                             <div className="min-w-0">
                               <div className="flex items-start gap-2">
                                 <h3 className="font-display min-w-0 flex-1 text-[16px] font-semibold leading-snug text-[var(--brand-ink)] sm:text-[17px]">
-                                  {[row.brand_name || row.supplier, row.name].filter(Boolean).join(" · ")}
+                                  {isGroupedNaturalStone
+                                    ? row.name
+                                    : [row.brand_name || row.supplier, row.name].filter(Boolean).join(" · ")}
                                 </h3>
                                 {row.pricing_codes?.length ? (
                                   <div className="flex shrink-0 flex-wrap justify-end gap-1">
@@ -850,11 +954,27 @@ export default function SlabCatalogClient() {
                               </div>
                               {row.material || row.supplier ? (
                                 <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgba(35,35,35,0.54)]">
-                                  {[row.material, row.supplier].filter(Boolean).join(" · ")}
+                                  {isGroupedNaturalStone
+                                    ? [
+                                        row.material,
+                                        row.group_count ? `${row.group_count} slabs` : "",
+                                        groupedSuppliers.length ? `${groupedSuppliers.length} suppliers` : "",
+                                      ].filter(Boolean).join(" · ")
+                                    : [row.material, row.supplier].filter(Boolean).join(" · ")}
                                 </p>
                               ) : null}
                             </div>
                           </div>
+                          {isGroupedNaturalStone && groupedSuppliers.length ? (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {groupedSuppliers.slice(0, 4).map((value) => (
+                                <SlabBadge key={`${row.id}-supplier-${value}`} label={value} />
+                              ))}
+                              {groupedSuppliers.length > 4 ? (
+                                <SlabBadge label={`+${groupedSuppliers.length - 4} more`} />
+                              ) : null}
+                            </div>
+                          ) : null}
                           {dimensions.length || thicknesses.length || finishes.length ? (
                             <div className={`mt-3 grid items-stretch gap-2 ${metricLayout.grid}`}>
                               {dimensions.length ? (
@@ -1099,6 +1219,185 @@ export default function SlabCatalogClient() {
         </div>
       ) : null}
 
+      {groupViewer ? (
+        <div
+          className="fixed inset-0 z-[68] overflow-y-auto bg-black/70 px-3 py-4 sm:px-4 sm:py-8"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              closeGroupViewer();
+            }
+          }}
+        >
+          <div className="mx-auto max-w-6xl">
+            <div className="overflow-hidden rounded-[32px] border border-white/10 bg-[rgba(10,10,10,0.88)] shadow-[0_24px_70px_rgba(0,0,0,0.34)]">
+              <div className="flex items-start justify-between gap-4 border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/50">
+                    Natural Stone Group
+                  </p>
+                  <h2 className="font-display mt-1 text-xl font-semibold text-white sm:text-2xl">
+                    {groupViewer.name}
+                  </h2>
+                  <p className="mt-1 text-sm text-white/68">
+                    {[
+                      groupViewer.material,
+                      groupViewer.group_count ? `${groupViewer.group_count} slabs` : "",
+                      Array.isArray(groupViewer.suppliers) && groupViewer.suppliers.length
+                        ? `${groupViewer.suppliers.length} suppliers`
+                        : "",
+                    ].filter(Boolean).join(" · ")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeGroupViewer}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/18 bg-white/10 text-2xl leading-none text-white transition-colors hover:border-white/28 hover:bg-white/16"
+                  aria-label="Close natural stone group"
+                >
+                  {"\u00D7"}
+                </button>
+              </div>
+              <div className="p-4 sm:p-6">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {(Array.isArray(groupViewer.group_rows) ? groupViewer.group_rows : []).map((member) => {
+                    const memberColors = slabColors(member);
+                    const memberDimensions = sizeValues(member);
+                    const memberThicknesses = thicknessValues(member);
+                    const memberFinishes = finishValues(member);
+
+                    return (
+                      <article
+                        key={`group-member-${member.id}`}
+                        className="overflow-hidden rounded-[24px] border border-white/10 bg-white/95 shadow-[0_14px_30px_rgba(25,27,28,0.12)]"
+                      >
+                        <div className="relative aspect-[16/10] overflow-hidden bg-[var(--brand-shell)]">
+                          {member.image_url ? (
+                            <button
+                              type="button"
+                              className="block h-full w-full text-left"
+                              onClick={() =>
+                                setLightbox({
+                                  id: member.id,
+                                  src: displayImageUrl(member.image_url),
+                                  alt: member.name || "Slab preview",
+                                  name: member.name || "Slab preview",
+                                  brand_name: member.brand_name || member.supplier || "",
+                                  supplier: member.supplier || "",
+                                  material: member.material || "",
+                                  rotateImage: isPorcelainMaterial(member.material),
+                                  width: formatDimensionToken(member.width || ""),
+                                  height: formatDimensionToken(member.height || ""),
+                                  thicknesses: member.thicknesses || [],
+                                  finishes: member.finishes || [],
+                                  colors: memberColors,
+                                  detail_url: member.detail_url || "",
+                                })
+                              }
+                              aria-label={`Open image for ${member.name}`}
+                            >
+                              <Image
+                                src={displayImageUrl(member.image_url)}
+                                alt={member.name}
+                                fill
+                                unoptimized={String(displayImageUrl(member.image_url || "")).startsWith("/api/image-proxy?")}
+                                sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
+                                className="object-cover object-center"
+                              />
+                            </button>
+                          ) : null}
+                          <div className="absolute right-3 top-3 z-[2] flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void openEditor(member);
+                              }}
+                              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/80 bg-white/92 text-[var(--brand-ink)] shadow-sm backdrop-blur transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
+                              aria-label={`Edit ${member.name}`}
+                              title="Edit slab"
+                            >
+                              <svg
+                                aria-hidden="true"
+                                viewBox="0 0 24 24"
+                                className="h-4.5 w-4.5"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="m12 20 9-9" />
+                                <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z" />
+                              </svg>
+                            </button>
+                            {member.detail_url ? (
+                              <a
+                                href={member.detail_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(event) => event.stopPropagation()}
+                                className="inline-flex h-10 items-center justify-center rounded-2xl border border-white/80 bg-white/92 px-4 text-sm font-semibold text-[var(--brand-ink)] shadow-sm backdrop-blur transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
+                              >
+                                Visit Site
+                              </a>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="p-4 text-sm text-[var(--brand-ink)]">
+                          <h3 className="font-display text-[16px] font-semibold leading-snug">
+                            {[member.supplier, member.name].filter(Boolean).join(" · ")}
+                          </h3>
+                          <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgba(35,35,35,0.54)]">
+                            {member.material}
+                          </p>
+                          <div className="mt-3 grid grid-cols-2 gap-2">
+                            {memberDimensions.length ? (
+                              <div className="rounded-[16px] border border-[var(--brand-line)] bg-[var(--brand-shell)] px-3 py-2">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)]">Size</p>
+                                <p className="mt-1 text-[13px] font-semibold leading-tight">{memberDimensions.join(", ")}</p>
+                              </div>
+                            ) : null}
+                            {memberThicknesses.length ? (
+                              <div className="rounded-[16px] border border-[var(--brand-line)] bg-[var(--brand-shell)] px-3 py-2">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)]">Thickness</p>
+                                <p className="mt-1 text-[13px] font-semibold leading-tight">{memberThicknesses.join(", ")}</p>
+                              </div>
+                            ) : null}
+                            {memberFinishes.length ? (
+                              <div className="rounded-[16px] border border-[var(--brand-line)] bg-[var(--brand-shell)] px-3 py-2 col-span-2">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)]">Finish</p>
+                                <p className="mt-1 text-[13px] font-semibold leading-tight">{memberFinishes.join(", ")}</p>
+                              </div>
+                            ) : null}
+                          </div>
+                          {memberColors.length ? (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {memberColors.map((value) => (
+                                <span
+                                  key={`${member.id}-group-color-${value}`}
+                                  className="inline-flex items-center gap-2 rounded-full border border-[var(--brand-line)] bg-white px-2.5 py-1 text-[11px] font-semibold text-[rgba(25,27,28,0.72)]"
+                                >
+                                  <span
+                                    aria-hidden="true"
+                                    className="h-3 w-3 rounded-full border border-black/10 shadow-inner"
+                                    style={colorSwatchStyle(value)}
+                                  />
+                                  {value}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {editor ? (
         <div
           className="fixed inset-0 z-[71] overflow-y-auto bg-black/55 px-4 py-8"
@@ -1127,6 +1426,11 @@ export default function SlabCatalogClient() {
 
             <div className="grid gap-4 p-6">
               <div className="flex flex-wrap gap-2">
+                {editor.active === false ? (
+                  <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-700">
+                    Archived
+                  </span>
+                ) : null}
                 {editor.brand_name ? (
                   <span className="inline-flex items-center rounded-full border border-[var(--brand-line)] bg-[var(--brand-white)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[rgba(35,35,35,0.7)]">
                     Brand · {editor.brand_name}
@@ -1146,6 +1450,45 @@ export default function SlabCatalogClient() {
 
               <section className="rounded-[26px] border border-[var(--brand-line)] bg-white p-5 shadow-[0_12px_28px_rgba(25,27,28,0.05)]">
                 <div className="grid gap-4 xl:grid-cols-12">
+                  <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-3">
+                    Brand
+                    <input
+                      type="text"
+                      value={editor.brand_name}
+                      onChange={(event) => updateEditorField("brand_name", event.target.value)}
+                      className={FILTER_INPUT_CLASS}
+                    />
+                  </label>
+                  <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-3">
+                    Supplier
+                    <select
+                      value={editor.supplier_id}
+                      onChange={(event) => updateEditorField("supplier_id", event.target.value)}
+                      className={FILTER_SELECT_CLASS}
+                    >
+                      <option value="">Select supplier</option>
+                      {editorLookups.suppliers.map((row) => (
+                        <option key={`editor-supplier-${row.id}`} value={String(row.id)}>
+                          {row.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-3">
+                    Material
+                    <select
+                      value={editor.material_id}
+                      onChange={(event) => updateEditorField("material_id", event.target.value)}
+                      className={FILTER_SELECT_CLASS}
+                    >
+                      <option value="">Select material</option>
+                      {editorLookups.materials.map((row) => (
+                        <option key={`editor-material-${row.id}`} value={String(row.id)}>
+                          {row.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-4">
                     Slab Name
                     <input
@@ -1200,7 +1543,7 @@ export default function SlabCatalogClient() {
                 <section className="rounded-[22px] border border-[var(--brand-line)] bg-[var(--brand-white)] p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Colors</p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {editorLookupColors.map((row) => {
+                    {editorLookups.colors.map((row) => {
                       const value = row.name;
                       return (
                         <button
@@ -1228,18 +1571,18 @@ export default function SlabCatalogClient() {
                 <section className="rounded-[22px] border border-[var(--brand-line)] bg-[var(--brand-white)] p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Finishes</p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {catalogOptions.finishes.map((value) => (
+                    {editorLookups.finishes.map((row) => (
                       <button
-                        key={`editor-finish-${value}`}
+                        key={`editor-finish-${row.id}`}
                         type="button"
-                        onClick={() => toggleEditorListValue("finishes", value)}
+                        onClick={() => toggleEditorListValue("finishes", row.name)}
                         className={`inline-flex h-10 items-center justify-center rounded-full border px-3.5 text-sm font-semibold transition ${
-                          listIncludes(editor.finishes, value)
+                          listIncludes(editor.finishes, row.name)
                             ? "border-[var(--brand-orange)] bg-white text-[var(--brand-orange)] ring-4 ring-[rgba(247,134,57,0.14)]"
                             : "border-[var(--brand-line)] bg-white text-[var(--brand-ink)] hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
                         }`}
                       >
-                        {value}
+                        {row.name}
                       </button>
                     ))}
                   </div>
@@ -1273,6 +1616,14 @@ export default function SlabCatalogClient() {
               ) : null}
 
               <div className="flex flex-wrap justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={archiveEditor}
+                  disabled={editorSaving}
+                  className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-200 bg-rose-50 px-6 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Archive Slab
+                </button>
                 <button
                   type="button"
                   onClick={closeEditor}

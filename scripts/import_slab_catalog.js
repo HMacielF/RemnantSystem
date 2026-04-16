@@ -174,10 +174,14 @@ function canonicalMsiMergeName(value) {
         .toLowerCase();
 }
 
+function isMsiSupplier(value) {
+    return ["MSI", "MSI Surfaces"].includes(String(value || "").trim());
+}
+
 function buildMergeKey(row) {
     const supplier = row.supplierName || "";
     const material = row.materialName || "";
-    const nameKey = supplier === "MSI"
+    const nameKey = isMsiSupplier(supplier)
         ? canonicalMsiMergeName(row.name)
         : String(row.name || "").trim().toLowerCase();
 
@@ -300,7 +304,7 @@ function buildSupplierRecords() {
             accentColors: [],
         })),
         ...[...combinedMsi.values()].map((row) => ({
-            supplierName: "MSI",
+            supplierName: "MSI Surfaces",
             websiteUrl: "https://www.msisurfaces.com",
             name: sanitizeProductName(row.name),
             materialName: "Quartz",

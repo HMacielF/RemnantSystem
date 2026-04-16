@@ -28,6 +28,18 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+if __package__ is None or __package__ == "":
+    import sys
+
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+
+from scrapers.slab_scraper.tracking import (
+    create_supabase_client,
+    finalize_scrape_run,
+    get_or_create_supplier,
+    start_scrape_run,
+)
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,8 +48,10 @@ logging.basicConfig(
 
 
 BASE_URL = "https://www.gramaco.com"
+SUPPLIER_NAME = "Gramaco Granite & Marble"
 SPECIAL_COLLECTION_URLS = {
     "hrp": f"{BASE_URL}/quartz/?swoof=1&type_collection=hrp&paged=1",
+    "noble": f"{BASE_URL}/quartz/?swoof=1&paged=1&type_collection=noble",
     "polarstone": f"{BASE_URL}/quartz/?swoof=1&paged=1&type_collection=polarstone",
     "smart-quartz": f"{BASE_URL}/quartz/?swoof=1&paged=1&type_collection=smart-quartz",
 }
@@ -49,6 +63,7 @@ SUPPORTED_CATEGORIES = (
     "soapstone",
     "porcelain",
     "hrp",
+    "noble",
     "polarstone",
     "smart-quartz",
 )
@@ -360,18 +375,64 @@ def main() -> None:
     listing_url = build_listing_url(args.category)
     driver = create_driver(headless=not args.headed)
     wait = WebDriverWait(driver, args.timeout_sec)
+    supabase = create_supabase_client()
+    supplier = get_or_create_supplier(supabase, SUPPLIER_NAME, BASE_URL)
+    run_id, _started_at = start_scrape_run(
+        supabase,
+        supplier.id,
+        "gramaco_scraper",
+        args.category,
+        notes={
+            "category": args.category,
+            "listing_url": listing_url,
+        },
+    )
 
     try:
         open_listing_page(driver, wait, listing_url)
         products = collect_listing_products(driver, wait, args.limit)
         records = scrape_detail_pages(driver, wait, products, args.category)
         json_path, csv_path = export_records(records, output_dir, args.category)
+        finalize_scrape_run(
+            supabase,
+            run_id,
+            seen_count=len(records),
+            updated_count=len(records),
+            notes={
+                "category": args.category,
+                "listing_url": listing_url,
+                "json_path": str(json_path),
+                "csv_path": str(csv_path),
+            },
+        )
         logging.info("Export complete")
         logging.info("JSON: %s", json_path)
         logging.info("CSV: %s", csv_path)
         logging.info("Collected %s Gramaco %s slabs", len(records), args.category)
     except TimeoutException as error:
+        finalize_scrape_run(
+            supabase,
+            run_id,
+            status="failed",
+            notes={
+                "category": args.category,
+                "listing_url": listing_url,
+                "error": "Timed out while loading Gramaco listing or detail pages",
+            },
+        )
         raise RuntimeError("Timed out while loading Gramaco listing or detail pages") from error
+    except Exception as error:
+        finalize_scrape_run(
+            supabase,
+            run_id,
+            status="failed",
+            notes={
+                "category": args.category,
+                "listing_url": listing_url,
+                "error": str(error),
+            },
+        )
+        raise
     finally:
         driver.quit()
 

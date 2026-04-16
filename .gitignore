@@ -152,6 +152,7 @@ scrapers/**/__pycache__/
 # Local Codex / agent tooling
 .agents/
 skills-lock.json
+.claude/
 
 # Generated scraper exports
 scrapers/slab_scraper/output/

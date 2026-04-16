@@ -108,6 +108,22 @@ const nextConfig = {
         protocol: "https",
         hostname: "us.vicostone.com",
       },
+      {
+        protocol: "https",
+        hostname: "stoneaction.net",
+      },
+      {
+        protocol: "https",
+        hostname: "s3.us-east-1.amazonaws.com",
+      },
+      {
+        protocol: "https",
+        hostname: "www.laminam.com",
+      },
+      {
+        protocol: "https",
+        hostname: "laminam-cdn.thron.com",
+      },
     ],
   },
   turbopack: {

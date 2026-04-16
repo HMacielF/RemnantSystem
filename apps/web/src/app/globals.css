@@ -10,6 +10,23 @@
   --brand-white: #f2f2f2;
   --brand-shell: #f7f7f7;
   --brand-line: #dde1e6;
+
+  /* Gradient tokens */
+  --gradient-hero:          linear-gradient(135deg, rgba(18,31,51,0.96) 0%, rgba(42,64,95,0.88) 100%);
+  --gradient-page:          linear-gradient(180deg, #f5efe7 0%, #efe6dc 28%, #e9edf3 100%);
+  --gradient-card:          linear-gradient(180deg, #fff7f0 0%, #fffdfb 100%);
+  --gradient-manage-header: linear-gradient(135deg, rgba(255,255,255,0.99) 0%, rgba(242,242,242,0.96) 100%);
+  --gradient-admin-bg:      linear-gradient(180deg, #ffffff 0%, var(--brand-white) 52%, rgba(247,134,57,0.08) 100%);
+  --gradient-orange-btn:    linear-gradient(135deg, var(--brand-orange) 0%, var(--brand-orange-deep) 100%);
+
+  /* Shadow tokens */
+  --shadow-hero:             0 30px 90px rgba(15, 23, 39, 0.18);
+  --shadow-card:             0 18px 50px rgba(31, 41, 55, 0.08);
+  --shadow-panel:            0 28px 90px rgba(25, 27, 28, 0.10);
+  --shadow-modal:            0 24px 70px rgba(35, 35, 35, 0.14);
+  --shadow-toast:            0 18px 45px rgba(15, 23, 39, 0.18);
+  --shadow-btn-orange:       0 18px 38px rgba(247, 134, 57, 0.24);
+  --shadow-btn-orange-hover: 0 22px 46px rgba(247, 134, 57, 0.30);
 }
 
 @theme inline {
@@ -18,6 +35,22 @@
   --font-sans: var(--font-neuething-sans);
   --font-mono: var(--font-geist-mono);
   --font-display: var(--font-stolzl-display);
+}
+
+@layer utilities {
+  .bg-gradient-hero          { background: var(--gradient-hero); }
+  .bg-gradient-page          { background: var(--gradient-page); }
+  .bg-gradient-card          { background: var(--gradient-card); }
+  .bg-gradient-manage-header { background: var(--gradient-manage-header); }
+  .bg-gradient-admin         { background: var(--gradient-admin-bg); }
+  .bg-gradient-orange-btn    { background: var(--gradient-orange-btn); }
+  .shadow-hero               { box-shadow: var(--shadow-hero); }
+  .shadow-card               { box-shadow: var(--shadow-card); }
+  .shadow-panel              { box-shadow: var(--shadow-panel); }
+  .shadow-modal              { box-shadow: var(--shadow-modal); }
+  .shadow-toast              { box-shadow: var(--shadow-toast); }
+  .shadow-btn-orange         { box-shadow: var(--shadow-btn-orange); }
+  .shadow-btn-orange-hover   { box-shadow: var(--shadow-btn-orange-hover); }
 }
 
 @media (prefers-color-scheme: dark) {

@@ -1,0 +1,22 @@
+SMTP Setup Required — dispatch-notifications Edge Function
+===========================================================
+
+Provider: Brevo (smtp-relay.brevo.com)
+
+Go to: Supabase Dashboard → Edge Functions → dispatch-notifications → Secrets
+
+Add the following environment variables:
+
+  SMTP_HOST   = smtp-relay.brevo.com
+  SMTP_PORT   = 587
+  SMTP_USER   = a6df4c001@smtp-brevo.com
+  SMTP_PASS   = <the SMTP key from Brevo>
+  SMTP_FROM   = noreply@yourdomain.com  (sender address shown to recipients)
+
+Once secrets are saved, the cron job fires every 2 minutes and will
+automatically pick up any pending rows in the notification_queue table.
+
+To verify it's working after setup:
+  INSERT INTO notification_queue (notification_type, target_email, scheduled_for, status, payload)
+  VALUES ('hold_request_created', 'your@email.com', now(), 'pending', '{}');
+  -- Wait up to 2 minutes, then check: SELECT * FROM notification_queue WHERE target_email = 'your@email.com';

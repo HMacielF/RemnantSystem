@@ -19,6 +19,7 @@ export async function GET(request) {
     const response = NextResponse.json(await fetchSlabs(authContext.client, {
       search: searchParams.get("search") || "",
       brand: searchParams.get("brand") || "",
+      supplier: searchParams.get("supplier") || "",
       material: searchParams.get("material") || "",
       finish: searchParams.get("finish") || "",
       thickness: searchParams.get("thickness") || "",

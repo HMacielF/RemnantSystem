@@ -45,6 +45,7 @@ const REMNANT_WITH_STONE_SELECT = `
 const SLAB_SELECT = `
   id,
   name,
+  active,
   width,
   height,
   color_tone,
@@ -53,6 +54,7 @@ const SLAB_SELECT = `
   stone_product:stone_products(
     id,
     brand_name,
+    stone_name,
     stone_product_colors(
       role,
       color:colors(id,name)
@@ -1215,8 +1217,9 @@ export async function fetchLookupPayload(request, authContext = null) {
 
   const lookupClient = getWriteClient(requiredAuthed.client);
 
-  const [companies, materials, thicknesses, finishes, colors, stone_products] = await Promise.all([
+  const [companies, suppliers, materials, thicknesses, finishes, colors, stone_products] = await Promise.all([
     fetchLookupRows("companies", lookupClient),
+    fetchLookupRows("suppliers", lookupClient),
     fetchLookupRows("materials", lookupClient),
     fetchLookupRows("thicknesses", lookupClient),
     fetchLookupRows("finishes", lookupClient),
@@ -1226,6 +1229,7 @@ export async function fetchLookupPayload(request, authContext = null) {
 
   return {
     companies,
+    suppliers,
     materials,
     thicknesses,
     finishes,
@@ -2888,12 +2892,284 @@ function uniqueSortedStrings(values = []) {
   );
 }
 
+const THICKNESS_ORDER = new Map([
+  ["6 MM", 1],
+  ["10 MM", 2],
+  ["12 MM", 3],
+  ["15 MM", 4],
+  ["2 CM", 5],
+  ["3 CM", 6],
+]);
+
+function normalizeThicknessLabel(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, " ");
+}
+
+function compareThicknessLabels(left, right) {
+  const normalizedLeft = normalizeThicknessLabel(left);
+  const normalizedRight = normalizeThicknessLabel(right);
+  const leftRank = THICKNESS_ORDER.get(normalizedLeft);
+  const rightRank = THICKNESS_ORDER.get(normalizedRight);
+
+  if (leftRank !== undefined || rightRank !== undefined) {
+    if (leftRank === undefined) return 1;
+    if (rightRank === undefined) return -1;
+    if (leftRank !== rightRank) return leftRank - rightRank;
+  }
+
+  return normalizedLeft.localeCompare(normalizedRight);
+}
+
+function uniqueSortedThicknesses(values = []) {
+  return [...new Set((Array.isArray(values) ? values : []).filter(Boolean))].sort(compareThicknessLabels);
+}
+
+const NATURAL_STONE_GROUP_MATERIALS = new Set([
+  "granite",
+  "marble",
+  "quartzite",
+  "soapstone",
+  "dolomitic marble",
+]);
+
+function normalizeSlabGroupingKeyPart(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isNaturalStoneGroupingMaterial(material) {
+  return NATURAL_STONE_GROUP_MATERIALS.has(normalizeSlabGroupingKeyPart(material));
+}
+
+function canonicalNaturalStoneGroupName(row = {}) {
+  let value = String(row?.stone_name || row?.name || "").trim();
+  if (!value) return "";
+
+  value = value
+    .replace(/\s+·\s+Block\s+.+$/i, "")
+    .replace(/\s+·\s+Batch\s+.+$/i, "")
+    .replace(/\b(polished|honed|leathered|leather|brushed|flamed|textured)\b/gi, " ")
+    .replace(/\b(granite|marble|quartzite|soapstone|dolomitic marble)\b/gi, " ")
+    .replace(/\bslab\b/gi, " ")
+    .replace(/\b\d+(?:\s+\d+\/\d+|\/\d+)?\s*"?\s*thick\b/gi, " ")
+    .replace(/\b\d+(?:\.\d+)?\s*(mm|cm)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return value;
+}
+
+function createGroupedNaturalStoneRows(rows = []) {
+  const grouped = new Map();
+  const passthroughRows = [];
+
+  for (const row of rows) {
+    if (!isNaturalStoneGroupingMaterial(row?.material)) {
+      passthroughRows.push({ ...row, is_group: false });
+      continue;
+    }
+
+    const groupingName = canonicalNaturalStoneGroupName(row) || row?.stone_name || row?.name || "";
+    const groupingKey = [
+      normalizeSlabGroupingKeyPart(row?.material),
+      normalizeSlabGroupingKeyPart(groupingName),
+    ].join("::");
+    const bucket = grouped.get(groupingKey) || [];
+    bucket.push(row);
+    grouped.set(groupingKey, bucket);
+  }
+
+  const groupedRows = [...grouped.entries()].map(([groupKey, members]) => {
+    if (members.length <= 1) {
+      return { ...members[0], is_group: false };
+    }
+
+    const sortedMembers = [...members].sort((left, right) => {
+      const supplierCompare = String(left?.supplier || "").localeCompare(String(right?.supplier || ""));
+      if (supplierCompare !== 0) return supplierCompare;
+      const nameCompare = String(left?.name || "").localeCompare(String(right?.name || ""));
+      if (nameCompare !== 0) return nameCompare;
+      return Number(left?.id || 0) - Number(right?.id || 0);
+    });
+    const hero = sortedMembers[0] || {};
+    const suppliers = uniqueSortedStrings(sortedMembers.map((item) => item?.supplier).filter(Boolean));
+    const colors = uniqueSortedStrings(sortedMembers.flatMap((item) => [
+      ...(Array.isArray(item?.primary_colors) ? item.primary_colors : []),
+      ...(Array.isArray(item?.accent_colors) ? item.accent_colors : []),
+    ]));
+    const finishes = uniqueSortedStrings(sortedMembers.flatMap((item) =>
+      Array.isArray(item?.finishes) ? item.finishes : []
+    ));
+    const thicknesses = uniqueSortedThicknesses(sortedMembers.flatMap((item) =>
+      Array.isArray(item?.thicknesses) ? item.thicknesses : []
+    ));
+    const pricingCodes = uniqueSortedStrings(sortedMembers.flatMap((item) =>
+      Array.isArray(item?.pricing_codes) ? item.pricing_codes : []
+    ));
+    const availablePrices = sortedMembers
+      .map((item) => normalizePriceValue(item?.price_per_sqft))
+      .filter((value) => value !== null);
+
+    return {
+      ...hero,
+      id: `group:${groupKey}`,
+      name: hero?.stone_name || hero?.name || "",
+      stone_name: hero?.stone_name || hero?.name || "",
+      brand_name: "",
+      supplier: suppliers.join(", "),
+      suppliers,
+      detail_url: "",
+      primary_colors: colors,
+      accent_colors: [],
+      finishes,
+      thicknesses,
+      pricing_codes: pricingCodes,
+      price_per_sqft: availablePrices.length ? Math.min(...availablePrices) : null,
+      is_group: true,
+      group_kind: "natural_stone",
+      group_count: sortedMembers.length,
+      group_rows: sortedMembers.map((item) => ({ ...item, is_group: false })),
+    };
+  });
+
+  return [...groupedRows, ...passthroughRows].sort((left, right) =>
+    String(left?.name || "").localeCompare(String(right?.name || "")),
+  );
+}
+
+function normalizeFinishToken(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function basicFinishFamilyFor(rawFinish, material = "") {
+  const finish = normalizeFinishToken(rawFinish);
+  const materialName = normalizeFinishToken(material);
+  if (!finish) return "";
+
+  // Branded Cambria finish term; keep under Polished for now, but review separately.
+  if (finish === "cambria luxe") {
+    return "Polished";
+  }
+
+  if (finish === "satin ridge") {
+    return "Textured";
+  }
+
+  if (finish === "lava") {
+    return "Textured";
+  }
+
+  if (
+    finish.includes("polish")
+    || finish.includes("gloss")
+    || finish.includes("shiny")
+  ) {
+    return "Polished";
+  }
+
+  if (
+    finish.includes("leather")
+    || finish.includes("textur")
+    || finish.includes("brush")
+    || finish.includes("rough")
+    || finish.includes("concrete")
+    || finish.includes("hammer")
+    || finish.includes("flame")
+    || finish.includes("caress")
+    || finish.includes("river")
+    || finish.includes("antique")
+  ) {
+    return "Textured";
+  }
+
+  if (
+    finish.includes("matte")
+    || finish.includes("honed")
+    || finish.includes("suede")
+    || finish.includes("volcano")
+    || finish.includes("satin")
+    || finish.includes("silk")
+    || finish.includes("cashmere")
+    || finish.includes("velvet")
+    || finish === "natural"
+    || finish.includes("nature")
+    || finish.includes("soft touch")
+  ) {
+    return "Matte";
+  }
+
+  // Natural-stone terms that usually indicate surface texture rather than flat matte.
+  if (
+    materialName.includes("granite")
+    || materialName.includes("marble")
+    || materialName.includes("quartzite")
+    || materialName.includes("soapstone")
+  ) {
+    if (finish.includes("split") || finish.includes("cleft")) {
+      return "Textured";
+    }
+  }
+
+  return "Other";
+}
+
+function slabFinishFamilies(row = {}) {
+  return uniqueSortedStrings(
+    (Array.isArray(row?.finishes) ? row.finishes : [])
+      .map((finish) => basicFinishFamilyFor(finish, row?.material))
+      .filter(Boolean),
+  );
+}
+
+function buildSlabFinishFilterOptions(rows = []) {
+  const aliasesByFamily = new Map();
+
+  for (const row of rows) {
+    const rawFinishes = Array.isArray(row?.finishes) ? row.finishes : [];
+    for (const finish of rawFinishes) {
+      const family = basicFinishFamilyFor(finish, row?.material);
+      if (!family) continue;
+      const bucket = aliasesByFamily.get(family) || new Set();
+      if (finish) bucket.add(String(finish).trim());
+      aliasesByFamily.set(family, bucket);
+    }
+  }
+
+  return [...aliasesByFamily.entries()]
+    .sort(([left], [right]) => String(left).localeCompare(String(right)))
+    .map(([value, aliases]) => {
+      const sortedAliases = [...aliases].sort((left, right) => left.localeCompare(right));
+      const distinctAliases = sortedAliases.filter(
+        (alias) => normalizeFinishToken(alias) !== normalizeFinishToken(value),
+      );
+      return {
+        value,
+        label: distinctAliases.length
+          ? `${value} (${distinctAliases.join(", ")})`
+          : value,
+        aliases: distinctAliases,
+      };
+    });
+}
+
 function buildSlabCatalogOptions(rows = []) {
   return {
     brands: uniqueSortedStrings(rows.map((row) => row.brand_name || row.supplier)),
+    suppliers: uniqueSortedStrings(rows.map((row) => row.supplier)),
     materials: uniqueSortedStrings(rows.map((row) => row.material)),
-    finishes: uniqueSortedStrings(rows.flatMap((row) => row.finishes || [])),
-    thicknesses: uniqueSortedStrings(rows.flatMap((row) => row.thicknesses || [])),
+    finish_filters: buildSlabFinishFilterOptions(rows),
+    thicknesses: uniqueSortedThicknesses(rows.flatMap((row) => row.thicknesses || [])),
     colors: uniqueSortedStrings(
       rows.flatMap((row) => [
         ...(Array.isArray(row?.primary_colors) ? row.primary_colors : []),
@@ -2906,14 +3182,16 @@ function buildSlabCatalogOptions(rows = []) {
 function applySlabCatalogFilters(rows = [], filters = {}) {
   const search = String(filters?.search || "").trim().toLowerCase();
   const brand = String(filters?.brand || "").trim();
+  const supplier = String(filters?.supplier || "").trim();
   const material = String(filters?.material || "").trim();
   const finish = String(filters?.finish || "").trim();
   const thickness = String(filters?.thickness || "").trim();
 
   return rows.filter((row) => {
     if (brand && (row.brand_name || row.supplier) !== brand) return false;
+    if (supplier && row.supplier !== supplier) return false;
     if (material && row.material !== material) return false;
-    if (finish && !(Array.isArray(row.finishes) ? row.finishes : []).includes(finish)) return false;
+    if (finish && !slabFinishFamilies(row).includes(finish)) return false;
     if (thickness && !(Array.isArray(row.thicknesses) ? row.thicknesses : []).includes(thickness)) return false;
 
     if (!search) return true;
@@ -3025,7 +3303,8 @@ export async function fetchSlabs(client = null, options = {}) {
 
   const catalogOptions = buildSlabCatalogOptions(normalizedRows);
   const filteredRows = applySlabCatalogFilters(normalizedRows, options);
-  const pricedRows = filterPricedSlabCatalogRows(filteredRows, options?.priceSort);
+  const groupedRows = createGroupedNaturalStoneRows(filteredRows);
+  const pricedRows = filterPricedSlabCatalogRows(groupedRows, options?.priceSort);
   const sortedRows = sortSlabCatalogRows(pricedRows, options?.priceSort);
 
   const requestedPage = Number.parseInt(String(options?.page || "1"), 10);
@@ -3521,7 +3800,7 @@ export async function createColorLookupRow(client, rawName) {
 }
 
 function normalizeStoneLookupKeyPart(value) {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 function stoneProductLookupKey(materialId, stoneName) {
@@ -3840,6 +4119,8 @@ function normalizeSlabRow(row, priceRows = [], pricePerSqft = null) {
   return {
     id: row.id,
     name: row.name,
+    stone_name: row.stone_product?.stone_name || row.name,
+    stone_product_id: row.stone_product?.id || null,
     width: row.width || "",
     height: row.height || "",
     color_tone: row.color_tone || "",
@@ -3862,11 +4143,93 @@ function normalizeEditableSlabRow(row) {
   const normalized = normalizeSlabRow(row);
   return {
     ...normalized,
+    active: row?.active !== false,
     supplier_id: row?.supplier?.id || null,
     material_id: row?.material?.id || null,
     stone_product_id: row?.stone_product?.id || null,
     colors: normalized.primary_colors,
   };
+}
+
+async function ensureSlabStoneProduct(writeClient, payload) {
+  const materialId = asNumber(payload?.material_id);
+  const stoneName = String(payload?.name || "").trim();
+  const brandName = String(payload?.brand_name || "").trim() || null;
+  if (materialId === null || !stoneName) return null;
+
+  const displayName = brandName ? `${brandName} ${stoneName}` : stoneName;
+  const normalizedStoneName = normalizeStoneLookupKeyPart(stoneName);
+  const normalizedBrandName = normalizeStoneLookupKeyPart(brandName);
+  const normalizedDisplayName = normalizeStoneLookupKeyPart(displayName);
+
+  const { data: normalizedMatch, error: normalizedMatchError } = await writeClient
+    .from("stone_products")
+    .select("id,material_id,brand_name,stone_name,display_name,normalized_name")
+    .eq("material_id", materialId)
+    .eq("normalized_name", normalizedDisplayName)
+    .maybeSingle();
+
+  if (normalizedMatchError) throw normalizedMatchError;
+  if (normalizedMatch?.id) return normalizedMatch.id;
+
+  const { data: candidates, error: candidateError } = await writeClient
+    .from("stone_products")
+    .select("id,material_id,brand_name,stone_name,display_name,normalized_name")
+    .eq("material_id", materialId)
+    .limit(1000);
+
+  if (candidateError) throw candidateError;
+
+  const rows = Array.isArray(candidates) ? candidates : [];
+  const exactBrandMatch = rows.find((row) =>
+    normalizeStoneLookupKeyPart(row?.stone_name) === normalizedStoneName &&
+    normalizeStoneLookupKeyPart(row?.brand_name) === normalizedBrandName,
+  );
+  if (exactBrandMatch?.id) return exactBrandMatch.id;
+
+  const displayMatch = rows.find(
+    (row) => normalizeStoneLookupKeyPart(row?.display_name) === normalizedDisplayName,
+  );
+  if (displayMatch?.id) return displayMatch.id;
+
+  const brandlessMatch = rows.find((row) =>
+    normalizeStoneLookupKeyPart(row?.stone_name) === normalizedStoneName &&
+    !normalizeStoneLookupKeyPart(row?.brand_name),
+  );
+  if (!normalizedBrandName && brandlessMatch?.id) return brandlessMatch.id;
+
+  const { data: created, error: createError } = await writeClient
+    .from("stone_products")
+    .insert({
+      material_id: materialId,
+      display_name: displayName,
+      stone_name: stoneName,
+      brand_name: brandName,
+      active: true,
+    })
+    .select("id")
+    .single();
+
+  if (createError?.code === "23505") {
+    const { data: retryRows, error: retryError } = await writeClient
+      .from("stone_products")
+      .select("id,brand_name,stone_name,display_name,normalized_name")
+      .eq("material_id", materialId)
+      .limit(100);
+    if (retryError) throw retryError;
+
+    const retryMatch = (retryRows || []).find((row) =>
+      normalizeStoneLookupKeyPart(row?.display_name) === normalizedDisplayName ||
+      (
+        normalizeStoneLookupKeyPart(row?.stone_name) === normalizedStoneName &&
+        normalizeStoneLookupKeyPart(row?.brand_name) === normalizedBrandName
+      ),
+    );
+    if (retryMatch?.id) return retryMatch.id;
+  }
+
+  if (createError) throw createError;
+  return created?.id || null;
 }
 
 function isAllowedImageProxyTarget(value) {
@@ -3875,7 +4238,12 @@ function isAllowedImageProxyTarget(value) {
     if (!["http:", "https:"].includes(parsed.protocol)) return false;
     const supabaseHostname = process.env.SUPABASE_URL ? new URL(process.env.SUPABASE_URL).hostname : null;
     const morawareHostname = process.env.MORAWARE_URL ? new URL(process.env.MORAWARE_URL).hostname : null;
-    return [supabaseHostname, morawareHostname].filter(Boolean).includes(parsed.hostname);
+    return [
+      supabaseHostname,
+      morawareHostname,
+      "www.gramaco.com",
+      "gramaco.com",
+    ].filter(Boolean).includes(parsed.hostname);
   } catch (_error) {
     return false;
   }
@@ -3944,19 +4312,23 @@ function normalizePayload(body) {
 function normalizeSlabPayload(body) {
   return {
     name: body.name ? String(body.name).trim() : "",
+    brand_name: body.brand_name === undefined ? undefined : String(body.brand_name || "").trim(),
+    supplier_id: body.supplier_id === undefined ? undefined : asNumber(body.supplier_id),
+    material_id: body.material_id === undefined ? undefined : asNumber(body.material_id),
+    active: body.active === undefined ? undefined : Boolean(body.active),
     width:
       body.width === "" || body.width === undefined || body.width === null
-        ? null
+        ? (body.width === undefined ? undefined : null)
         : parseMeasurement(body.width),
     height:
       body.height === "" || body.height === undefined || body.height === null
-        ? null
+        ? (body.height === undefined ? undefined : null)
         : parseMeasurement(body.height),
-    detail_url: sanitizeExternalHttpUrl(body.detail_url),
-    image_url: sanitizeExternalHttpUrl(body.image_url),
-    colors: dedupeColorList(body.colors),
-    finishes: dedupeStringList(body.finishes),
-    thicknesses: dedupeStringList(body.thicknesses),
+    detail_url: body.detail_url === undefined ? undefined : sanitizeExternalHttpUrl(body.detail_url),
+    image_url: body.image_url === undefined ? undefined : sanitizeExternalHttpUrl(body.image_url),
+    colors: body.colors === undefined ? undefined : dedupeColorList(body.colors),
+    finishes: body.finishes === undefined ? undefined : dedupeStringList(body.finishes),
+    thicknesses: body.thicknesses === undefined ? undefined : dedupeStringList(body.thicknesses),
   };
 }
 
@@ -3973,6 +4345,14 @@ function validateRemnantPayload(payload) {
 function validateSlabPayload(payload, body) {
   if (!payload.name) {
     return "Slab name is required";
+  }
+
+  if (!payload.supplier_id) {
+    return "Supplier is required";
+  }
+
+  if (!payload.material_id) {
+    return "Material is required";
   }
 
   if (body?.width !== undefined && body?.width !== null && String(body.width).trim() !== "" && payload.width === null) {
@@ -3995,13 +4375,7 @@ export async function updateSlab(client, authed, slabId, body) {
   }
 
   const writeClient = getWriteClient(client);
-  const payload = normalizeSlabPayload(body || {});
-  const validationError = validateSlabPayload(payload, body || {});
-  if (validationError) {
-    const error = new Error(validationError);
-    error.statusCode = 400;
-    throw error;
-  }
+  const normalizedPayload = normalizeSlabPayload(body || {});
 
   const { data: existingSlab, error: existingError } = await writeClient
     .from("slabs")
@@ -4016,10 +4390,53 @@ export async function updateSlab(client, authed, slabId, body) {
     throw error;
   }
 
+  const payload = {
+    name: normalizedPayload.name || existingSlab.name || "",
+    brand_name: normalizedPayload.brand_name !== undefined
+      ? normalizedPayload.brand_name
+      : (existingSlab?.stone_product?.brand_name || ""),
+    supplier_id: normalizedPayload.supplier_id !== undefined
+      ? normalizedPayload.supplier_id
+      : (existingSlab?.supplier?.id || null),
+    material_id: normalizedPayload.material_id !== undefined
+      ? normalizedPayload.material_id
+      : (existingSlab?.material?.id || null),
+    active: normalizedPayload.active !== undefined
+      ? normalizedPayload.active
+      : (existingSlab?.active !== false),
+    width: normalizedPayload.width !== undefined ? normalizedPayload.width : existingSlab.width,
+    height: normalizedPayload.height !== undefined ? normalizedPayload.height : existingSlab.height,
+    detail_url: normalizedPayload.detail_url !== undefined ? normalizedPayload.detail_url : existingSlab.detail_url,
+    image_url: normalizedPayload.image_url !== undefined ? normalizedPayload.image_url : existingSlab.image_url,
+    colors: normalizedPayload.colors !== undefined
+      ? normalizedPayload.colors
+      : normalizeEditableSlabRow(existingSlab).colors,
+    finishes: normalizedPayload.finishes !== undefined ? normalizedPayload.finishes : dedupeStringList(
+      (existingSlab?.slab_finishes || []).map((item) => item?.finish?.name).filter(Boolean),
+    ),
+    thicknesses: normalizedPayload.thicknesses !== undefined ? normalizedPayload.thicknesses : dedupeStringList(
+      (existingSlab?.slab_thicknesses || []).map((item) => item?.thickness?.name).filter(Boolean),
+    ),
+  };
+
+  const validationError = validateSlabPayload(payload, body || {});
+  if (validationError) {
+    const error = new Error(validationError);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const stoneProductId = await ensureSlabStoneProduct(writeClient, payload);
+
   const { error: updateError } = await writeClient
     .from("slabs")
     .update({
       name: payload.name,
+      supplier_id: payload.supplier_id,
+      material_id: payload.material_id,
+      stone_product_id: stoneProductId,
+      active: payload.active,
+      deactivated_at: payload.active ? null : new Date().toISOString(),
       width: payload.width,
       height: payload.height,
       detail_url: payload.detail_url,
@@ -4048,15 +4465,15 @@ export async function updateSlab(client, authed, slabId, body) {
 
   runBestEffort(async () => {
     await writeAuditLog(writeClient, authed, {
-      event_type: "slab_updated",
+      event_type: payload.active ? "slab_updated" : "slab_archived",
       entity_type: "slab",
       entity_id: numericSlabId,
-      message: `Updated slab #${numericSlabId}`,
+      message: payload.active ? `Updated slab #${numericSlabId}` : `Archived slab #${numericSlabId}`,
       old_data: existingSlab,
       new_data: refreshedSlab,
       meta: {
         source: "api",
-        action: "update",
+        action: payload.active ? "update" : "archive",
       },
     });
   }, "Update slab audit");

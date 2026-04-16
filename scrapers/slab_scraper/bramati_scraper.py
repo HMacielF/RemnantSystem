@@ -38,13 +38,21 @@ logging.basicConfig(
 
 
 BASE_URL = "https://bramati.com"
-SUPPORTED_CATEGORIES = ("quartz", "marble", "granite", "quartzite", "soapstone")
+CATEGORY_URLS = {
+    "quartz": f"{BASE_URL}/?product_cat=quartz&post_type=product&s=",
+    "marble": f"{BASE_URL}/?product_cat=marble&post_type=product&s=",
+    "granite": f"{BASE_URL}/?product_cat=granite&post_type=product&s=",
+    "quartzite": f"{BASE_URL}/?product_cat=quartzite&post_type=product&s=",
+    "soapstone": f"{BASE_URL}/?product_cat=soapstone&post_type=product&s=",
+    "dolomite": f"{BASE_URL}/page/1/?product_cat=dolomite&post_type=product&s",
+}
+SUPPORTED_CATEGORIES = tuple(CATEGORY_URLS.keys())
 PER_PAGE_SELECT_SELECTOR = ".woocommerce-perpage select"
 PRODUCT_CARD_SELECTOR = ".card.h-100"
 CARD_MODAL_TRIGGER_SELECTOR = ".card-top-img a[href^='#modal-']"
 CARD_NAME_SELECTOR = ".card-body h5"
 CARD_BLOCK_SELECTOR = ".card-body p"
-CARD_DETAIL_LINK_SELECTOR = ".card-body h5 a.button, .modal-body a.button"
+CARD_DETAIL_LINK_SELECTOR = ".card-body a[href], .modal-body a[href]"
 CARD_TYPE_SELECTOR = ".card-footer"
 PAGINATION_NEXT_SELECTOR = "nav.woocommerce-pagination a.next.page-numbers"
 DEFAULT_TIMEOUT_SEC = 20
@@ -78,7 +86,7 @@ def now_timestamp_slug() -> str:
 
 
 def build_listing_url(category_slug: str) -> str:
-    return f"{BASE_URL}/?product_cat={category_slug}&post_type=product&s="
+    return CATEGORY_URLS[category_slug]
 
 
 def material_label_from_category(category_slug: str) -> str:
@@ -233,9 +241,26 @@ def parse_background_image_url(style_value: str) -> str | None:
     return urljoin(BASE_URL, match.group(2).strip())
 
 
+def normalize_detail_url(raw_href: str | None) -> str | None:
+    href = (raw_href or "").strip()
+    if not href:
+        return None
+
+    normalized = urljoin(BASE_URL, href)
+    parsed = urlparse(normalized)
+    path = (parsed.path or "").rstrip("/").lower()
+    if not path.startswith("/product/"):
+        return None
+    return normalized
+
+
 def parse_block_number(raw_text: str) -> str | None:
     match = re.search(r"block\s*#\s*:?\s*(.+)$", raw_text, re.IGNORECASE)
-    return match.group(1).strip() if match else None
+    if not match:
+        return None
+
+    value = match.group(1).strip().strip(":").strip()
+    return value or None
 
 
 def parse_size_value(size_text: str) -> tuple[str | None, str | None]:
@@ -296,11 +321,10 @@ def collect_card_record(driver: webdriver.Chrome, card, category_slug: str) -> B
         return None
 
     detail_url = None
-    try:
-        detail_link = card.find_element(By.CSS_SELECTOR, CARD_DETAIL_LINK_SELECTOR)
-        detail_url = urljoin(BASE_URL, (detail_link.get_attribute("href") or "").strip())
-    except NoSuchElementException:
-        pass
+    for detail_link in card.find_elements(By.CSS_SELECTOR, CARD_DETAIL_LINK_SELECTOR):
+        detail_url = normalize_detail_url(detail_link.get_attribute("href"))
+        if detail_url:
+            break
 
     material = material_label_from_category(category_slug)
     try:
@@ -331,11 +355,10 @@ def collect_card_record(driver: webdriver.Chrome, card, category_slug: str) -> B
             pass
 
         if not detail_url:
-            try:
-                modal_link = modal.find_element(By.CSS_SELECTOR, CARD_DETAIL_LINK_SELECTOR)
-                detail_url = urljoin(BASE_URL, (modal_link.get_attribute("href") or "").strip())
-            except NoSuchElementException:
-                pass
+            for modal_link in modal.find_elements(By.CSS_SELECTOR, CARD_DETAIL_LINK_SELECTOR):
+                detail_url = normalize_detail_url(modal_link.get_attribute("href"))
+                if detail_url:
+                    break
 
         dimensions, thickness = extract_modal_size_values(modal)
 
