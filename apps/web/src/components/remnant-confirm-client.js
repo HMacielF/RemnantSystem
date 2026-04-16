@@ -89,6 +89,7 @@ export default function RemnantConfirmClient() {
   const [inputPulse, setInputPulse] = useState(false);
   const [lastResolvedLookup, setLastResolvedLookup] = useState(null);
   const inputRef = useRef(null);
+  const locationRef = useRef(null);
   const lookupRequestIdRef = useRef(0);
   const runLookupRef = useRef(null);
   const messageTimeoutRef = useRef(null);
@@ -183,14 +184,11 @@ export default function RemnantConfirmClient() {
       if (lookupRequestIdRef.current !== requestId) return;
       setLookupResult(payload);
       if (payload?.remnant) {
-        setLocationValue(String(payload.remnant.location || ""));
         setLastResolvedLookup({
           remnant: payload.remnant,
           existingCheck: payload.existing_check || null,
           enteredNumber: payload.entered_number || nextValue,
         });
-      } else {
-        setLocationValue("");
       }
       if (!payload?.remnant) {
         setMessage(`No remnant found for #${nextValue}. If it exists physically, mark it as not in the database.`);
@@ -259,7 +257,6 @@ export default function RemnantConfirmClient() {
       ));
       setLocalCheckedCount((count) => count + 1);
       setLookupValue("");
-      setLocationValue("");
       setLookupResult(null);
       pulseInputReadyState();
       inputRef.current?.focus();
@@ -291,7 +288,6 @@ export default function RemnantConfirmClient() {
       showTransientMessage(payload?.message || `Marked remnant #${lookupValue.trim()} as physically present but missing from the DB.`);
       setLocalCheckedCount((count) => count + 1);
       setLookupValue("");
-      setLocationValue("");
       pulseInputReadyState();
       inputRef.current?.focus();
     } catch (nextError) {
@@ -307,7 +303,6 @@ export default function RemnantConfirmClient() {
     setMessage("");
     setError("");
     setLookupValue(String(lastResolvedLookup.enteredNumber || displayRemnantId(lastResolvedLookup.remnant)));
-    setLocationValue(String(lastResolvedLookup.remnant.location || ""));
     setLookupResult({
       entered_number: lastResolvedLookup.enteredNumber || displayRemnantId(lastResolvedLookup.remnant),
       remnant: lastResolvedLookup.remnant,
@@ -343,6 +338,29 @@ export default function RemnantConfirmClient() {
         </section>
 
         <section className="rounded-[26px] border border-[var(--brand-line)] bg-white/96 p-4 shadow-[0_24px_70px_rgba(25,27,28,0.08)] sm:rounded-[30px] sm:p-5">
+          <div className="mb-4 flex items-end gap-3">
+            <div className="w-24 shrink-0">
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
+                Zone
+              </label>
+              <input
+                ref={locationRef}
+                value={locationValue}
+                onChange={(event) => setLocationValue(event.target.value.toUpperCase().slice(0, 2))}
+                placeholder="A"
+                maxLength={2}
+                className="h-14 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-center text-[1.4rem] font-bold text-[var(--brand-ink)] uppercase outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] sm:h-12"
+              />
+            </div>
+            {locationValue ? (
+              <div className="mb-[3px] flex items-center gap-2 rounded-full bg-[var(--brand-shell)] px-3 py-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="text-xs font-semibold text-[var(--brand-ink)]">Logging to zone {locationValue}</span>
+              </div>
+            ) : (
+              <p className="mb-[3px] text-xs text-[rgba(25,27,28,0.52)]">Set a zone letter to log all remnants to the same location.</p>
+            )}
+          </div>
           <form onSubmit={handleLookupSubmit} className="flex flex-col gap-3 sm:flex-row">
             <div className="min-w-0 flex-1">
               <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
@@ -472,17 +490,12 @@ export default function RemnantConfirmClient() {
                           <span className="inline-flex items-center rounded-full bg-[var(--brand-shell)] px-3 py-1 text-xs font-medium text-[rgba(25,27,28,0.72)]">
                             {seenHint}
                           </span>
-                        </div>
-                        <div className="mt-4">
-                          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-[var(--brand-orange)]">
-                            Location
-                          </label>
-                          <input
-                            value={locationValue}
-                            onChange={(event) => setLocationValue(event.target.value)}
-                            placeholder="Shelf, rack, yard, or shop area"
-                            className="h-11 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
-                          />
+                          {locationValue ? (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(247,134,57,0.10)] px-3 py-1 text-xs font-semibold text-[var(--brand-orange)]">
+                              <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-orange)]" />
+                              Zone {locationValue}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                       {existingCheck ? (
