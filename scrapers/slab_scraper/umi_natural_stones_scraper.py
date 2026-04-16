@@ -383,7 +383,14 @@ def fetch_lot_payload(
     )
     if isinstance(payload, dict) and payload.get("error"):
         raise RuntimeError(payload["error"])
-    return payload if isinstance(payload, list) else []
+    if not isinstance(payload, list):
+        logging.warning(
+            "fetch_lot_payload: unexpected result type %s for item %s — script may have timed out",
+            type(payload).__name__,
+            product.item_code,
+        )
+        return []
+    return payload
 
 
 def collect_detail_records(

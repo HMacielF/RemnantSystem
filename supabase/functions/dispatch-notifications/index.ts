@@ -100,7 +100,7 @@ async function updateStatus(
     .from("notification_queue")
     .update({
       status,
-      sent_at: status === "sent" ? new Date().toISOString() : undefined,
+      ...(status === "sent" && { sent_at: new Date().toISOString() }),
       error: errorMessage ?? null,
     })
     .eq("id", id);
