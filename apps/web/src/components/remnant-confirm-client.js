@@ -490,6 +490,13 @@ export default function RemnantConfirmClient() {
                           <span className="inline-flex items-center rounded-full bg-[var(--brand-shell)] px-3 py-1 text-xs font-medium text-[rgba(25,27,28,0.72)]">
                             {seenHint}
                           </span>
+                          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
+                            currentRemnant.location
+                              ? "bg-sky-50 text-sky-700"
+                              : "bg-[var(--brand-shell)] text-[rgba(25,27,28,0.52)]"
+                          }`}>
+                            DB location: {currentRemnant.location || "N/A"}
+                          </span>
                           {locationValue ? (
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(247,134,57,0.10)] px-3 py-1 text-xs font-semibold text-[var(--brand-orange)]">
                               <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-orange)]" />
