@@ -2759,14 +2759,41 @@ export async function recordInventoryCheck(client, authed, body) {
 
 export async function bulkInventoryHold(client, authed) {
   const writeClient = getWriteClient(client);
-  const { data, error } = await writeClient
+
+  const { data: availableRemnants, error: fetchError } = await writeClient
+    .from("remnants")
+    .select("id, company_id")
+    .eq("status", "available")
+    .is("deleted_at", null);
+  if (fetchError) throw fetchError;
+
+  if (!availableRemnants?.length) return { ok: true, count: 0 };
+
+  const now = new Date().toISOString();
+  const holdRows = availableRemnants.map((r) => ({
+    remnant_id: r.id,
+    company_id: r.company_id,
+    hold_owner_user_id: authed.profile.id,
+    hold_started_at: now,
+    expires_at: null,
+    status: "active",
+    customer_name: "Inventory Double Check",
+    notes: "Bulk hold for inventory re-verification",
+    job_number: null,
+  }));
+
+  const { error: holdError } = await writeClient.from("holds").insert(holdRows);
+  if (holdError) throw holdError;
+
+  const ids = availableRemnants.map((r) => r.id);
+  const { error: updateError } = await writeClient
     .from("remnants")
     .update({ status: "hold", inventory_hold: true })
-    .eq("status", "available")
-    .is("deleted_at", null)
-    .select("id");
-  if (error) throw error;
-  const count = data?.length ?? 0;
+    .in("id", ids)
+    .is("deleted_at", null);
+  if (updateError) throw updateError;
+
+  const count = ids.length;
   runBestEffort(async () => {
     await writeAuditLog(writeClient, authed, {
       event_type: "inventory_double_check_started",
@@ -2775,10 +2802,11 @@ export async function bulkInventoryHold(client, authed) {
       remnant_id: null,
       company_id: null,
       message: `Started inventory double check — placed ${count} available remnants on hold`,
-      new_data: { count, affected_ids: data?.map((r) => r.id) ?? [] },
+      new_data: { count, affected_ids: ids },
       meta: { source: "manage_confirm", action: "bulk_inventory_hold" },
     });
   }, "Audit bulk inventory hold");
+
   return { ok: true, count };
 }
 
