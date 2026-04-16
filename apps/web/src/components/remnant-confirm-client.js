@@ -186,7 +186,6 @@ export default function RemnantConfirmClient() {
           existingCheck: payload.existing_check || null,
           enteredNumber: payload.entered_number || nextValue,
         });
-        inputRef.current?.blur();
       }
       if (!payload?.remnant) {
         setMessage(`No remnant found for #${nextValue}. Mark it below if it exists physically.`);
@@ -582,8 +581,8 @@ export default function RemnantConfirmClient() {
                 ) : null}
               </div>
 
-              {/* Desktop action buttons */}
-              <div className="mt-4 hidden grid-cols-3 gap-3 sm:grid">
+              {/* Action buttons */}
+              <div className="mt-4 grid grid-cols-3 gap-3">
                 <button
                   type="button"
                   disabled={!canConfirm}
@@ -624,47 +623,6 @@ export default function RemnantConfirmClient() {
         ) : null}
       </div>
 
-      {/* ── Mobile bottom action bar ──────────────────────────────── */}
-      {currentRemnant ? (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--brand-line)] bg-white/96 px-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2.5 shadow-[0_-12px_32px_rgba(25,27,28,0.10)] backdrop-blur sm:hidden">
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              disabled={!canConfirm}
-              onClick={() => handleConfirm("seen")}
-              className="inline-flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl bg-emerald-600 text-xs font-bold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-                <path d="M4 10.5l4 4 8-8" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              {savingOutcome === "seen" ? "Saving…" : "Seen"}
-            </button>
-            <button
-              type="button"
-              disabled={!canConfirm}
-              onClick={() => handleConfirm("issue")}
-              className="inline-flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl bg-amber-500 text-xs font-bold text-white transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-                <path d="M10 6v5M10 14h.01" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M3 17L10 3l7 14H3z" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              {savingOutcome === "issue" ? "Saving…" : "Review"}
-            </button>
-            <button
-              type="button"
-              disabled={!canConfirm}
-              onClick={() => handleConfirm("missing")}
-              className="inline-flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl bg-rose-600 text-xs font-bold text-white transition-colors hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-                <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
-              </svg>
-              {savingOutcome === "missing" ? "Saving…" : "Missing"}
-            </button>
-          </div>
-        </div>
-      ) : null}
     </main>
   );
 }
