@@ -10,7 +10,7 @@ const FILTER_LABEL_CLASS =
 const FILTER_INPUT_CLASS =
   "mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[var(--brand-ink)] placeholder:text-[color:color-mix(in_srgb,var(--brand-ink)_44%,white)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]";
 const FILTER_SELECT_CLASS =
-  "mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-3 text-sm font-medium text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]";
+  "mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-3 text-sm font-medium text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] focus-visible:ring-4 focus-visible:ring-[rgba(247,134,57,0.14)]";
 
 function uniqueSorted(values) {
   return [...new Set((values || []).filter(Boolean))].sort((a, b) =>
@@ -651,7 +651,7 @@ export default function SlabCatalogClient() {
                 </div>
                 <Link
                   href="/manage"
-                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-5 text-sm font-semibold text-[var(--brand-ink)] shadow-sm transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
+                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-5 text-sm font-semibold text-[var(--brand-ink)] shadow-sm transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)] hover:text-[var(--brand-orange)]"
                 >
                   Back to Manage
                 </Link>
@@ -659,7 +659,7 @@ export default function SlabCatalogClient() {
             </section>
 
             <section className="mb-4 rounded-[30px] border border-[var(--brand-line)] bg-white/92 p-5 shadow-[0_24px_70px_rgba(25,27,28,0.08)]">
-              <div className="grid gap-3 xl:grid-cols-[minmax(280px,1.3fr)_220px_220px_220px_220px_220px] xl:items-end">
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[minmax(280px,1.3fr)_220px_220px_220px_220px_220px] xl:items-end">
                 <label className={FILTER_LABEL_CLASS}>
                   Search
                   <input
@@ -784,7 +784,7 @@ export default function SlabCatalogClient() {
                 <button
                   type="button"
                   onClick={cyclePriceSort}
-                  className={`rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition ${priceSort !== "default" ? "border-[var(--brand-orange)] bg-[rgba(247,134,57,0.08)] text-[var(--brand-orange)]" : "border-[var(--brand-line)] bg-white text-[var(--brand-ink)] hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"}`}
+                  className={`whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition ${priceSort !== "default" ? "border-[var(--brand-orange)] bg-[rgba(247,134,57,0.08)] text-[var(--brand-orange)]" : "border-[var(--brand-line)] bg-white text-[var(--brand-ink)] hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"}`}
                 >
                   {priceSortLabel}
                 </button>
@@ -818,7 +818,7 @@ export default function SlabCatalogClient() {
                 ))}
               </div>
             ) : rows.length === 0 ? (
-              <div className="rounded-[28px] border border-[var(--brand-line)] bg-white/92 p-8 text-center text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)] shadow-sm">
+              <div className="rounded-[28px] border border-[var(--brand-line)] bg-white/92 p-8 text-center text-[rgba(35,35,35,0.72)] shadow-sm">
                 No slabs match the current filters.
               </div>
             ) : (
@@ -1025,11 +1025,8 @@ export default function SlabCatalogClient() {
                               ) : null}
                               {thicknesses.length ? (
                                 <div className="flex min-w-0 flex-col rounded-[16px] border border-[var(--brand-line)] bg-white/88 px-3 py-2">
-                                  <p
-                                    className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)] sm:text-[11px]"
-                                    title="Thickness"
-                                  >
-                                    Thick
+                                  <p className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)] sm:text-[11px]">
+                                    Thickness
                                   </p>
                                   <p className="mt-1 break-words text-[13px] font-semibold leading-tight text-[var(--brand-ink)] sm:text-[14px]">
                                     {renderMetricValues(
@@ -1296,6 +1293,7 @@ export default function SlabCatalogClient() {
                     const memberDimensions = sizeValues(member);
                     const memberThicknesses = thicknessValues(member);
                     const memberFinishes = finishValues(member);
+                    const memberMetricLayout = cardMetricLayout(member);
 
                     return (
                       <article
@@ -1382,9 +1380,9 @@ export default function SlabCatalogClient() {
                           <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgba(35,35,35,0.54)]">
                             {member.material}
                           </p>
-                          <div className="mt-3 grid grid-cols-2 gap-2">
+                          <div className={`mt-3 grid items-stretch gap-2 ${memberMetricLayout.grid}`}>
                             {memberDimensions.length ? (
-                              <div className="rounded-[16px] border border-[var(--brand-line)] bg-[var(--brand-shell)] px-3 py-2">
+                              <div className={`rounded-[16px] border border-[var(--brand-line)] bg-[var(--brand-shell)] px-3 py-2 ${memberMetricLayout.sizeTile}`}>
                                 <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)]">Size</p>
                                 <p className="mt-1 text-[13px] font-semibold leading-tight">{memberDimensions.join(", ")}</p>
                               </div>
@@ -1396,7 +1394,7 @@ export default function SlabCatalogClient() {
                               </div>
                             ) : null}
                             {memberFinishes.length ? (
-                              <div className="rounded-[16px] border border-[var(--brand-line)] bg-[var(--brand-shell)] px-3 py-2 col-span-2">
+                              <div className="rounded-[16px] border border-[var(--brand-line)] bg-[var(--brand-shell)] px-3 py-2">
                                 <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)]">Finish</p>
                                 <p className="mt-1 text-[13px] font-semibold leading-tight">{memberFinishes.join(", ")}</p>
                               </div>
@@ -1582,7 +1580,7 @@ export default function SlabCatalogClient() {
                           key={`editor-color-${row.id}`}
                           type="button"
                           onClick={() => toggleEditorListValue("colors", value)}
-                          className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                          className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[rgba(247,134,57,0.14)] ${
                             listIncludes(editor.colors, value)
                               ? "border-[var(--brand-orange)] bg-white text-[rgba(25,27,28,0.82)] ring-4 ring-[rgba(247,134,57,0.14)]"
                               : "border-[var(--brand-line)] bg-white/92 text-[rgba(25,27,28,0.72)]"
@@ -1608,7 +1606,7 @@ export default function SlabCatalogClient() {
                         key={`editor-finish-${row.id}`}
                         type="button"
                         onClick={() => toggleEditorListValue("finishes", row.name)}
-                        className={`inline-flex h-10 items-center justify-center rounded-full border px-3.5 text-sm font-semibold transition ${
+                        className={`inline-flex h-10 items-center justify-center rounded-full border px-3.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[rgba(247,134,57,0.14)] ${
                           listIncludes(editor.finishes, row.name)
                             ? "border-[var(--brand-orange)] bg-white text-[var(--brand-orange)] ring-4 ring-[rgba(247,134,57,0.14)]"
                             : "border-[var(--brand-line)] bg-white text-[var(--brand-ink)] hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
@@ -1628,7 +1626,7 @@ export default function SlabCatalogClient() {
                         key={`editor-thickness-${value}`}
                         type="button"
                         onClick={() => toggleEditorListValue("thicknesses", value)}
-                        className={`inline-flex h-10 items-center justify-center rounded-full border px-3.5 text-sm font-semibold transition ${
+                        className={`inline-flex h-10 items-center justify-center rounded-full border px-3.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[rgba(247,134,57,0.14)] ${
                           listIncludes(editor.thicknesses, value)
                             ? "border-[var(--brand-orange)] bg-white text-[var(--brand-orange)] ring-4 ring-[rgba(247,134,57,0.14)]"
                             : "border-[var(--brand-line)] bg-white text-[var(--brand-ink)] hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
