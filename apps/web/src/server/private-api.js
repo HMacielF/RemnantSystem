@@ -2546,9 +2546,7 @@ export async function lookupInventoryCheckRemnant(client, number, authed, sessio
     .from("remnants")
     .select(REMNANT_WITH_STONE_SELECT)
     .is("deleted_at", null)
-    .or(`moraware_remnant_id.eq.${numeric},id.eq.${numeric}`)
-    .order("moraware_remnant_id", { ascending: true, nullsFirst: false })
-    .limit(1)
+    .eq("moraware_remnant_id", numeric)
     .maybeSingle();
 
   if (error) throw error;
