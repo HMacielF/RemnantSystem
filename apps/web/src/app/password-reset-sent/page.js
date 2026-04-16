@@ -29,13 +29,13 @@ export default function PasswordResetSentPage() {
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm">
         <Link
           href="/portal"
-          className="font-medium text-[#b85b1b] transition hover:text-[#8f4517]"
+          className="font-medium text-[#b85b1b] transition-colors hover:text-[#8f4517]"
         >
           Back to sign in
         </Link>
         <Link
           href="/forgot-password"
-          className="font-medium text-[#6d584b] transition hover:text-[#2d2623]"
+          className="font-medium text-[#6d584b] transition-colors hover:text-[#2d2623]"
         >
           Try a different email
         </Link>

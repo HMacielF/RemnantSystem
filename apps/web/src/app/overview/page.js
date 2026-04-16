@@ -62,7 +62,7 @@ export default function OverviewPage() {
               </div>
               <Link
                 href={route.href}
-                className="mt-6 inline-flex h-11 items-center justify-center rounded-2xl bg-[#152238] px-5 text-sm font-semibold text-white transition hover:bg-[#f08b49]"
+                className="mt-6 inline-flex h-11 items-center justify-center rounded-2xl bg-[#152238] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#f08b49]"
               >
                 Open {route.href}
               </Link>

@@ -91,7 +91,7 @@ export default async function ErrorPage({ searchParams }) {
         </Link>
         <Link
           href="/"
-          className="inline-flex h-12 w-full items-center justify-center rounded-2xl border border-[#d8c7b8] bg-white px-6 text-sm font-semibold uppercase tracking-[0.16em] text-[#6d584b] shadow-sm transition hover:border-[#E78B4B] hover:text-[#241c18]"
+          className="inline-flex h-12 w-full items-center justify-center rounded-2xl border border-[#d8c7b8] bg-white px-6 text-sm font-semibold uppercase tracking-[0.16em] text-[#6d584b] shadow-sm transition-colors hover:border-[#E78B4B] hover:text-[#241c18]"
         >
           View Live Inventory
         </Link>

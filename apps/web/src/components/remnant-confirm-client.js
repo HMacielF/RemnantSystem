@@ -334,7 +334,7 @@ export default function RemnantConfirmClient() {
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:gap-3">
               <Link
                 href="/manage"
-                className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)] sm:w-auto"
+                className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-shell)] sm:w-auto"
               >
                 Back to Workspace
               </Link>
@@ -355,7 +355,7 @@ export default function RemnantConfirmClient() {
                   onChange={(event) => setLookupValue(normalizeLookupValue(event.target.value))}
                   placeholder="Enter remnant #"
                   inputMode="numeric"
-                  className={`h-14 w-full rounded-2xl border bg-white px-4 pr-11 text-[1.2rem] font-semibold text-[var(--brand-ink)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] sm:h-12 sm:text-lg ${
+                  className={`h-14 w-full rounded-2xl border bg-white px-4 pr-11 text-[1.2rem] font-semibold text-[var(--brand-ink)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] sm:h-12 sm:text-lg ${
                     inputPulse
                       ? "border-emerald-400 ring-4 ring-emerald-100"
                       : "border-[var(--brand-line)]"
@@ -371,7 +371,7 @@ export default function RemnantConfirmClient() {
             <button
               type="submit"
               disabled={lookupLoading || !lookupValue.trim()}
-              className="inline-flex h-14 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-5 text-base font-semibold text-white transition hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-60 sm:h-12 sm:self-end sm:text-sm"
+              className="inline-flex h-14 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-5 text-base font-semibold text-white transition-colors hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-60 sm:h-12 sm:self-end sm:text-sm"
             >
               {lookupLoading ? "Looking up…" : "Check"}
             </button>
@@ -398,7 +398,7 @@ export default function RemnantConfirmClient() {
               <button
                 type="button"
                 onClick={restoreLastLookup}
-                className="inline-flex h-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-white)]"
+                className="inline-flex h-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-white)]"
               >
                 Reopen
               </button>
@@ -413,7 +413,7 @@ export default function RemnantConfirmClient() {
                 type="button"
                 onClick={handleNotInDb}
                 disabled={savingOutcome === "not_in_db"}
-                className="mt-3 inline-flex h-12 items-center justify-center rounded-2xl bg-amber-500 px-5 text-sm font-semibold text-white transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-3 inline-flex h-12 items-center justify-center rounded-2xl bg-amber-500 px-5 text-sm font-semibold text-white transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {savingOutcome === "not_in_db" ? "Saving…" : "Exists, Not In DB"}
               </button>
@@ -481,7 +481,7 @@ export default function RemnantConfirmClient() {
                             value={locationValue}
                             onChange={(event) => setLocationValue(event.target.value)}
                             placeholder="Shelf, rack, yard, or shop area"
-                            className="h-11 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                            className="h-11 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                           />
                         </div>
                       </div>
@@ -503,7 +503,7 @@ export default function RemnantConfirmClient() {
                         type="button"
                         disabled={!canConfirm}
                         onClick={() => handleConfirm("seen")}
-                        className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-600 px-5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {savingOutcome === "seen" ? "Saving…" : "Seen"}
                       </button>
@@ -511,7 +511,7 @@ export default function RemnantConfirmClient() {
                         type="button"
                         disabled={!canConfirm}
                         onClick={() => handleConfirm("issue")}
-                        className="inline-flex h-12 items-center justify-center rounded-2xl bg-amber-500 px-5 text-sm font-semibold text-white transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex h-12 items-center justify-center rounded-2xl bg-amber-500 px-5 text-sm font-semibold text-white transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {savingOutcome === "issue" ? "Saving…" : "Needs Review"}
                       </button>
@@ -519,7 +519,7 @@ export default function RemnantConfirmClient() {
                         type="button"
                         disabled={!canConfirm}
                         onClick={() => handleConfirm("missing")}
-                        className="inline-flex h-12 items-center justify-center rounded-2xl bg-rose-600 px-5 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex h-12 items-center justify-center rounded-2xl bg-rose-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {savingOutcome === "missing" ? "Saving…" : "Missing"}
                       </button>
@@ -538,7 +538,7 @@ export default function RemnantConfirmClient() {
               type="button"
               disabled={!canConfirm}
               onClick={() => handleConfirm("seen")}
-              className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-600 px-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {savingOutcome === "seen" ? "Saving…" : "Seen"}
             </button>
@@ -546,7 +546,7 @@ export default function RemnantConfirmClient() {
               type="button"
               disabled={!canConfirm}
               onClick={() => handleConfirm("issue")}
-              className="inline-flex h-12 items-center justify-center rounded-2xl bg-amber-500 px-3 text-sm font-semibold text-white transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-12 items-center justify-center rounded-2xl bg-amber-500 px-3 text-sm font-semibold text-white transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {savingOutcome === "issue" ? "Saving…" : "Review"}
             </button>
@@ -554,7 +554,7 @@ export default function RemnantConfirmClient() {
               type="button"
               disabled={!canConfirm}
               onClick={() => handleConfirm("missing")}
-              className="inline-flex h-12 items-center justify-center rounded-2xl bg-rose-600 px-3 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-12 items-center justify-center rounded-2xl bg-rose-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {savingOutcome === "missing" ? "Saving…" : "Missing"}
             </button>

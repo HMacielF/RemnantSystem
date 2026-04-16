@@ -119,7 +119,7 @@ function AccessNotice({ title, body, ctaHref, ctaLabel }) {
         <h1 className="font-display mt-3 text-3xl font-semibold text-[var(--brand-ink)]">{title}</h1>
         <p className="mt-4 text-sm leading-7 text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)]">{body}</p>
         <div className="mt-6 flex flex-wrap gap-3">
-          <a href={ctaHref} className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--brand-orange)]">
+          <a href={ctaHref} className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-5 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-orange)]">
             {ctaLabel}
           </a>
         </div>
@@ -570,7 +570,7 @@ export default function AdminWorkspaceClient() {
                 <form method="POST" action="/api/auth/logout" className="shrink-0">
                   <button
                     type="submit"
-                    className="inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-3.5 text-center text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)]"
+                    className="inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-3.5 text-center text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-shell)]"
                   >
                     Log Out
                   </button>
@@ -579,19 +579,19 @@ export default function AdminWorkspaceClient() {
               <div className="mt-3.5 grid grid-cols-3 gap-2.5">
                 <Link
                   href="/manage"
-                  className="inline-flex h-10 w-full items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)]"
+                  className="inline-flex h-10 w-full items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-shell)]"
                 >
                   Remnants
                 </Link>
                 <Link
                   href="/slabs"
-                  className="inline-flex h-10 w-full items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)]"
+                  className="inline-flex h-10 w-full items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-shell)]"
                 >
                   Slabs
                 </Link>
                 <Link
                   href="/portal"
-                  className="inline-flex h-10 w-full items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)]"
+                  className="inline-flex h-10 w-full items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-shell)]"
                 >
                   Portal
                 </Link>
@@ -607,7 +607,7 @@ export default function AdminWorkspaceClient() {
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Tables</p>
                 <h2 className="font-display mt-1 text-xl font-semibold text-[var(--brand-ink)]">Editable schema</h2>
               </div>
-              <button type="button" onClick={() => reloadMeta()} className="inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]">
+              <button type="button" onClick={() => reloadMeta()} className="inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]">
                 Refresh
               </button>
             </div>
@@ -619,7 +619,7 @@ export default function AdminWorkspaceClient() {
                   onChange={(event) => setTableFilter(event.target.value)}
                   type="text"
                   placeholder="Search table names"
-                  className="mt-2 h-11 w-full rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-shell)] px-4 text-sm text-[var(--brand-ink)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                  className="mt-2 h-11 w-full rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-shell)] px-4 text-sm text-[var(--brand-ink)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                 />
               </label>
             </div>
@@ -631,7 +631,7 @@ export default function AdminWorkspaceClient() {
                     key={table.name}
                     type="button"
                     onClick={() => setActiveTable(table.name)}
-                    className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
+                    className={`w-full rounded-2xl border px-4 py-3 text-left transition-colors ${
                       isActive
                         ? "border-[var(--brand-orange)] bg-[rgba(247,134,57,0.12)] shadow-sm"
                         : "border-[var(--brand-line)] bg-[var(--brand-shell)] hover:border-[rgba(247,134,57,0.32)] hover:bg-white"
@@ -657,13 +657,13 @@ export default function AdminWorkspaceClient() {
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => reloadRows()} disabled={!activeTable} className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] px-5 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)] disabled:cursor-not-allowed disabled:opacity-50">
+                <button type="button" onClick={() => reloadRows()} disabled={!activeTable} className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] px-5 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)] disabled:cursor-not-allowed disabled:opacity-60">
                   Reload Rows
                 </button>
-                <button type="button" onClick={duplicateSelectedRow} disabled={!resettableSelectedRow || !activeTableMeta} className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] px-5 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)] disabled:cursor-not-allowed disabled:opacity-50">
+                <button type="button" onClick={duplicateSelectedRow} disabled={!resettableSelectedRow || !activeTableMeta} className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] px-5 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)] disabled:cursor-not-allowed disabled:opacity-60">
                   Duplicate Row
                 </button>
-                <button type="button" onClick={startCreateRow} disabled={!activeTableMeta} className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-50">
+                <button type="button" onClick={startCreateRow} disabled={!activeTableMeta} className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-5 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-60">
                   New Row
                 </button>
               </div>
@@ -677,7 +677,7 @@ export default function AdminWorkspaceClient() {
                   onChange={(event) => setRowFilter(event.target.value)}
                   type="text"
                   placeholder="Filter loaded rows"
-                  className="mt-2 h-11 w-full rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-shell)] px-4 text-sm text-[var(--brand-ink)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                  className="mt-2 h-11 w-full rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-shell)] px-4 text-sm text-[var(--brand-ink)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                 />
               </label>
               <div className="rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-shell)] px-4 py-3 text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)]">
@@ -688,7 +688,7 @@ export default function AdminWorkspaceClient() {
                 <select
                   value={Number.isFinite(visibleColumnCount) ? String(visibleColumnCount) : "all"}
                   onChange={(event) => setVisibleColumnCount(event.target.value === "all" ? Number.POSITIVE_INFINITY : Number(event.target.value))}
-                  className="rounded-xl border border-[var(--brand-line)] bg-white px-3 py-1.5 text-sm text-[var(--brand-ink)] outline-none transition focus:border-[var(--brand-orange)]"
+                  className="rounded-xl border border-[var(--brand-line)] bg-white px-3 py-1.5 text-sm text-[var(--brand-ink)] outline-none transition-colors focus:border-[var(--brand-orange)]"
                 >
                   <option value="6">6</option>
                   <option value="12">12</option>
@@ -701,7 +701,7 @@ export default function AdminWorkspaceClient() {
                   type="button"
                   onClick={() => setRowOffset((current) => Math.max(current - ROWS_PAGE_SIZE, 0))}
                   disabled={!hasPreviousPage}
-                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Previous
                 </button>
@@ -709,7 +709,7 @@ export default function AdminWorkspaceClient() {
                   type="button"
                   onClick={() => setRowOffset((current) => current + ROWS_PAGE_SIZE)}
                   disabled={!hasNextPage}
-                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Next
                 </button>
@@ -726,7 +726,7 @@ export default function AdminWorkspaceClient() {
                           <button
                             type="button"
                             onClick={() => toggleSort(column.name)}
-                            className="inline-flex items-center gap-1 text-left transition hover:text-[var(--brand-ink)]"
+                            className="inline-flex items-center gap-1 text-left transition-colors hover:text-[var(--brand-ink)]"
                           >
                             <span>{column.name}</span>
                             <span className="text-[10px] text-[color:color-mix(in_srgb,var(--brand-ink)_45%,white)]">
@@ -755,7 +755,7 @@ export default function AdminWorkspaceClient() {
                           <tr
                             key={identifierKey(row._identifier)}
                             onClick={() => selectRow(row)}
-                            className={`cursor-pointer transition ${active ? "bg-[rgba(247,134,57,0.12)]" : "hover:bg-[var(--brand-shell)]"}`}
+                            className={`cursor-pointer transition-colors ${active ? "bg-[rgba(247,134,57,0.12)]" : "hover:bg-[var(--brand-shell)]"}`}
                           >
                             {visibleColumns.map((column) => (
                               <td key={column.name} className="max-w-[240px] px-4 py-3 align-top text-[var(--brand-ink)]">
@@ -812,7 +812,7 @@ export default function AdminWorkspaceClient() {
                 <button
                   type="button"
                   onClick={closeEditorModal}
-                  className="inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)]"
+                  className="inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-shell)]"
                 >
                   Close
                 </button>
@@ -912,7 +912,7 @@ export default function AdminWorkspaceClient() {
               </div>
 
               <div className="flex flex-wrap gap-2 border-t border-[var(--brand-line)] pt-4">
-                <button type="submit" disabled={!selectedRow} className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-50">
+                <button type="submit" disabled={!selectedRow} className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-5 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-60">
                   Save Changes
                 </button>
                 <button type="button" onClick={() => {
@@ -921,10 +921,10 @@ export default function AdminWorkspaceClient() {
                     return;
                   }
                   setSelectedRow(resettableSelectedRow ? JSON.parse(JSON.stringify(resettableSelectedRow)) : null);
-                }} className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] px-5 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]">
+                }} className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] px-5 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]">
                   Reset
                 </button>
-                <button type="button" onClick={deleteRow} disabled={isCreating || !selectedIdentifier} className="inline-flex h-11 items-center justify-center rounded-2xl border border-[#fecaca] px-5 text-sm font-semibold text-[#b42318] transition hover:bg-[#fff1f1] disabled:cursor-not-allowed disabled:opacity-50">
+                <button type="button" onClick={deleteRow} disabled={isCreating || !selectedIdentifier} className="inline-flex h-11 items-center justify-center rounded-2xl border border-[#fecaca] px-5 text-sm font-semibold text-[#b42318] transition-colors hover:bg-[#fff1f1] disabled:cursor-not-allowed disabled:opacity-60">
                   Delete Row
                 </button>
               </div>

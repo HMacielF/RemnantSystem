@@ -51,7 +51,7 @@ export default async function PortalPage() {
               placeholder="you@company.com"
               autoComplete="username"
               required
-              className="h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+              className="h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition-colors focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
             />
           </div>
         </div>
@@ -71,7 +71,7 @@ export default async function PortalPage() {
               placeholder="Enter your password"
               autoComplete="current-password"
               required
-              className="h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+              className="h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition-colors focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
             />
           </div>
         </div>

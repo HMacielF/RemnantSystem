@@ -22,7 +22,7 @@ export default function ForgotPasswordPage() {
             name="email"
             placeholder="you@company.com"
             required
-            className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+            className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition-colors focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
           />
         </label>
 

@@ -298,7 +298,7 @@ function PrivateRemnantSummaryBlock({ remnant, className = "", onOpenImage }) {
             type="button"
             onClick={onOpenImage}
             disabled={!image}
-            className={`overflow-hidden rounded-[22px] border border-white/80 bg-white text-left shadow-[0_12px_24px_rgba(25,27,28,0.08)] transition ${image ? "hover:-translate-y-0.5" : "cursor-default"}`}
+            className={`overflow-hidden rounded-[22px] border border-white/80 bg-white text-left shadow-[0_12px_24px_rgba(25,27,28,0.08)] transition-transform ${image ? "hover:-translate-y-0.5" : "cursor-default"}`}
           >
             {image ? (
               <img
@@ -399,7 +399,7 @@ function SelectField({ wrapperClassName = "relative mt-2", className = "", child
     <div className={wrapperClassName}>
       <select
         {...props}
-        className={`h-12 w-full appearance-none rounded-2xl border border-[var(--brand-line)] bg-white px-4 pr-10 text-sm font-medium text-[var(--brand-ink)] shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] ${className}`}
+        className={`h-12 w-full appearance-none rounded-2xl border border-[var(--brand-line)] bg-white px-4 pr-10 text-sm font-medium text-[var(--brand-ink)] shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] ${className}`}
       >
         {children}
       </select>
@@ -442,13 +442,13 @@ function InAppSelect({
           window.setTimeout(() => setOpen(false), 120);
         }}
         disabled={disabled}
-        className={`flex h-12 w-full items-center justify-between gap-3 rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-left text-sm font-medium shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] ${selected ? "text-[var(--brand-ink)]" : "text-[rgba(35,35,35,0.48)]"} ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+        className={`flex h-12 w-full items-center justify-between gap-3 rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-left text-sm font-medium shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] ${selected ? "text-[var(--brand-ink)]" : "text-[rgba(35,35,35,0.48)]"} ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
       >
         <span className="truncate">{buttonText}</span>
         <svg
           aria-hidden="true"
           viewBox="0 0 20 20"
-          className={`h-4 w-4 shrink-0 text-[var(--brand-orange)] transition ${open ? "rotate-180" : ""}`}
+          className={`h-4 w-4 shrink-0 text-[var(--brand-orange)] transition-transform ${open ? "rotate-180" : ""}`}
           fill="none"
           stroke="currentColor"
           strokeWidth="1.8"
@@ -472,7 +472,7 @@ function InAppSelect({
                     onChange?.({ target: { value: option.value } });
                     setOpen(false);
                   }}
-                  className={`flex w-full items-center rounded-[16px] px-3 py-2.5 text-left transition hover:bg-[var(--brand-white)] ${isSelected ? "bg-[var(--brand-white)]" : ""}`}
+                  className={`flex w-full items-center rounded-[16px] px-3 py-2.5 text-left transition-colors hover:bg-[var(--brand-white)] ${isSelected ? "bg-[var(--brand-white)]" : ""}`}
                 >
                   <span className={`block truncate text-sm ${isSelected ? "font-semibold text-[var(--brand-ink)]" : "font-medium text-[rgba(35,35,35,0.78)]"}`}>
                     {option.label}
@@ -2177,7 +2177,7 @@ export default function PrivateWorkspaceClient() {
             Sign in first, then come back here to continue in the private workspace.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <a href="/portal" className="inline-flex h-11 items-center justify-center rounded-2xl bg-[#152238] px-5 text-sm font-semibold text-white transition hover:bg-[#f08b49]">
+            <a href="/portal" className="inline-flex h-11 items-center justify-center rounded-2xl bg-[#152238] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#f08b49]">
               Open Login
             </a>
           </div>
@@ -2216,7 +2216,7 @@ export default function PrivateWorkspaceClient() {
                 <form method="POST" action="/api/auth/logout" className="shrink-0">
                   <button
                     type="submit"
-                    className="inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-3.5 text-center text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)]"
+                    className="inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-3.5 text-center text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-shell)]"
                   >
                     Log Out
                   </button>
@@ -2230,7 +2230,7 @@ export default function PrivateWorkspaceClient() {
                     setMyHoldsOpen(false);
                     setQueueOpen(true);
                   }}
-                  className={`inline-flex h-10 items-center justify-between gap-3 rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)] ${
+                  className={`inline-flex h-10 items-center justify-between gap-3 rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-shell)] ${
                     isStatusUser ? "min-w-0 flex-1" : "min-w-[118px]"
                   }`}
                 >
@@ -2242,7 +2242,7 @@ export default function PrivateWorkspaceClient() {
                 <button
                   type="button"
                   onClick={openMyHoldsPanel}
-                  className={`inline-flex h-10 items-center justify-between gap-3 rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)] ${
+                  className={`inline-flex h-10 items-center justify-between gap-3 rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-shell)] ${
                     isStatusUser ? "min-w-0 flex-1" : "min-w-[118px]"
                   }`}
                 >
@@ -2254,7 +2254,7 @@ export default function PrivateWorkspaceClient() {
                 <button
                   type="button"
                   onClick={openMySoldPanel}
-                  className={`inline-flex h-10 items-center justify-between gap-3 rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)] ${
+                  className={`inline-flex h-10 items-center justify-between gap-3 rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-shell)] ${
                     isStatusUser ? "min-w-0 flex-1" : "min-w-[118px]"
                   }`}
                 >
@@ -2267,7 +2267,7 @@ export default function PrivateWorkspaceClient() {
                   <>
                     <Link
                       href="/manage/confirm"
-                      className={`inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)] ${
+                      className={`inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-shell)] ${
                         isStatusUser ? "shrink-0 px-3.5" : ""
                       }`}
                     >
@@ -2275,7 +2275,7 @@ export default function PrivateWorkspaceClient() {
                     </Link>
                     <Link
                       href="/admin"
-                      className={`inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)] ${
+                      className={`inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-shell)] ${
                         isStatusUser ? "shrink-0 px-3.5" : ""
                       }`}
                     >
@@ -2283,7 +2283,7 @@ export default function PrivateWorkspaceClient() {
                     </Link>
                     <Link
                       href="/slabs"
-                      className={`inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-shell)] ${
+                      className={`inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-shell)] ${
                         isStatusUser ? "shrink-0 px-3.5" : ""
                       }`}
                     >
@@ -2355,7 +2355,7 @@ export default function PrivateWorkspaceClient() {
                       value={filters.stone}
                       onChange={(event) => setFilters((current) => ({ ...current, stone: event.target.value }))}
                       placeholder="Stone, brand, color, finish or #741"
-                      className="h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white pl-10 pr-4 text-sm font-medium text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                      className="h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white pl-10 pr-4 text-sm font-medium text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                     />
                   </div>
                 </label>
@@ -2368,7 +2368,7 @@ export default function PrivateWorkspaceClient() {
                     value={filters.minWidth}
                     onChange={(event) => setFilters((current) => ({ ...current, minWidth: event.target.value }))}
                     placeholder="W"
-                    className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-3 text-sm font-medium text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                    className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-3 text-sm font-medium text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                   />
                 </label>
 
@@ -2380,7 +2380,7 @@ export default function PrivateWorkspaceClient() {
                     value={filters.minHeight}
                     onChange={(event) => setFilters((current) => ({ ...current, minHeight: event.target.value }))}
                     placeholder="H"
-                    className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-3 text-sm font-medium text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                    className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-3 text-sm font-medium text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                   />
                 </label>
 
@@ -2537,7 +2537,7 @@ export default function PrivateWorkspaceClient() {
                           }
                         : null;
                   const actionButtonBaseClass =
-                    "inline-flex h-11 items-center justify-center rounded-[18px] border px-3 text-[11px] font-semibold leading-none transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+                    "inline-flex h-11 items-center justify-center rounded-[18px] border px-3 text-[11px] font-semibold leading-none transition-colors disabled:cursor-not-allowed disabled:opacity-60";
                   const availableActionClass = `${actionButtonBaseClass} border-emerald-300 bg-emerald-100 text-emerald-800 hover:border-emerald-400 hover:bg-emerald-200`;
                   const holdActionClass = `${actionButtonBaseClass} border-amber-300 bg-amber-100 text-amber-900 hover:border-amber-400 hover:bg-amber-200`;
                   const soldActionClass = `${actionButtonBaseClass} border-rose-300 bg-rose-100 text-rose-800 hover:border-rose-400 hover:bg-rose-200`;
@@ -2794,7 +2794,7 @@ export default function PrivateWorkspaceClient() {
                         <button
                           type="button"
                           onClick={showPreviousImage}
-                          className="absolute left-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white shadow-lg backdrop-blur transition hover:bg-black/50"
+                          className="absolute left-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white shadow-lg backdrop-blur transition-colors hover:bg-black/50"
                           aria-label="Previous image"
                         >
                           ‹
@@ -2802,7 +2802,7 @@ export default function PrivateWorkspaceClient() {
                         <button
                           type="button"
                           onClick={showNextImage}
-                          className="absolute right-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white shadow-lg backdrop-blur transition hover:bg-black/50"
+                          className="absolute right-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white shadow-lg backdrop-blur transition-colors hover:bg-black/50"
                           aria-label="Next image"
                         >
                           ›
@@ -2839,7 +2839,7 @@ export default function PrivateWorkspaceClient() {
               <button
                 type="button"
                 onClick={() => setQueueOpen(false)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
                 aria-label="Close request queue"
               >
                 {"\u00D7"}
@@ -2939,7 +2939,7 @@ export default function PrivateWorkspaceClient() {
                                 type="button"
                                 disabled={isPending}
                                 onClick={() => reviewHoldRequest(request.id, "approved")}
-                                className="inline-flex h-12 items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-100 px-5 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-200 disabled:cursor-wait disabled:opacity-60"
+                                className="inline-flex h-12 items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-100 px-5 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 {isPending ? "Working..." : "Approve"}
                               </button>
@@ -2947,7 +2947,7 @@ export default function PrivateWorkspaceClient() {
                                 type="button"
                                 disabled={isPending}
                                 onClick={() => reviewHoldRequest(request.id, "rejected")}
-                                className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-200 bg-rose-100 px-5 text-sm font-semibold text-rose-800 transition hover:bg-rose-200 disabled:cursor-wait disabled:opacity-60"
+                                className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-200 bg-rose-100 px-5 text-sm font-semibold text-rose-800 transition-colors hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 {isPending ? "Working..." : "Deny"}
                               </button>
@@ -2983,7 +2983,7 @@ export default function PrivateWorkspaceClient() {
               <button
                 type="button"
                 onClick={() => setMyHoldsOpen(false)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
                 aria-label="Close my holds"
               >
                 {"\u00D7"}
@@ -3082,7 +3082,7 @@ export default function PrivateWorkspaceClient() {
                                 type="button"
                                 disabled={isWorking || remnantStatus === "available"}
                                 onClick={() => changeRemnantStatus(holdRemnant, "available")}
-                                className="inline-flex h-12 items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-100 px-5 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="inline-flex h-12 items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-100 px-5 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 {isWorking ? "Working..." : "Make Available"}
                               </button>
@@ -3090,7 +3090,7 @@ export default function PrivateWorkspaceClient() {
                                 type="button"
                                 disabled={remnantStatus === "sold"}
                                 onClick={() => changeRemnantStatus(holdRemnant, "sold")}
-                                className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-200 bg-rose-100 px-5 text-sm font-semibold text-rose-800 transition hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-200 bg-rose-100 px-5 text-sm font-semibold text-rose-800 transition-colors hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 Sell
                               </button>
@@ -3126,7 +3126,7 @@ export default function PrivateWorkspaceClient() {
               <button
                 type="button"
                 onClick={() => setMySoldOpen(false)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
                 aria-label="Close my sold"
               >
                 {"\u00D7"}
@@ -3210,7 +3210,7 @@ export default function PrivateWorkspaceClient() {
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Inventory</p>
                 <h2 className="font-display text-2xl font-semibold text-[var(--brand-ink)]">{editorMode === "create" ? "Add Remnant" : "Edit Remnant"}</h2>
               </div>
-              <button type="button" onClick={closeEditor} className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
+              <button type="button" onClick={closeEditor} className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
                 {"\u00D7"}
               </button>
             </div>
@@ -3249,7 +3249,7 @@ export default function PrivateWorkspaceClient() {
                         type="button"
                         onClick={openCropEditor}
                         disabled={!editorForm.image_preview}
-                        className="inline-flex h-11 w-full items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex h-11 w-full items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         Crop
                       </button>
@@ -3267,7 +3267,7 @@ export default function PrivateWorkspaceClient() {
                             value={editorColorDraft}
                             onChange={(event) => setEditorColorDraft(event.target.value)}
                             placeholder="Color"
-                            className="h-10 min-w-0 flex-1 rounded-2xl border border-[var(--brand-line)] bg-white px-3.5 text-sm text-[var(--brand-ink)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                            className="h-10 min-w-0 flex-1 rounded-2xl border border-[var(--brand-line)] bg-white px-3.5 text-sm text-[var(--brand-ink)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                           />
                           <button
                             type="button"
@@ -3275,7 +3275,7 @@ export default function PrivateWorkspaceClient() {
                               setEditorColorComposerOpen(false);
                               setEditorColorDraft("");
                             }}
-                            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white text-base font-semibold text-[rgba(35,35,35,0.62)] transition hover:border-[var(--brand-orange)] hover:text-[var(--brand-orange)]"
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white text-base font-semibold text-[rgba(35,35,35,0.62)] transition-colors hover:border-[var(--brand-orange)] hover:text-[var(--brand-orange)]"
                             aria-label="Cancel add color"
                           >
                             ×
@@ -3284,7 +3284,7 @@ export default function PrivateWorkspaceClient() {
                             type="button"
                             onClick={createEditorColor}
                             disabled={editorColorSaving}
-                            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--brand-ink)] text-sm font-semibold text-white transition hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--brand-ink)] text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-60"
                             aria-label={editorColorSaving ? "Adding color" : "Add color"}
                           >
                             {editorColorSaving ? "…" : "✓"}
@@ -3294,7 +3294,7 @@ export default function PrivateWorkspaceClient() {
                         <button
                           type="button"
                           onClick={() => setEditorColorComposerOpen(true)}
-                          className="inline-flex h-9 items-center justify-center gap-2 rounded-2xl border border-[var(--brand-line)] bg-white px-3.5 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+                          className="inline-flex h-9 items-center justify-center gap-2 rounded-2xl border border-[var(--brand-line)] bg-white px-3.5 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
                         >
                           <span className="text-base leading-none">+</span>
                           Color
@@ -3310,7 +3310,7 @@ export default function PrivateWorkspaceClient() {
                               key={`color-${row.id}`}
                               type="button"
                               onClick={() => toggleEditorColor(row.name)}
-                              className={`group relative inline-flex min-h-10 items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition ${
+                              className={`group relative inline-flex min-h-10 items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition-colors ${
                                 selected
                                   ? "border-[var(--brand-orange)] bg-white ring-4 ring-[rgba(247,134,57,0.16)] shadow-sm"
                                   : "border-[var(--brand-line)] bg-white hover:border-[rgba(247,134,57,0.35)] hover:bg-[rgba(255,255,255,0.92)]"
@@ -3361,7 +3361,7 @@ export default function PrivateWorkspaceClient() {
                       type="number"
                       value={editorForm.moraware_remnant_id}
                       onChange={(event) => updateEditorField("moraware_remnant_id", event.target.value)}
-                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                     />
                   </label>
                   <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-2">
@@ -3392,7 +3392,7 @@ export default function PrivateWorkspaceClient() {
                           onBlur={() => {
                             window.setTimeout(() => setEditorBrandMenuOpen(false), 120);
                           }}
-                          className="h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                          className="h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                         />
                         {editorBrandMenuOpen && filteredEditorBrandSuggestions.length ? (
                           <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-[22px] border border-[var(--brand-line)] bg-white shadow-[0_20px_40px_rgba(25,27,28,0.12)]">
@@ -3406,7 +3406,7 @@ export default function PrivateWorkspaceClient() {
                                     updateEditorField("brand_name", brand);
                                     setEditorBrandMenuOpen(false);
                                   }}
-                                  className="flex w-full items-center rounded-[16px] px-3 py-2.5 text-left transition hover:bg-[var(--brand-white)]"
+                                  className="flex w-full items-center rounded-[16px] px-3 py-2.5 text-left transition-colors hover:bg-[var(--brand-white)]"
                                 >
                                   <span className="block truncate text-sm font-semibold text-[var(--brand-ink)]">
                                     {brand}
@@ -3433,7 +3433,7 @@ export default function PrivateWorkspaceClient() {
                         onBlur={() => {
                           window.setTimeout(() => setEditorStoneMenuOpen(false), 120);
                         }}
-                        className="h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                        className="h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                       />
                       {editorStoneMenuOpen && filteredEditorStoneSuggestions.length ? (
                         <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-[22px] border border-[var(--brand-line)] bg-white shadow-[0_20px_40px_rgba(25,27,28,0.12)]">
@@ -3455,7 +3455,7 @@ export default function PrivateWorkspaceClient() {
                                   updateEditorField("name", nextStoneName);
                                   setEditorStoneMenuOpen(false);
                                 }}
-                                className="flex w-full items-start justify-between gap-3 rounded-[16px] px-3 py-2.5 text-left transition hover:bg-[var(--brand-white)]"
+                                className="flex w-full items-start justify-between gap-3 rounded-[16px] px-3 py-2.5 text-left transition-colors hover:bg-[var(--brand-white)]"
                               >
                                 <span className="min-w-0">
                                   <span className="block truncate text-sm font-semibold text-[var(--brand-ink)]">
@@ -3512,7 +3512,7 @@ export default function PrivateWorkspaceClient() {
                         value={editorForm.price_per_sqft}
                         onChange={(event) => updateEditorField("price_per_sqft", event.target.value)}
                         placeholder="0.00"
-                        className="h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white pl-8 pr-4 text-sm font-semibold text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                        className="h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white pl-8 pr-4 text-sm font-semibold text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                       />
                     </div>
                   </label>
@@ -3524,7 +3524,7 @@ export default function PrivateWorkspaceClient() {
                       value={editorForm.width}
                       onChange={(event) => updateEditorField("width", event.target.value)}
                       placeholder='36.5 or 36 1/2'
-                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                     />
                   </label>
                   <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-2">
@@ -3535,7 +3535,7 @@ export default function PrivateWorkspaceClient() {
                       value={editorForm.height}
                       onChange={(event) => updateEditorField("height", event.target.value)}
                       placeholder='24.25 or 24 1/4'
-                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                     />
                   </label>
                   <div className="flex items-end xl:col-span-2">
@@ -3558,7 +3558,7 @@ export default function PrivateWorkspaceClient() {
                           value={editorForm.l_width}
                           onChange={(event) => updateEditorField("l_width", event.target.value)}
                           placeholder='18.5 or 18 1/2'
-                          className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                          className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                         />
                       </label>
                       <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-2">
@@ -3569,7 +3569,7 @@ export default function PrivateWorkspaceClient() {
                           value={editorForm.l_height}
                           onChange={(event) => updateEditorField("l_height", event.target.value)}
                           placeholder='18.5 or 18 1/2'
-                          className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                          className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                         />
                       </label>
                     </>
@@ -3631,7 +3631,7 @@ export default function PrivateWorkspaceClient() {
                             type="text"
                             value={editorSlabForm.name}
                             onChange={(event) => updateEditorSlabField("name", event.target.value)}
-                            className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                            className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                           />
                         </label>
                         <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-2">
@@ -3641,7 +3641,7 @@ export default function PrivateWorkspaceClient() {
                             inputMode="decimal"
                             value={editorSlabForm.width}
                             onChange={(event) => updateEditorSlabField("width", event.target.value)}
-                            className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                            className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                           />
                         </label>
                         <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-2">
@@ -3651,7 +3651,7 @@ export default function PrivateWorkspaceClient() {
                             inputMode="decimal"
                             value={editorSlabForm.height}
                             onChange={(event) => updateEditorSlabField("height", event.target.value)}
-                            className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                            className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                           />
                         </label>
                         <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-4">
@@ -3660,7 +3660,7 @@ export default function PrivateWorkspaceClient() {
                             type="url"
                             value={editorSlabForm.detail_url}
                             onChange={(event) => updateEditorSlabField("detail_url", event.target.value)}
-                            className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                            className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                           />
                         </label>
                         <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-8">
@@ -3669,7 +3669,7 @@ export default function PrivateWorkspaceClient() {
                             type="url"
                             value={editorSlabForm.image_url}
                             onChange={(event) => updateEditorSlabField("image_url", event.target.value)}
-                            className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                            className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                           />
                         </label>
                       </div>
@@ -3714,7 +3714,7 @@ export default function PrivateWorkspaceClient() {
                                   key={`slab-finish-${row.id}`}
                                   type="button"
                                   onClick={() => toggleEditorSlabListValue("finishes", row.name)}
-                                  className={`inline-flex h-10 items-center justify-center rounded-full border px-3.5 text-sm font-semibold transition ${
+                                  className={`inline-flex h-10 items-center justify-center rounded-full border px-3.5 text-sm font-semibold transition-colors ${
                                     selected
                                       ? "border-[var(--brand-orange)] bg-white text-[var(--brand-orange)] ring-4 ring-[rgba(247,134,57,0.14)]"
                                       : "border-[var(--brand-line)] bg-white text-[var(--brand-ink)] hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
@@ -3737,7 +3737,7 @@ export default function PrivateWorkspaceClient() {
                                   key={`slab-thickness-${row.id}`}
                                   type="button"
                                   onClick={() => toggleEditorSlabListValue("thicknesses", row.name)}
-                                  className={`inline-flex h-10 items-center justify-center rounded-full border px-3.5 text-sm font-semibold transition ${
+                                  className={`inline-flex h-10 items-center justify-center rounded-full border px-3.5 text-sm font-semibold transition-colors ${
                                     selected
                                       ? "border-[var(--brand-orange)] bg-white text-[var(--brand-orange)] ring-4 ring-[rgba(247,134,57,0.14)]"
                                       : "border-[var(--brand-line)] bg-white text-[var(--brand-ink)] hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
@@ -3762,7 +3762,7 @@ export default function PrivateWorkspaceClient() {
                           type="button"
                           onClick={() => void loadLinkedSlabEditor(editorSlabForm.id)}
                           disabled={editorSlabLoading || editorSlabSaving}
-                          className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-5 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)] disabled:cursor-not-allowed disabled:opacity-60"
+                          className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-5 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)] disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Refresh Slab
                         </button>
@@ -3770,7 +3770,7 @@ export default function PrivateWorkspaceClient() {
                           type="button"
                           onClick={saveLinkedSlab}
                           disabled={editorSlabSaving}
-                          className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-60"
+                          className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-5 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {editorSlabSaving ? "Saving Slab…" : "Save Linked Slab"}
                         </button>
@@ -3780,15 +3780,15 @@ export default function PrivateWorkspaceClient() {
                 </section>
               ) : null}
               <div className="md:col-span-2 flex flex-wrap justify-center gap-3 pt-2">
-                <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-6 text-sm font-semibold text-white transition hover:bg-[var(--brand-orange)]">
+                <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-6 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-orange)]">
                   {editorMode === "create" ? "Create Remnant" : "Save Changes"}
                 </button>
                 {editorMode === "edit" ? (
-                  <button type="button" onClick={archiveEditorRemnant} className="inline-flex h-12 items-center justify-center rounded-2xl border border-stone-300 bg-stone-100 px-6 text-sm font-semibold text-stone-900 transition hover:bg-stone-200">
+                  <button type="button" onClick={archiveEditorRemnant} className="inline-flex h-12 items-center justify-center rounded-2xl border border-stone-300 bg-stone-100 px-6 text-sm font-semibold text-stone-900 transition-colors hover:bg-stone-200">
                     Archive
                   </button>
                 ) : null}
-                <button type="button" onClick={closeEditor} className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-6 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
+                <button type="button" onClick={closeEditor} className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-6 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
                   Cancel
                 </button>
               </div>
@@ -3805,7 +3805,7 @@ export default function PrivateWorkspaceClient() {
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Crop Workspace</p>
                 <h2 className="font-display text-2xl font-semibold text-[var(--brand-ink)]">Free Crop</h2>
               </div>
-              <button type="button" onClick={closeCropEditor} className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
+              <button type="button" onClick={closeCropEditor} className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
                 {"\u00D7"}
               </button>
             </div>
@@ -3838,14 +3838,14 @@ export default function PrivateWorkspaceClient() {
                     <button
                       type="button"
                       onClick={() => updateCropModal((current) => ({ ...current, rotationBase: current.rotationBase - 90 }))}
-                      className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+                      className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
                     >
                       Rotate Left
                     </button>
                     <button
                       type="button"
                       onClick={() => updateCropModal((current) => ({ ...current, rotationBase: current.rotationBase + 90 }))}
-                      className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+                      className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
                     >
                       Rotate Right
                     </button>
@@ -3874,14 +3874,14 @@ export default function PrivateWorkspaceClient() {
                       rotation: 0,
                       cropRect: { ...DEFAULT_CROP_RECT },
                     }))}
-                    className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-5 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+                    className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-5 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
                   >
                     Reset
                   </button>
                   <button
                     type="button"
                     onClick={saveCropEditor}
-                    className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--brand-orange)]"
+                    className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-5 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-orange)]"
                   >
                     Save Crop
                   </button>
@@ -3900,7 +3900,7 @@ export default function PrivateWorkspaceClient() {
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Hold</p>
                 <h2 className="font-display text-2xl font-semibold text-[var(--brand-ink)]">Manage Hold</h2>
               </div>
-              <button type="button" onClick={closeHoldEditor} className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
+              <button type="button" onClick={closeHoldEditor} className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
                 {"\u00D7"}
               </button>
             </div>
@@ -3964,7 +3964,7 @@ export default function PrivateWorkspaceClient() {
                         required
                         disabled={holdEditor.locked_to_other_owner}
                         placeholder="Customer name"
-                        className="mt-1 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 py-3 text-sm text-[var(--brand-ink)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                        className="mt-1 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 py-3 text-sm text-[var(--brand-ink)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                       />
                     </label>
                     <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)]">
@@ -3991,14 +3991,14 @@ export default function PrivateWorkspaceClient() {
                         value={holdEditor.notes}
                         onChange={(event) => updateHoldField("notes", event.target.value)}
                         disabled={holdEditor.locked_to_other_owner}
-                        className="mt-1 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 py-3 text-sm text-[var(--brand-ink)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                        className="mt-1 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 py-3 text-sm text-[var(--brand-ink)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                         placeholder="Optional notes for the team"
                       />
                     </label>
                   </div>
 
                   <div className="mt-6 flex flex-wrap gap-3">
-                    <button type="submit" disabled={holdEditor.locked_to_other_owner} className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--brand-orange)] bg-[rgba(247,134,57,0.12)] px-6 text-sm font-semibold text-[var(--brand-orange-deep)] transition hover:bg-[rgba(247,134,57,0.2)] disabled:cursor-not-allowed disabled:opacity-50">
+                    <button type="submit" disabled={holdEditor.locked_to_other_owner} className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--brand-orange)] bg-[rgba(247,134,57,0.12)] px-6 text-sm font-semibold text-[var(--brand-orange-deep)] transition-colors hover:bg-[rgba(247,134,57,0.2)] disabled:cursor-not-allowed disabled:opacity-60">
                       Save Hold
                     </button>
                     {holdEditor.holdId ? (
@@ -4006,7 +4006,7 @@ export default function PrivateWorkspaceClient() {
                         type="button"
                         onClick={releaseHoldEditor}
                         disabled={holdEditor.locked_to_other_owner}
-                        className="inline-flex h-12 items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-100 px-6 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex h-12 items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-100 px-6 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         Make Available
                       </button>
@@ -4016,12 +4016,12 @@ export default function PrivateWorkspaceClient() {
                         type="button"
                         onClick={sellFromHoldEditor}
                         disabled={holdEditor.locked_to_other_owner}
-                        className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-200 bg-rose-100 px-6 text-sm font-semibold text-rose-800 transition hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-200 bg-rose-100 px-6 text-sm font-semibold text-rose-800 transition-colors hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         Sell
                       </button>
                     ) : null}
-                    <button type="button" onClick={closeHoldEditor} className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-6 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
+                    <button type="button" onClick={closeHoldEditor} className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-6 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
                       Cancel
                     </button>
                   </div>
@@ -4043,7 +4043,7 @@ export default function PrivateWorkspaceClient() {
               <button
                 type="button"
                 onClick={closeSoldEditor}
-                className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+                className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
               >
                 {"\u00D7"}
               </button>
@@ -4107,16 +4107,16 @@ export default function PrivateWorkspaceClient() {
                     rows="4"
                     value={soldEditor.notes}
                     onChange={(event) => updateSoldField("notes", event.target.value)}
-                    className="mt-1 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 py-3 text-sm text-[var(--brand-ink)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                    className="mt-1 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 py-3 text-sm text-[var(--brand-ink)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                     placeholder="Optional notes"
                   />
                 </label>
               </div>
               <div className="mt-5 flex flex-wrap gap-3">
-                    <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-200 bg-rose-100 px-6 text-sm font-semibold text-rose-800 transition hover:bg-rose-200">
+                    <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-200 bg-rose-100 px-6 text-sm font-semibold text-rose-800 transition-colors hover:bg-rose-200">
                   Save Sale
                 </button>
-                    <button type="button" onClick={closeSoldEditor} className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-6 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
+                    <button type="button" onClick={closeSoldEditor} className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-6 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
                   Cancel
                 </button>
               </div>
@@ -4142,7 +4142,7 @@ export default function PrivateWorkspaceClient() {
             <button
               type="button"
               onClick={clearMessage}
-              className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold transition ${
+              className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold transition-colors ${
                 messageTone === "error"
                   ? "text-rose-600 hover:bg-rose-50"
                   : "text-emerald-700 hover:bg-emerald-50"

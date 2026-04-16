@@ -1250,7 +1250,7 @@ export default function SlabCatalogClient() {
 
       {groupViewer ? (
         <div
-          className="fixed inset-0 z-[68] overflow-y-auto bg-black/70 px-3 py-4 sm:px-4 sm:py-8"
+          className="fixed inset-0 z-[68] overflow-y-auto bg-black/75 px-3 py-4 sm:px-4 sm:py-8"
           onClick={(event) => {
             if (event.target === event.currentTarget) {
               closeGroupViewer();

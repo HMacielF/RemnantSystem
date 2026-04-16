@@ -59,7 +59,7 @@ export function AuthActions({ primary, secondary }) {
       {primary ? (
         <Link
           href={primary.href}
-          className="font-medium text-[#b85b1b] transition hover:text-[#8f4517]"
+          className="font-medium text-[#b85b1b] transition-colors hover:text-[#8f4517]"
         >
           {primary.label}
         </Link>
@@ -69,7 +69,7 @@ export function AuthActions({ primary, secondary }) {
       {secondary ? (
         <Link
           href={secondary.href}
-          className="font-medium text-[#6d584b] transition hover:text-[#2d2623]"
+          className="font-medium text-[#6d584b] transition-colors hover:text-[#2d2623]"
         >
           {secondary.label}
         </Link>

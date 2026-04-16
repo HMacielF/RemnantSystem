@@ -190,7 +190,7 @@ function SelectField({ wrapperClassName = "relative mt-2", className = "", child
     <div className={wrapperClassName}>
       <select
         {...props}
-        className={`h-12 w-full appearance-none rounded-2xl border border-[var(--brand-line)] bg-white px-4 pr-10 text-sm font-medium text-[var(--brand-ink)] shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] ${className}`}
+        className={`h-12 w-full appearance-none rounded-2xl border border-[var(--brand-line)] bg-white px-4 pr-10 text-sm font-medium text-[var(--brand-ink)] shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] ${className}`}
       >
         {children}
       </select>
@@ -725,7 +725,7 @@ export default function PublicInventoryClient() {
                   value={filters.stone}
                   onChange={(event) => setFilters((current) => ({ ...current, stone: event.target.value }))}
                   placeholder="Search by stone, brand, color, finish or #741"
-                  className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                  className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                 />
               </label>
 
@@ -737,7 +737,7 @@ export default function PublicInventoryClient() {
                   value={filters.minWidth}
                   onChange={(event) => setFilters((current) => ({ ...current, minWidth: event.target.value }))}
                   placeholder="W"
-                  className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-3 text-sm font-medium text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                  className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-3 text-sm font-medium text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                 />
               </label>
 
@@ -749,7 +749,7 @@ export default function PublicInventoryClient() {
                   value={filters.minHeight}
                   onChange={(event) => setFilters((current) => ({ ...current, minHeight: event.target.value }))}
                   placeholder="H"
-                  className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-3 text-sm font-medium text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                  className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-3 text-sm font-medium text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
                 />
               </label>
 
@@ -1042,7 +1042,7 @@ export default function PublicInventoryClient() {
                         <button
                           type="button"
                           onClick={showPreviousImage}
-                          className="absolute left-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white shadow-lg backdrop-blur transition hover:bg-black/50"
+                          className="absolute left-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white shadow-lg backdrop-blur transition-colors hover:bg-black/50"
                           aria-label="Previous image"
                         >
                           ‹
@@ -1050,7 +1050,7 @@ export default function PublicInventoryClient() {
                         <button
                           type="button"
                           onClick={showNextImage}
-                          className="absolute right-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white shadow-lg backdrop-blur transition hover:bg-black/50"
+                          className="absolute right-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white shadow-lg backdrop-blur transition-colors hover:bg-black/50"
                           aria-label="Next image"
                         >
                           ›
@@ -1084,7 +1084,7 @@ export default function PublicInventoryClient() {
               <button
                 type="button"
                 onClick={() => setHoldRemnant(null)}
-                className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)] active:bg-[rgba(247,134,57,0.08)]"
+                className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)] active:bg-[rgba(247,134,57,0.08)]"
                 aria-label="Close hold request form"
               >
                 {"\u00D7"}
@@ -1145,7 +1145,7 @@ export default function PublicInventoryClient() {
                       <button
                         type="button"
                         onClick={() => openImageViewer(holdRemnant)}
-                        className="overflow-hidden rounded-[22px] border border-white/80 bg-white text-left shadow-[0_12px_24px_rgba(25,27,28,0.08)] transition hover:-translate-y-0.5"
+                        className="overflow-hidden rounded-[22px] border border-white/80 bg-white text-left shadow-[0_12px_24px_rgba(25,27,28,0.08)] transition-transform hover:-translate-y-0.5"
                       >
                         <img
                           src={imageSrc(holdRemnant)}
@@ -1196,7 +1196,7 @@ export default function PublicInventoryClient() {
                       required
                       value={holdForm.requester_name}
                       onChange={(event) => setHoldForm((current) => ({ ...current, requester_name: event.target.value }))}
-                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.10)]"
+                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.10)]"
                       placeholder="Your full name"
                     />
                   </label>
@@ -1207,7 +1207,7 @@ export default function PublicInventoryClient() {
                       type="email"
                       value={holdForm.requester_email}
                       onChange={(event) => setHoldForm((current) => ({ ...current, requester_email: event.target.value }))}
-                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.10)]"
+                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.10)]"
                       placeholder="you@example.com"
                     />
                   </label>
@@ -1245,7 +1245,7 @@ export default function PublicInventoryClient() {
                       rows="4"
                       value={holdForm.notes}
                       onChange={(event) => setHoldForm((current) => ({ ...current, notes: event.target.value }))}
-                      className="mt-2 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 py-3 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.10)]"
+                      className="mt-2 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 py-3 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.10)]"
                       placeholder="Anything the sales rep should know about timing, pickup, or questions"
                     />
                   </label>
@@ -1300,7 +1300,7 @@ export default function PublicInventoryClient() {
             <button
               type="button"
               onClick={() => setNotice(null)}
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-lg leading-none text-current/70 transition hover:bg-black/5 hover:text-current"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-lg leading-none text-current/70 transition-colors hover:bg-black/5 hover:text-current"
               aria-label="Dismiss notification"
             >
               {"\u00D7"}

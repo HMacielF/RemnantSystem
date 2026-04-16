@@ -199,7 +199,7 @@ export default function SetPasswordClient() {
                 placeholder="At least 8 characters"
                 minLength={8}
                 required
-                className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition-colors focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
               />
             </label>
 
@@ -211,7 +211,7 @@ export default function SetPasswordClient() {
                 placeholder="Re-enter your password"
                 minLength={8}
                 required
-                className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
+                className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition-colors focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
               />
             </label>
 
@@ -228,7 +228,7 @@ export default function SetPasswordClient() {
         <div className="mt-5 text-sm">
           <Link
             href="/portal"
-            className="font-medium text-[#b85b1b] transition hover:text-[#8f4517]"
+            className="font-medium text-[#b85b1b] transition-colors hover:text-[#8f4517]"
           >
             Back to sign in
           </Link>
