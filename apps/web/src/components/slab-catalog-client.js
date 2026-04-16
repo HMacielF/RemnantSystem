@@ -8,9 +8,9 @@ import useBodyScrollLock from "@/components/use-body-scroll-lock";
 const FILTER_LABEL_CLASS =
   "block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]";
 const FILTER_INPUT_CLASS =
-  "mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[var(--brand-ink)] placeholder:text-[color:color-mix(in_srgb,var(--brand-ink)_44%,white)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]";
+  "mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[var(--brand-ink)] placeholder:text-[color:color-mix(in_srgb,var(--brand-ink)_44%,white)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]";
 const FILTER_SELECT_CLASS =
-  "mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-3 text-sm font-medium text-[var(--brand-ink)] shadow-sm outline-none transition focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] focus-visible:ring-4 focus-visible:ring-[rgba(247,134,57,0.14)]";
+  "mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-3 text-sm font-medium text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] focus-visible:ring-4 focus-visible:ring-[rgba(247,134,57,0.14)]";
 
 function uniqueSorted(values) {
   return [...new Set((values || []).filter(Boolean))].sort((a, b) =>
@@ -651,14 +651,14 @@ export default function SlabCatalogClient() {
                 </div>
                 <Link
                   href="/manage"
-                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-5 text-sm font-semibold text-[var(--brand-ink)] shadow-sm transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)] hover:text-[var(--brand-orange)]"
+                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-5 text-sm font-semibold text-[var(--brand-ink)] shadow-sm transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)] hover:text-[var(--brand-orange)]"
                 >
                   Back to Manage
                 </Link>
               </div>
             </section>
 
-            <section className="mb-4 rounded-[30px] border border-[var(--brand-line)] bg-white/92 p-5 shadow-[0_24px_70px_rgba(25,27,28,0.08)]">
+            <section className="mb-4 rounded-[32px] border border-[var(--brand-line)] bg-white/92 p-5 shadow-[0_24px_70px_rgba(25,27,28,0.08)]">
               <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[minmax(280px,1.3fr)_220px_220px_220px_220px_220px] xl:items-end">
                 <label className={FILTER_LABEL_CLASS}>
                   Search
@@ -771,7 +771,7 @@ export default function SlabCatalogClient() {
               </div>
             </section>
 
-            <section className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <section className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--brand-orange)]">
                   Catalog
@@ -784,7 +784,7 @@ export default function SlabCatalogClient() {
                 <button
                   type="button"
                   onClick={cyclePriceSort}
-                  className={`whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition ${priceSort !== "default" ? "border-[var(--brand-orange)] bg-[rgba(247,134,57,0.08)] text-[var(--brand-orange)]" : "border-[var(--brand-line)] bg-white text-[var(--brand-ink)] hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"}`}
+                  className={`whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition-colors ${priceSort !== "default" ? "border-[var(--brand-orange)] bg-[rgba(247,134,57,0.08)] text-[var(--brand-orange)]" : "border-[var(--brand-line)] bg-white text-[var(--brand-ink)] hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"}`}
                 >
                   {priceSortLabel}
                 </button>
@@ -792,7 +792,7 @@ export default function SlabCatalogClient() {
                   <button
                     type="button"
                     onClick={clearFilters}
-                    className="rounded-full border border-[var(--brand-line)] bg-white px-4 py-2 text-sm font-semibold text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)] shadow-sm transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
+                    className="rounded-full border border-[var(--brand-line)] bg-white px-4 py-2 text-sm font-semibold text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)] shadow-sm transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
                   >
                     Clear filters
                   </button>
@@ -896,7 +896,7 @@ export default function SlabCatalogClient() {
                                 event.stopPropagation();
                                 openGroupViewer(row);
                               }}
-                              className="inline-flex h-10 items-center justify-center rounded-2xl border border-white/80 bg-white/92 px-4 text-sm font-semibold text-[var(--brand-ink)] shadow-sm backdrop-blur transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
+                              className="inline-flex h-10 items-center justify-center rounded-2xl border border-white/80 bg-white/92 px-4 text-sm font-semibold text-[var(--brand-ink)] shadow-sm backdrop-blur transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
                               aria-label={`View slabs for ${row.name}`}
                               title="View slab group"
                             >
@@ -909,7 +909,7 @@ export default function SlabCatalogClient() {
                                 event.stopPropagation();
                                 void openEditor(row);
                               }}
-                              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/80 bg-white/92 text-[var(--brand-ink)] shadow-sm backdrop-blur transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
+                              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/80 bg-white/92 text-[var(--brand-ink)] shadow-sm backdrop-blur transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
                               aria-label={`Edit ${row.name}`}
                               title="Edit slab"
                             >
@@ -1084,7 +1084,7 @@ export default function SlabCatalogClient() {
                       type="button"
                       onClick={() => setPage((current) => current + 1)}
                       disabled={loadingMore}
-                      className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-6 text-sm font-semibold text-[var(--brand-ink)] shadow-sm transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)] disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-6 text-sm font-semibold text-[var(--brand-ink)] shadow-sm transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)] disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {loadingMore ? "Loading More…" : "Load More"}
                     </button>
@@ -1188,7 +1188,7 @@ export default function SlabCatalogClient() {
                       href={lightbox.detail_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex h-10 items-center justify-center rounded-2xl border border-white/18 bg-white/10 px-4 text-sm font-semibold text-white transition hover:border-white/28 hover:bg-white/16"
+                      className="inline-flex h-10 items-center justify-center rounded-2xl border border-white/18 bg-white/10 px-4 text-sm font-semibold text-white transition-colors hover:border-white/28 hover:bg-white/16"
                     >
                       View Supplier
                     </a>
@@ -1210,7 +1210,7 @@ export default function SlabCatalogClient() {
                       <button
                         type="button"
                         onClick={showPreviousImage}
-                        className="absolute left-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white shadow-lg backdrop-blur transition hover:bg-black/50"
+                        className="absolute left-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white shadow-lg backdrop-blur transition-colors hover:bg-black/50"
                         aria-label="Previous image"
                       >
                         ‹
@@ -1218,7 +1218,7 @@ export default function SlabCatalogClient() {
                       <button
                         type="button"
                         onClick={showNextImage}
-                        className="absolute right-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white shadow-lg backdrop-blur transition hover:bg-black/50"
+                        className="absolute right-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white shadow-lg backdrop-blur transition-colors hover:bg-black/50"
                         aria-label="Next image"
                       >
                         ›
@@ -1342,7 +1342,7 @@ export default function SlabCatalogClient() {
                                 event.stopPropagation();
                                 void openEditor(member);
                               }}
-                              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/80 bg-white/92 text-[var(--brand-ink)] shadow-sm backdrop-blur transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
+                              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/80 bg-white/92 text-[var(--brand-ink)] shadow-sm backdrop-blur transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
                               aria-label={`Edit ${member.name}`}
                               title="Edit slab"
                             >
@@ -1366,7 +1366,7 @@ export default function SlabCatalogClient() {
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(event) => event.stopPropagation()}
-                                className="inline-flex h-10 items-center justify-center rounded-2xl border border-white/80 bg-white/92 px-4 text-sm font-semibold text-[var(--brand-ink)] shadow-sm backdrop-blur transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
+                                className="inline-flex h-10 items-center justify-center rounded-2xl border border-white/80 bg-white/92 px-4 text-sm font-semibold text-[var(--brand-ink)] shadow-sm backdrop-blur transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
                               >
                                 Visit Site
                               </a>
@@ -1448,7 +1448,7 @@ export default function SlabCatalogClient() {
               <button
                 type="button"
                 onClick={closeEditor}
-                className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+                className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
               >
                 {"\u00D7"}
               </button>
@@ -1580,7 +1580,7 @@ export default function SlabCatalogClient() {
                           key={`editor-color-${row.id}`}
                           type="button"
                           onClick={() => toggleEditorListValue("colors", value)}
-                          className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[rgba(247,134,57,0.14)] ${
+                          className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[rgba(247,134,57,0.14)] ${
                             listIncludes(editor.colors, value)
                               ? "border-[var(--brand-orange)] bg-white text-[rgba(25,27,28,0.82)] ring-4 ring-[rgba(247,134,57,0.14)]"
                               : "border-[var(--brand-line)] bg-white/92 text-[rgba(25,27,28,0.72)]"
@@ -1606,7 +1606,7 @@ export default function SlabCatalogClient() {
                         key={`editor-finish-${row.id}`}
                         type="button"
                         onClick={() => toggleEditorListValue("finishes", row.name)}
-                        className={`inline-flex h-10 items-center justify-center rounded-full border px-3.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[rgba(247,134,57,0.14)] ${
+                        className={`inline-flex h-10 items-center justify-center rounded-full border px-3.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[rgba(247,134,57,0.14)] ${
                           listIncludes(editor.finishes, row.name)
                             ? "border-[var(--brand-orange)] bg-white text-[var(--brand-orange)] ring-4 ring-[rgba(247,134,57,0.14)]"
                             : "border-[var(--brand-line)] bg-white text-[var(--brand-ink)] hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
@@ -1626,7 +1626,7 @@ export default function SlabCatalogClient() {
                         key={`editor-thickness-${value}`}
                         type="button"
                         onClick={() => toggleEditorListValue("thicknesses", value)}
-                        className={`inline-flex h-10 items-center justify-center rounded-full border px-3.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[rgba(247,134,57,0.14)] ${
+                        className={`inline-flex h-10 items-center justify-center rounded-full border px-3.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[rgba(247,134,57,0.14)] ${
                           listIncludes(editor.thicknesses, value)
                             ? "border-[var(--brand-orange)] bg-white text-[var(--brand-orange)] ring-4 ring-[rgba(247,134,57,0.14)]"
                             : "border-[var(--brand-line)] bg-white text-[var(--brand-ink)] hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
@@ -1653,14 +1653,14 @@ export default function SlabCatalogClient() {
                       type="button"
                       onClick={archiveEditor}
                       disabled={editorSaving}
-                      className="inline-flex h-10 items-center justify-center rounded-2xl bg-rose-600 px-4 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex h-10 items-center justify-center rounded-2xl bg-rose-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Confirm
                     </button>
                     <button
                       type="button"
                       onClick={() => setArchiveConfirm(false)}
-                      className="inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-white)]"
+                      className="inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-white)]"
                     >
                       Cancel
                     </button>
@@ -1670,7 +1670,7 @@ export default function SlabCatalogClient() {
                     type="button"
                     onClick={archiveEditor}
                     disabled={editorSaving}
-                    className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-200 bg-rose-50 px-6 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-200 bg-rose-50 px-6 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Archive Slab
                   </button>
@@ -1678,7 +1678,7 @@ export default function SlabCatalogClient() {
                 <button
                   type="button"
                   onClick={closeEditor}
-                  className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-6 text-sm font-semibold text-[var(--brand-ink)] transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+                  className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-6 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
                 >
                   Cancel
                 </button>
@@ -1686,7 +1686,7 @@ export default function SlabCatalogClient() {
                   type="button"
                   onClick={saveEditor}
                   disabled={editorSaving}
-                  className="inline-flex h-12 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-6 text-sm font-semibold text-white transition hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex h-12 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-6 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {editorSaving ? "Saving Slab…" : "Save Slab"}
                 </button>
