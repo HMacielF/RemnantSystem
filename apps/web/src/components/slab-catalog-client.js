@@ -201,6 +201,8 @@ function colorSwatchStyle(colorName) {
     blonde: { backgroundColor: "#e7c98b" },
     blue: { backgroundColor: "#5b88d6" },
     brown: { backgroundColor: "#8b5a2b" },
+    charcoal: { backgroundColor: "#3d3d3d" },
+    copper: { backgroundColor: "#b87333" },
     cream: { backgroundColor: "#f4ead2" },
     gold: { backgroundColor: "#d4af37" },
     gray: { backgroundColor: "#8b9098" },
@@ -208,8 +210,13 @@ function colorSwatchStyle(colorName) {
     "gray-light": { backgroundColor: "#cfd4dc" },
     grey: { backgroundColor: "#8b9098" },
     green: { backgroundColor: "#6f956f" },
+    ivory: { backgroundColor: "#fffff0" },
     navy: { backgroundColor: "#284a7a" },
+    orange: { backgroundColor: "#e07b39" },
+    pink: { backgroundColor: "#e8a0a0" },
+    purple: { backgroundColor: "#8b5cf6" },
     red: { backgroundColor: "#ff3b30" },
+    silver: { backgroundColor: "#c0c0c0" },
     taupe: { backgroundColor: "#8f7762" },
     white: { backgroundColor: "#ffffff" },
   };
@@ -292,6 +299,7 @@ export default function SlabCatalogClient() {
   const [editorLoading, setEditorLoading] = useState(false);
   const [editorSaving, setEditorSaving] = useState(false);
   const [editorError, setEditorError] = useState("");
+  const [archiveConfirm, setArchiveConfirm] = useState(false);
   const [search, setSearch] = useState("");
   const [brand, setBrand] = useState("");
   const [supplier, setSupplier] = useState("");
@@ -304,6 +312,19 @@ export default function SlabCatalogClient() {
   const [hasMore, setHasMore] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
   const deferredSearch = useDeferredValue(search);
+
+  const hasActiveFilters = Boolean(search || brand || supplier || material || finish || thickness || priceSort !== "default");
+
+  function clearFilters() {
+    setSearch("");
+    setBrand("");
+    setSupplier("");
+    setMaterial("");
+    setFinish("");
+    setThickness("");
+    setPriceSort("default");
+    setPage(1);
+  }
 
   useBodyScrollLock(Boolean(lightbox || groupViewer || editor));
 
@@ -504,6 +525,7 @@ export default function SlabCatalogClient() {
     setEditorError("");
     setEditorLoading(false);
     setEditorSaving(false);
+    setArchiveConfirm(false);
   }
 
   function updateEditorField(key, value) {
@@ -572,15 +594,16 @@ export default function SlabCatalogClient() {
 
   async function archiveEditor() {
     if (!editor?.id) return;
-    if (!window.confirm(`Archive slab "${editor.name}"?`)) return;
+    if (!archiveConfirm) { setArchiveConfirm(true); return; }
+    setArchiveConfirm(false);
     await saveEditor({ active: false });
   }
 
   useEffect(() => {
     function handleViewerKeys(event) {
       if (event.key === "Escape") {
-        setLightbox(null);
-        setGroupViewer(null);
+        if (lightbox) { setLightbox(null); return; }
+        if (groupViewer) { setGroupViewer(null); return; }
         return;
       }
       if (!lightbox) return;
@@ -761,10 +784,19 @@ export default function SlabCatalogClient() {
                 <button
                   type="button"
                   onClick={cyclePriceSort}
-                  className="rounded-full border border-[var(--brand-line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--brand-ink)] shadow-sm transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
+                  className={`rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition ${priceSort !== "default" ? "border-[var(--brand-orange)] bg-[rgba(247,134,57,0.08)] text-[var(--brand-orange)]" : "border-[var(--brand-line)] bg-white text-[var(--brand-ink)] hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"}`}
                 >
                   {priceSortLabel}
                 </button>
+                {hasActiveFilters ? (
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="rounded-full border border-[var(--brand-line)] bg-white px-4 py-2 text-sm font-semibold text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)] shadow-sm transition hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
+                  >
+                    Clear filters
+                  </button>
+                ) : null}
                 <div className="rounded-full border border-[var(--brand-line)] bg-white px-4 py-2 text-sm font-semibold text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)] shadow-sm">
                   {loading ? "Loading..." : error ? "Unavailable" : `${totalCount} results`}
                 </div>
@@ -1616,14 +1648,35 @@ export default function SlabCatalogClient() {
               ) : null}
 
               <div className="flex flex-wrap justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={archiveEditor}
-                  disabled={editorSaving}
-                  className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-200 bg-rose-50 px-6 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Archive Slab
-                </button>
+                {archiveConfirm ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-rose-700">Archive this slab?</span>
+                    <button
+                      type="button"
+                      onClick={archiveEditor}
+                      disabled={editorSaving}
+                      className="inline-flex h-10 items-center justify-center rounded-2xl bg-rose-600 px-4 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Confirm
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setArchiveConfirm(false)}
+                      className="inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:bg-[var(--brand-white)]"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={archiveEditor}
+                    disabled={editorSaving}
+                    className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-200 bg-rose-50 px-6 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Archive Slab
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={closeEditor}
