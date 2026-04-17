@@ -4,7 +4,6 @@ import {
   formatHold,
   REMNANT_WITH_STONE_SELECT,
   HOLD_SELECT,
-  REMNANT_INVENTORY_CHECK_EVENT,
   extractStoneProductColors,
   fetchRelevantHoldForRemnant,
   writeAuditLog,
@@ -13,10 +12,48 @@ import {
   isPrivilegedProfile,
   extractRemnantIdSearch,
   asNumber,
-  normalizeInventoryCheckOutcome,
-  sanitizeInventorySessionId,
-  fetchInventoryCheckAuditRows,
 } from "./api-utils.js";
+
+export const REMNANT_INVENTORY_CHECK_EVENT = "remnant_inventory_confirmed";
+
+export function normalizeInventoryCheckOutcome(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "seen" || normalized === "exists" || normalized === "confirmed") return "seen";
+  if (normalized === "missing" || normalized === "not_found" || normalized === "not-found") return "missing";
+  if (normalized === "issue" || normalized === "review" || normalized === "needs_review" || normalized === "needs-review") {
+    return "issue";
+  }
+  if (normalized === "not_in_db" || normalized === "not-in-db" || normalized === "unuploaded" || normalized === "unknown") {
+    return "not_in_db";
+  }
+  const error = new Error("Invalid inventory check outcome");
+  error.statusCode = 400;
+  throw error;
+}
+
+export function sanitizeInventorySessionId(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized || normalized.length > 120) {
+    const error = new Error("Session id is required");
+    error.statusCode = 400;
+    throw error;
+  }
+  return normalized;
+}
+
+export async function fetchInventoryCheckAuditRows(client, authed, sessionId) {
+  const writeClient = getWriteClient(client);
+  const query = writeClient
+    .from("audit_logs")
+    .select("*")
+    .eq("event_type", REMNANT_INVENTORY_CHECK_EVENT)
+    .contains("meta", { session_id: sessionId })
+    .order("created_at", { ascending: false });
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
 
 export async function lookupInventoryCheckRemnant(client, number, authed, sessionId) {
   const numeric = extractRemnantIdSearch(number);

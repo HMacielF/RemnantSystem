@@ -1,10 +1,6 @@
 import {
   getWriteClient,
   getServiceClient,
-  formatAdminIdentifier,
-  applyAdminIdentifierFilter,
-  sanitizeAdminIdentifier,
-  sanitizeAdminWriteValues,
   writeAuditLog,
   runBestEffort,
   asNumber,
@@ -13,6 +9,119 @@ import {
   getAdminTableConfig,
   listAdminTables,
 } from "./api-utils.js";
+
+export function formatAdminIdentifier(tableConfig, row) {
+  return tableConfig.primaryKey.reduce((acc, key) => {
+    acc[key] = row?.[key] ?? null;
+    return acc;
+  }, {});
+}
+
+export function applyAdminIdentifierFilter(query, tableConfig, identifier) {
+  let nextQuery = query;
+  for (const key of tableConfig.primaryKey) {
+    if (!Object.prototype.hasOwnProperty.call(identifier || {}, key)) {
+      throw new Error(`Missing identifier field: ${key}`);
+    }
+    nextQuery = nextQuery.eq(key, identifier[key]);
+  }
+  return nextQuery;
+}
+
+function parseAdminBoolean(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+
+  const normalized = String(value).trim().toLowerCase();
+  if (["true", "1", "yes", "on"].includes(normalized)) return true;
+  if (["false", "0", "no", "off"].includes(normalized)) return false;
+  throw new Error(`Invalid boolean value: ${value}`);
+}
+
+function parseAdminTimestamp(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`Invalid timestamp value: ${value}`);
+  }
+  return parsed.toISOString();
+}
+
+function parseAdminJson(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "object") return value;
+  try {
+    return JSON.parse(String(value));
+  } catch (_error) {
+    throw new Error("Invalid JSON value");
+  }
+}
+
+export function parseAdminColumnValue(columnName, columnConfig, rawValue) {
+  if (rawValue === undefined) {
+    return Object.prototype.hasOwnProperty.call(columnConfig, "defaultValue")
+      ? columnConfig.defaultValue
+      : undefined;
+  }
+
+  switch (columnConfig.type) {
+    case "boolean":
+      return parseAdminBoolean(rawValue);
+    case "bigint":
+    case "integer": {
+      if (rawValue === null || rawValue === "") return null;
+      const parsed = Number(rawValue);
+      if (!Number.isFinite(parsed)) {
+        throw new Error(`Invalid numeric value for ${columnName}`);
+      }
+      return parsed;
+    }
+    case "json":
+    case "jsonb":
+      return parseAdminJson(rawValue);
+    case "timestamptz":
+      return parseAdminTimestamp(rawValue);
+    case "enum": {
+      if (rawValue === null || rawValue === "") return null;
+      const normalized = String(rawValue).trim();
+      if (!columnConfig.options?.includes(normalized)) {
+        throw new Error(`Invalid value for ${columnName}`);
+      }
+      return normalized;
+    }
+    default:
+      return rawValue === null || rawValue === undefined || rawValue === "" ? null : String(rawValue);
+  }
+}
+
+export function sanitizeAdminIdentifier(tableConfig, rawIdentifier) {
+  return tableConfig.primaryKey.reduce((acc, key) => {
+    const columnConfig = tableConfig.columns[key] || { type: "text" };
+    const nextValue = parseAdminColumnValue(key, columnConfig, rawIdentifier?.[key]);
+    if (nextValue === undefined || nextValue === null || nextValue === "") {
+      throw new Error(`Missing identifier field: ${key}`);
+    }
+    acc[key] = nextValue;
+    return acc;
+  }, {});
+}
+
+export function sanitizeAdminWriteValues(tableConfig, rawValues, mode) {
+  const values = {};
+
+  for (const [columnName, columnConfig] of Object.entries(tableConfig.columns)) {
+    if (columnConfig.editable === false) continue;
+    const parsed = parseAdminColumnValue(columnName, columnConfig, rawValues?.[columnName]);
+    if (parsed === undefined) continue;
+    if (mode === "insert" && parsed === null && !columnConfig.required && !Object.prototype.hasOwnProperty.call(rawValues || {}, columnName)) {
+      continue;
+    }
+    values[columnName] = parsed;
+  }
+
+  return values;
+}
 
 export async function createAdminUser(client, rawValues, options = {}) {
   const serviceClient = getServiceClient();
