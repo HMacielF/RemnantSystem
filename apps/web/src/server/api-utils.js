@@ -1393,19 +1393,34 @@ export function isAllowedImageProxyTarget(value) {
 }
 
 export async function uploadImageIfPresent(client, imageKey, imageFile) {
-  if (!imageFile?.dataUrl) return null;
+  if (!imageFile) return null;
 
-  const parsed = parseDataUrl(imageFile.dataUrl);
-  if (!parsed) {
-    throw new Error("Invalid image upload format");
+  let buffer;
+  let contentType;
+  let fileName = "";
+
+  if (typeof Blob !== "undefined" && imageFile instanceof Blob) {
+    buffer = Buffer.from(await imageFile.arrayBuffer());
+    contentType = imageFile.type || "application/octet-stream";
+    fileName = imageFile.name || "";
+  } else if (imageFile?.dataUrl) {
+    const parsed = parseDataUrl(imageFile.dataUrl);
+    if (!parsed) {
+      throw new Error("Invalid image upload format");
+    }
+    buffer = parsed.buffer;
+    contentType = parsed.contentType;
+    fileName = imageFile.name || "";
+  } else {
+    return null;
   }
 
-  const ext = extensionForType(parsed.contentType, imageFile.name);
+  const ext = extensionForType(contentType, fileName);
   const imagePath = buildImagePath(imageKey, ext);
   const bucket = process.env.SUPABASE_BUCKET || "remnant-images";
 
-  const { error: uploadError } = await client.storage.from(bucket).upload(imagePath, parsed.buffer, {
-    contentType: parsed.contentType,
+  const { error: uploadError } = await client.storage.from(bucket).upload(imagePath, buffer, {
+    contentType,
     upsert: true,
   });
 

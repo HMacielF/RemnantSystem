@@ -802,6 +802,41 @@ export async function fileToPayload(file) {
   };
 }
 
+async function dataUrlToBlob(dataUrl) {
+  const response = await fetch(dataUrl);
+  return response.blob();
+}
+
+/**
+ * Build a fetch init for a remnant-writing request. When the payload has
+ * an image_file carrying a data URL, send multipart/form-data with the
+ * image as a real file (no base64 inflation). Otherwise send plain JSON.
+ */
+export async function buildRemnantRequestInit(method, payload) {
+  const imageFile = payload?.image_file;
+  const hasImage = imageFile && (imageFile.dataUrl || imageFile instanceof Blob);
+
+  if (!hasImage) {
+    const { image_file: _image, ...rest } = payload || {};
+    return {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(rest),
+    };
+  }
+
+  const blob = imageFile instanceof Blob
+    ? imageFile
+    : await dataUrlToBlob(imageFile.dataUrl);
+  const fileName = imageFile.name || "image";
+  const fileType = imageFile.type || blob.type || "application/octet-stream";
+  const { image_file: _image, ...rest } = payload;
+  const form = new FormData();
+  form.append("data", JSON.stringify(rest));
+  form.append("image", new File([blob], fileName, { type: fileType }));
+  return { method, body: form };
+}
+
 export async function apiFetch(path, options) {
   let res;
   try {

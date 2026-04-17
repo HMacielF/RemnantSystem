@@ -7,6 +7,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useBodyScrollLock from "@/components/use-body-scroll-lock";
 import {
   apiFetch,
+  buildRemnantRequestInit,
   canManageStructure,
   canManageRemnant,
   normalizeRemnantStatus,
@@ -612,20 +613,12 @@ export default function PrivateWorkspaceClient() {
       };
 
       if (editorMode === "create") {
-        await apiFetch("/api/remnants", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
+        await apiFetch("/api/remnants", await buildRemnantRequestInit("POST", payload));
         await reloadNextStoneId();
         await reloadAvailableMaterialOptions();
         showSuccessMessage(profile?.system_role === "super_admin" ? "Remnant created." : "Remnant submitted for approval.");
       } else {
-        await apiFetch(`/api/remnants/${editorForm.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
+        await apiFetch(`/api/remnants/${editorForm.id}`, await buildRemnantRequestInit("PATCH", payload));
         await reloadAvailableMaterialOptions();
         showSuccessMessage("Remnant updated.");
       }

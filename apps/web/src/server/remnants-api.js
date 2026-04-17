@@ -760,7 +760,8 @@ export async function updateRemnantImage(client, authed, remnantId, body) {
     error.statusCode = 400;
     throw error;
   }
-  if (!body?.image_file?.dataUrl) {
+  const hasImage = body?.image_file instanceof Blob || Boolean(body?.image_file?.dataUrl);
+  if (!hasImage) {
     const error = new Error("Image file is required");
     error.statusCode = 400;
     throw error;
