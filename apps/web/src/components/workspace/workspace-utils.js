@@ -556,10 +556,37 @@ export function cropSourceUrl(src) {
   }
 }
 
+let webpEncodingSupport = null;
+
+function supportsWebpEncoding() {
+  if (webpEncodingSupport !== null) return webpEncodingSupport;
+  if (typeof document === "undefined") return false;
+  try {
+    const probe = document.createElement("canvas");
+    probe.width = 1;
+    probe.height = 1;
+    webpEncodingSupport = probe.toDataURL("image/webp").startsWith("data:image/webp");
+  } catch (_error) {
+    webpEncodingSupport = false;
+  }
+  return webpEncodingSupport;
+}
+
 export function preferredCropType(contentType) {
   const normalized = String(contentType || "").toLowerCase();
-  if (normalized === "image/png" || normalized === "image/webp") return normalized;
-  return "image/webp";
+  if (normalized === "image/png") return normalized;
+  if (normalized === "image/webp") {
+    return supportsWebpEncoding() ? normalized : "image/jpeg";
+  }
+  return supportsWebpEncoding() ? "image/webp" : "image/jpeg";
+}
+
+export function preferredCropExtension(contentType) {
+  switch (preferredCropType(contentType)) {
+    case "image/png": return "png";
+    case "image/webp": return "webp";
+    default: return "jpg";
+  }
 }
 
 export function imagePayloadFromDataUrl(dataUrl, fileName, type) {
@@ -745,8 +772,9 @@ export async function normalizeImageFile(file) {
 
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
     const outputType = preferredCropType(contentType);
+    const outputExt = preferredCropExtension(contentType);
     return {
-      name: file.name.replace(/\.[^.]+$/, "") + ".webp",
+      name: file.name.replace(/\.[^.]+$/, "") + "." + outputExt,
       type: outputType,
       dataUrl: canvas.toDataURL(outputType, 0.86),
     };
