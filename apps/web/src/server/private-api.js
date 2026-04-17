@@ -4,7 +4,7 @@ import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
 const { getAdminTableConfig, listAdminTables } = require("./adminDbConfig.js");
-const VALID_STATUSES = new Set(["available", "hold", "sold"]);
+const VALID_STATUSES = new Set(["available", "hold", "sold", "pending_approval"]);
 const REMNANT_SELECT = `
   id,
   moraware_remnant_id,
@@ -1917,6 +1917,7 @@ export async function createRemnant(client, authed, body) {
     throw error;
   }
 
+  const isAdmin = authed.profile.system_role === "super_admin";
   const stoneProductId = await ensureStoneProduct(writeClient, payload);
   const imageData = await uploadImageIfPresent(writeClient, payload.name || `new-${Date.now()}`, body?.image_file);
   const insertPayload = {
@@ -1932,7 +1933,7 @@ export async function createRemnant(client, authed, body) {
     l_width: payload.l_width,
     l_height: payload.l_height,
     stone_product_id: stoneProductId,
-    status: payload.status,
+    status: isAdmin ? payload.status : "pending_approval",
     hash: body?.hash ? String(body.hash).trim() : `manual:${Date.now()}`,
     deleted_at: null,
     ...(imageData || {}),
@@ -1992,6 +1993,49 @@ export async function createRemnant(client, authed, body) {
   }]);
 
   return formatRemnant(pricedRow);
+}
+
+export async function fetchPendingApprovals(client) {
+  const writeClient = getWriteClient(client);
+  const { data, error } = await writeClient
+    .from("remnants")
+    .select(REMNANT_SELECT)
+    .eq("status", "pending_approval")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data || []).map(formatRemnant);
+}
+
+export async function approveRemnant(client, authed, remnantId) {
+  const writeClient = getWriteClient(client);
+  const { data, error } = await writeClient
+    .from("remnants")
+    .update({ status: "available" })
+    .eq("id", remnantId)
+    .eq("status", "pending_approval")
+    .is("deleted_at", null)
+    .select(REMNANT_SELECT)
+    .single();
+  if (error) throw error;
+  if (!data) {
+    const notFound = new Error("Remnant not found or not pending approval");
+    notFound.statusCode = 404;
+    throw notFound;
+  }
+  runBestEffort(async () => {
+    await writeAuditLog(writeClient, authed, {
+      event_type: "remnant_approved",
+      entity_type: "remnant",
+      entity_id: data.id,
+      remnant_id: data.id,
+      company_id: data.company_id,
+      message: `Approved remnant #${data.moraware_remnant_id || data.id} — now available`,
+      new_data: data,
+      meta: { source: "api", action: "approve" },
+    });
+  }, "Approve remnant audit");
+  return formatRemnant(data);
 }
 
 export async function updateRemnant(client, authed, remnantId, body) {

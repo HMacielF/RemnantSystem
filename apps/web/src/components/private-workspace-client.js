@@ -896,6 +896,9 @@ export default function PrivateWorkspaceClient() {
   const [holdEditor, setHoldEditor] = useState(null);
   const [soldEditor, setSoldEditor] = useState(null);
   const [cropModal, setCropModal] = useState(null);
+  const [pendingApprovals, setPendingApprovals] = useState([]);
+  const [approvalsOpen, setApprovalsOpen] = useState(false);
+  const [approvingId, setApprovingId] = useState(null);
   const remnantAbortRef = useRef(null);
   const enrichmentRef = useRef(null);
   const cropCanvasRef = useRef(null);
@@ -1168,7 +1171,7 @@ export default function PrivateWorkspaceClient() {
         setProfile(nextProfile);
         setAuthState("ready");
 
-        const [requestsPayload, myHoldsPayload, mySoldPayload, lookupPayload, salesRepPayload, stonePayload, remnantRows] = await Promise.all([
+        const [requestsPayload, myHoldsPayload, mySoldPayload, lookupPayload, salesRepPayload, stonePayload, remnantRows, approvalsPayload] = await Promise.all([
           apiFetch("/api/hold-requests?status=pending", { cache: "no-store" }),
           apiFetch("/api/my-holds", { cache: "no-store" }),
           apiFetch("/api/my-sold", { cache: "no-store" }),
@@ -1176,6 +1179,7 @@ export default function PrivateWorkspaceClient() {
           nextProfile.system_role === "status_user" ? Promise.resolve([]) : apiFetch("/api/sales-reps", { cache: "no-store" }),
           canManageStructure(nextProfile) ? apiFetch("/api/next-stone-id", { cache: "no-store" }) : Promise.resolve({ nextStoneId: null }),
           apiFetch("/api/remnants?enrich=0", { cache: "no-store" }),
+          nextProfile.system_role === "super_admin" ? apiFetch("/api/remnants/approve", { cache: "no-store" }) : Promise.resolve([]),
         ]);
 
         if (!mounted) return;
@@ -1193,6 +1197,7 @@ export default function PrivateWorkspaceClient() {
         setSalesReps(Array.isArray(salesRepPayload) ? salesRepPayload : []);
         setNextStoneId(stonePayload?.nextStoneId ?? null);
         setAvailableMaterialOptions(materialOptionsFromRows(remnantRows));
+        setPendingApprovals(Array.isArray(approvalsPayload) ? approvalsPayload : []);
       } catch (loadError) {
         if (!mounted) return;
         if (isAccessDeniedError(loadError.message)) {
@@ -1743,7 +1748,7 @@ export default function PrivateWorkspaceClient() {
         });
         await reloadNextStoneId();
         await reloadAvailableMaterialOptions();
-        showSuccessMessage("Remnant created.");
+        showSuccessMessage(profile?.system_role === "super_admin" ? "Remnant created." : "Remnant submitted for approval.");
       } else {
         await apiFetch(`/api/remnants/${editorForm.id}`, {
           method: "PATCH",
@@ -1762,6 +1767,25 @@ export default function PrivateWorkspaceClient() {
       setLoading(true);
     } catch (saveError) {
       setError(saveError.message);
+    }
+  }
+
+  async function handleApproveRemnant(remnantId) {
+    setApprovingId(remnantId);
+    try {
+      await apiFetch("/api/remnants/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ remnant_id: remnantId }),
+      });
+      setPendingApprovals((current) => current.filter((r) => r.id !== remnantId));
+      showSuccessMessage("Remnant approved and now available.");
+      setFilters((current) => ({ ...current }));
+      setLoading(true);
+    } catch (err) {
+      showErrorMessage(err.message || "Failed to approve remnant.");
+    } finally {
+      setApprovingId(null);
     }
   }
 
@@ -2239,6 +2263,18 @@ export default function PrivateWorkspaceClient() {
                     {holdRequests.length}
                   </span>
                 </button>
+                {profile?.system_role === "super_admin" && pendingApprovals.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setApprovalsOpen(true)}
+                    className="inline-flex h-10 items-center justify-between gap-3 rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-shell)]"
+                  >
+                    <span className="whitespace-nowrap">Approvals</span>
+                    <span className="inline-flex min-w-7 shrink-0 items-center justify-center rounded-full bg-violet-500 px-2 py-0.5 text-xs font-semibold text-white shadow-[0_8px_18px_rgba(139,92,246,0.32)]">
+                      {pendingApprovals.length}
+                    </span>
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={openMyHoldsPanel}
@@ -2953,6 +2989,87 @@ export default function PrivateWorkspaceClient() {
                               </button>
                             </div>
                           </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {approvalsOpen ? (
+        <div className="fixed inset-0 z-[71] overflow-y-auto bg-black/50 px-4 py-8">
+          <div className="mx-auto max-w-3xl overflow-hidden rounded-[32px] border border-[var(--brand-line)] bg-white shadow-[0_24px_70px_rgba(35,35,35,0.14)]">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,#f7f7f7_100%)] px-6 py-5">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-violet-500">Pending Approvals</p>
+                  <span className="inline-flex items-center rounded-full border border-[var(--brand-line)] bg-[var(--brand-white)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)]">
+                    {pendingApprovals.length} Waiting
+                  </span>
+                </div>
+                <h2 className="font-display mt-1 text-2xl font-semibold text-[var(--brand-ink)]">Remnants Awaiting Approval</h2>
+                <p className="mt-2 text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_72%,white)]">Review each remnant submitted by managers. Approve to make it available publicly.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setApprovalsOpen(false)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+                aria-label="Close approvals panel"
+              >
+                {"\u00D7"}
+              </button>
+            </div>
+            <div className="max-h-[70vh] overflow-y-auto p-6">
+              {pendingApprovals.length === 0 ? (
+                <div className="rounded-[24px] border border-dashed border-[var(--brand-line)] bg-[var(--brand-white)] px-5 py-10 text-center">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-violet-500">All Clear</p>
+                  <p className="mt-2 text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_72%,white)]">No remnants pending approval.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {pendingApprovals.map((remnant) => {
+                    const isApproving = approvingId === remnant.id;
+                    const size = remnant.l_shape
+                      ? `${remnant.width}" × ${remnant.height}" + ${remnant.l_width}" × ${remnant.l_height}"`
+                      : remnant.width && remnant.height ? `${remnant.width}" × ${remnant.height}"` : "";
+                    return (
+                      <article key={remnant.id} className={`flex items-center justify-between gap-4 rounded-[24px] border border-[var(--brand-line)] bg-white p-4 shadow-sm ${isApproving ? "opacity-60" : ""}`}>
+                        <div className="flex min-w-0 items-center gap-3">
+                          {remnant.image ? (
+                            <img
+                              src={remnant.image}
+                              alt={remnant.name}
+                              className="h-14 w-14 shrink-0 rounded-2xl border border-[var(--brand-line)] object-contain"
+                            />
+                          ) : (
+                            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-dashed border-[var(--brand-line)] bg-[var(--brand-shell)] text-xs text-[rgba(25,27,28,0.32)]">No img</div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-violet-500">#{remnant.moraware_remnant_id || remnant.id}</p>
+                            <p className="truncate text-sm font-semibold text-[var(--brand-ink)]">{remnant.name || "Unnamed"}</p>
+                            <p className="text-xs text-[rgba(25,27,28,0.55)]">{[remnant.material_name, size].filter(Boolean).join(" · ")}</p>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => { setApprovalsOpen(false); setEditorForm({ ...remnant, id: remnant.id }); setEditorMode("edit"); }}
+                            className="rounded-xl border border-[var(--brand-line)] bg-[var(--brand-shell)] px-3 py-2 text-xs font-bold text-[var(--brand-ink)] transition-colors hover:bg-[rgba(25,27,28,0.08)]"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isApproving}
+                            onClick={() => handleApproveRemnant(remnant.id)}
+                            className="rounded-xl bg-violet-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isApproving ? "Approving…" : "Approve"}
+                          </button>
                         </div>
                       </article>
                     );
