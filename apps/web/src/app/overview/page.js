@@ -25,7 +25,7 @@ export default function OverviewPage() {
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#f5efe7_0%,#efe6dc_28%,#e9edf3_100%)] px-6 py-10 text-[#1f2937]">
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
-        <section className="overflow-hidden rounded-[34px] border border-white/70 bg-[linear-gradient(135deg,rgba(18,31,51,0.96),rgba(42,64,95,0.88))] px-8 py-8 text-white shadow-[0_30px_90px_rgba(15,23,39,0.18)]">
+        <section className="overflow-hidden rounded-[34px] border border-white/70 bg-[linear-gradient(135deg,rgba(18,31,51,0.96),rgba(42,64,95,0.88))] px-8 py-8 text-white shadow-hero">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#f7bf97]">
@@ -51,7 +51,7 @@ export default function OverviewPage() {
           {routes.map((route) => (
             <article
               key={route.href}
-              className="flex flex-col justify-between rounded-[28px] border border-white/70 bg-white/90 p-6 shadow-[0_18px_50px_rgba(31,41,55,0.08)]"
+              className="flex flex-col justify-between rounded-[28px] border border-white/70 bg-white/90 p-6 shadow-card"
             >
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a16235]">
@@ -71,7 +71,7 @@ export default function OverviewPage() {
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-          <article className="rounded-[28px] border border-white/70 bg-white/92 p-6 shadow-[0_18px_50px_rgba(31,41,55,0.08)]">
+          <article className="rounded-[28px] border border-white/70 bg-white/92 p-6 shadow-card">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a16235]">
               Current Setup
             </p>
@@ -92,7 +92,7 @@ export default function OverviewPage() {
             </div>
           </article>
 
-          <article className="rounded-[28px] border border-white/70 bg-[linear-gradient(180deg,#fff7f0_0%,#fffdfb_100%)] p-6 shadow-[0_18px_50px_rgba(31,41,55,0.08)]">
+          <article className="rounded-[28px] border border-white/70 bg-[linear-gradient(180deg,#fff7f0_0%,#fffdfb_100%)] p-6 shadow-card">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a16235]">
               Focus
             </p>

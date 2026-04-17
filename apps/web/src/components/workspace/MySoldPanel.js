@@ -18,7 +18,7 @@ export function MySoldPanel({
 
   return (
     <div className="fixed inset-0 z-[71] overflow-y-auto bg-black/50 px-4 py-8">
-      <div className="mx-auto max-w-5xl overflow-hidden rounded-[32px] border border-[var(--brand-line)] bg-white shadow-[0_24px_70px_rgba(35,35,35,0.14)]">
+      <div className="mx-auto max-w-5xl overflow-hidden rounded-[32px] border border-[var(--brand-line)] bg-white shadow-modal">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,#f7f7f7_100%)] px-6 py-5">
           <div>
             <div className="flex flex-wrap items-center gap-2">

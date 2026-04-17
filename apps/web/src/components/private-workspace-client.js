@@ -855,7 +855,7 @@ export default function PrivateWorkspaceClient() {
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,var(--brand-white)_52%,rgba(247,134,57,0.08)_100%)] text-[var(--brand-ink)]">
       <div className="mx-auto w-full max-w-[1800px] px-3 py-5 sm:px-4 md:px-6 2xl:px-8">
-        <section className="mb-4 overflow-hidden rounded-[32px] border border-[var(--brand-line)] bg-[linear-gradient(135deg,rgba(255,255,255,0.99),rgba(242,242,242,0.96))] px-6 py-5 text-[var(--brand-ink)] shadow-[0_28px_90px_rgba(25,27,28,0.10)]">
+        <section className="mb-4 overflow-hidden rounded-[32px] border border-[var(--brand-line)] bg-[linear-gradient(135deg,rgba(255,255,255,0.99),rgba(242,242,242,0.96))] px-6 py-5 text-[var(--brand-ink)] shadow-panel">
           <div className={`grid gap-5 lg:items-start ${isStatusUser ? "xl:grid-cols-[minmax(0,1fr)_520px]" : "xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,640px)]"}`}>
             <div className={`${isStatusUser ? "max-w-3xl" : "max-w-4xl"}`}>
               <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-orange)]">Management Workspace</p>
@@ -1483,7 +1483,7 @@ export default function PrivateWorkspaceClient() {
       {message ? (
         <div className="pointer-events-none fixed inset-x-4 bottom-4 z-[74] flex justify-center sm:inset-x-auto sm:right-5 sm:justify-end">
           <div
-            className={`pointer-events-auto flex w-full max-w-md items-start justify-between gap-3 rounded-[24px] border px-4 py-3 text-sm shadow-[0_18px_45px_rgba(15,23,39,0.18)] backdrop-blur ${
+            className={`pointer-events-auto flex w-full max-w-md items-start justify-between gap-3 rounded-[24px] border px-4 py-3 text-sm shadow-toast backdrop-blur ${
               messageTone === "error"
                 ? "border-rose-200 bg-white/96 text-rose-800"
                 : "border-emerald-200 bg-white/96 text-[#285641]"

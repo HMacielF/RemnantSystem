@@ -1266,7 +1266,7 @@ export default function PublicInventoryClient() {
                 <button
                   type="submit"
                   disabled={holdSubmitting || salesReps.length === 0}
-                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--brand-orange)_0%,var(--brand-orange-deep)_100%)] px-6 text-sm font-semibold text-white shadow-[0_18px_38px_rgba(247,134,57,0.24)] transition-all hover:-translate-y-0.5 hover:shadow-[0_22px_46px_rgba(247,134,57,0.30)] disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--brand-orange)_0%,var(--brand-orange-deep)_100%)] px-6 text-sm font-semibold text-white shadow-btn-orange transition-all hover:-translate-y-0.5 hover:shadow-[0_22px_46px_rgba(247,134,57,0.30)] disabled:cursor-wait disabled:opacity-60 sm:w-auto"
                 >
                   {holdSubmitting ? "Sending..." : "Send hold request"}
                 </button>

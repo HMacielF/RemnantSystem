@@ -635,7 +635,7 @@ export default function SlabCatalogClient() {
           <div className="pointer-events-none absolute right-[-60px] top-[40px] h-[220px] w-[220px] rounded-full bg-[rgba(60,113,82,0.10)] blur-3xl" />
 
           <div className="relative mx-auto max-w-[1680px] px-4 py-4 md:px-6 md:py-5">
-            <section className="mb-4 overflow-hidden rounded-[32px] border border-[var(--brand-line)] bg-[linear-gradient(135deg,rgba(255,255,255,0.99),rgba(242,242,242,0.96))] px-6 py-5 shadow-[0_28px_90px_rgba(25,27,28,0.10)]">
+            <section className="mb-4 overflow-hidden rounded-[32px] border border-[var(--brand-line)] bg-[linear-gradient(135deg,rgba(255,255,255,0.99),rgba(242,242,242,0.96))] px-6 py-5 shadow-panel">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div className="max-w-3xl">
                   <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-orange)]">

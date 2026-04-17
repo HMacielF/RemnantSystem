@@ -548,7 +548,7 @@ export default function AdminWorkspaceClient() {
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,var(--brand-white)_52%,rgba(247,134,57,0.08)_100%)] font-sans text-[var(--brand-ink)]">
       <div className="mx-auto w-full max-w-[1800px] px-3 py-5 sm:px-4 md:px-6 2xl:px-8">
-        <section className="mb-4 overflow-hidden rounded-[32px] border border-[var(--brand-line)] bg-[linear-gradient(135deg,rgba(255,255,255,0.99),rgba(242,242,242,0.96))] px-6 py-5 text-[var(--brand-ink)] shadow-[0_28px_90px_rgba(25,27,28,0.10)]">
+        <section className="mb-4 overflow-hidden rounded-[32px] border border-[var(--brand-line)] bg-[linear-gradient(135deg,rgba(255,255,255,0.99),rgba(242,242,242,0.96))] px-6 py-5 text-[var(--brand-ink)] shadow-panel">
           <div className="grid gap-5 lg:items-start xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,520px)]">
             <div className="max-w-4xl">
               <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-orange)]">Super Admin Workspace</p>
@@ -601,7 +601,7 @@ export default function AdminWorkspaceClient() {
         </section>
 
         <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="rounded-[28px] border border-[var(--brand-line)] bg-white/94 p-4 shadow-[0_28px_90px_rgba(25,27,28,0.10)]">
+          <aside className="rounded-[28px] border border-[var(--brand-line)] bg-white/94 p-4 shadow-panel">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Tables</p>
@@ -645,7 +645,7 @@ export default function AdminWorkspaceClient() {
             </div>
           </aside>
 
-          <section className="rounded-[28px] border border-[var(--brand-line)] bg-white/95 p-4 shadow-[0_28px_90px_rgba(25,27,28,0.10)]">
+          <section className="rounded-[28px] border border-[var(--brand-line)] bg-white/95 p-4 shadow-panel">
             <div className="flex flex-col gap-4 border-b border-[var(--brand-line)] pb-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Rows</p>
