@@ -160,3 +160,6 @@ scrapers/remnant_scraper/last_sync_issues.json
 
 # Local backups
 .backups/
+
+# Ad-hoc reports and data exports (HTML/CSV) not relevant to the app
+local-reports/
