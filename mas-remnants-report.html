@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MAS Remnants Report</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #1a1a1a; padding: 40px; }
+    header { margin-bottom: 28px; }
+    h1 { font-size: 22px; font-weight: 700; }
+    p.sub { font-size: 13px; color: #666; margin-top: 4px; }
+    .owner { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; background: #fff1e6; color: #8f4517; border: 1px solid #f2c9a4; border-radius: 4px; padding: 3px 8px; margin-top: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead tr { background: #f5f0eb; }
+    th { text-align: left; padding: 10px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #8f4517; border-bottom: 2px solid #e0d5cc; }
+    td { padding: 11px 14px; border-bottom: 1px solid #ede8e3; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    .group-header td { background: #f0ebe5; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #8f4517; padding: 6px 14px; border-bottom: 1px solid #e0d5cc; }
+    .id { font-weight: 700; color: #e07830; }
+    .name { font-weight: 600; }
+    .size { color: #444; font-variant-numeric: tabular-nums; }
+    footer { margin-top: 24px; font-size: 12px; color: #999; border-top: 1px solid #ede8e3; padding-top: 12px; }
+    @media print {
+      body { padding: 20px; }
+      @page { margin: 1.5cm; size: letter; }
+      .group-header td, .owner { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>MAS Remnants Report</h1>
+    <p class="sub">7 remnants &mdash; grouped by material</p>
+    <span class="owner">These remnants belong to MAS</span>
+  </header>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Name</th>
+        <th>Size</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="group-header"><td colspan="3">Calacatta Classique (2)</td></tr>
+      <tr><td class="id">250</td><td class="name">Calacatta Classique</td><td class="size">58&Prime; &times; 44&Prime;</td></tr>
+      <tr><td class="id">419</td><td class="name">Calacatta Classique</td><td class="size">84&Prime; &times; 25&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Calacatta Nocturne</td></tr>
+      <tr><td class="id">430</td><td class="name">Calacatta Nocturne</td><td class="size">57&Prime; &times; 31&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Diana Blue (2)</td></tr>
+      <tr><td class="id">393</td><td class="name">Diana Blue</td><td class="size">58&Prime; &times; 37&Prime;</td></tr>
+      <tr><td class="id">395</td><td class="name">Diana Blue</td><td class="size">63&Prime; &times; 35&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Midnight Marble</td></tr>
+      <tr><td class="id">645</td><td class="name">Midnight Marble</td><td class="size">128&Prime; &times; 50&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Quartz Livorno</td></tr>
+      <tr><td class="id">449</td><td class="name">Quartz Livorno</td><td class="size">75&Prime; &times; 39&Prime;</td></tr>
+    </tbody>
+  </table>
+  <footer>7 remnants belonging to MAS &mdash; Quick Countertop &mdash; parsed from Moraware description column</footer>
+</body>
+</html>

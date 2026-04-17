@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Quick Remnants Report</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #1a1a1a; padding: 40px; }
+    header { margin-bottom: 28px; }
+    h1 { font-size: 22px; font-weight: 700; }
+    p.sub { font-size: 13px; color: #666; margin-top: 4px; }
+    .owner { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; background: #fff1e6; color: #8f4517; border: 1px solid #f2c9a4; border-radius: 4px; padding: 3px 8px; margin-top: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead tr { background: #f5f0eb; }
+    th { text-align: left; padding: 10px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #8f4517; border-bottom: 2px solid #e0d5cc; }
+    td { padding: 11px 14px; border-bottom: 1px solid #ede8e3; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    .group-header td { background: #f0ebe5; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #8f4517; padding: 6px 14px; border-bottom: 1px solid #e0d5cc; }
+    .id { font-weight: 700; color: #e07830; }
+    .name { font-weight: 600; }
+    .size { color: #444; font-variant-numeric: tabular-nums; }
+    .sold-badge { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; background: #fee2e2; color: #991b1b; border-radius: 4px; padding: 1px 5px; margin-left: 6px; }
+    .warn-badge { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; background: #fef3c7; color: #92400e; border-radius: 4px; padding: 1px 5px; margin-left: 6px; }
+    .info-badge { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; background: #e0f2fe; color: #075985; border-radius: 4px; padding: 1px 5px; margin-left: 6px; }
+    .note { color: #666; font-size: 11px; margin-left: 6px; font-weight: 500; }
+    .sold-note { color: #991b1b; }
+    footer { margin-top: 24px; font-size: 12px; color: #999; border-top: 1px solid #ede8e3; padding-top: 12px; }
+    @media print {
+      body { padding: 20px; }
+      @page { margin: 1.5cm; size: letter; }
+      .group-header td, .owner, .sold-badge, .warn-badge, .info-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Quick Remnants Report</h1>
+    <p class="sub">27 remnants &mdash; grouped by material &mdash; 3 marked SOLD, 1 flagged for new ID, 1 flagged as FRV</p>
+    <span class="owner">These remnants belong to Quick Countertop</span>
+  </header>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Name</th>
+        <th>Size</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="group-header"><td colspan="3">Granite Absolute Black</td></tr>
+      <tr><td class="id">87</td><td class="name">Granite Absolute Black</td><td class="size">48&Prime; &times; 34&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Granite Giallo Napoli</td></tr>
+      <tr><td class="id">100</td><td class="name">Granite Giallo Napoli</td><td class="size">78&Prime; &times; 56&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Granite Peregrine</td></tr>
+      <tr><td class="id">104</td><td class="name">Granite Peregrine</td><td class="size">39&Prime; &times; 35&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Marble Calacatta Beccia Violetta Polished 3cm</td></tr>
+      <tr><td class="id">67</td><td class="name">Marble Calacatta Beccia Violetta Polished 3cm<span class="warn-badge">Needs New ID#</span></td><td class="size">57&Prime; &times; 26&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Marble White Carrara</td></tr>
+      <tr><td class="id">173</td><td class="name">Marble White Carrara</td><td class="size">127&Prime; &times; 24&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">MSI Soapstone Mist</td></tr>
+      <tr><td class="id">98</td><td class="name">MSI Soapstone Mist<span class="sold-badge">Sold</span></td><td class="size">64&Prime; &times; 44&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Quartz Calacatta Lumanyx</td></tr>
+      <tr><td class="id">132</td><td class="name">Quartz Calacatta Lumanyx<span class="info-badge">FRV</span></td><td class="size">126&Prime; &times; 27&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Quartz MSI Alabaster White</td></tr>
+      <tr><td class="id">146</td><td class="name">Quartz MSI Alabaster White</td><td class="size">47&Prime; &times; 43&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Quartz MSI Calacatta Azai</td></tr>
+      <tr><td class="id">182</td><td class="name">Quartz MSI Calacatta Azai</td><td class="size">49&Prime; &times; 49&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Quartz MSI Calacatta Premata</td></tr>
+      <tr><td class="id">125</td><td class="name">Quartz MSI Calacatta Premata<span class="sold-badge">Sold</span><span class="note sold-note">Patrica</span></td><td class="size">123&Prime; &times; 28&Prime; + 42&Prime; &times; 50&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Quartz MSI Calcatta Abezzo (2)</td></tr>
+      <tr><td class="id">109</td><td class="name">Quartz MSI Calcatta Abezzo</td><td class="size">52&Prime; &times; 25&Prime;</td></tr>
+      <tr><td class="id">110</td><td class="name">Quartz MSI Calcatta Abezzo</td><td class="size">113&Prime; &times; 29&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Quartz MSI Midnight Majesty</td></tr>
+      <tr><td class="id">145</td><td class="name">Quartz MSI Midnight Majesty</td><td class="size">51&Prime; &times; 36&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Quartz MSI Solitaj</td></tr>
+      <tr><td class="id">133</td><td class="name">Quartz MSI Solitaj</td><td class="size">62&Prime; &times; 42&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Quartz Quick Blanco (2)</td></tr>
+      <tr><td class="id">170</td><td class="name">Quartz Quick Blanco</td><td class="size">41&Prime; &times; 43&Prime;</td></tr>
+      <tr><td class="id">172</td><td class="name">Quartz Quick Blanco</td><td class="size">99&Prime; &times; 48&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Quartz Quick Glass White (4)</td></tr>
+      <tr><td class="id">167</td><td class="name">Quartz Quick Glass White</td><td class="size">46&Prime; &times; 37&Prime;</td></tr>
+      <tr><td class="id">168</td><td class="name">Quartz Quick Glass White</td><td class="size">78&Prime; &times; 39&Prime;</td></tr>
+      <tr><td class="id">169</td><td class="name">Quartz Quick Glass White</td><td class="size">82&Prime; &times; 78&Prime;</td></tr>
+      <tr><td class="id">174</td><td class="name">Quick Glass White</td><td class="size">137&Prime; &times; 34&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Quartz Quick Marma</td></tr>
+      <tr><td class="id">166</td><td class="name">Quartz Quick Marma</td><td class="size">94&Prime; &times; 24&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Quarzite Calcatta Artemis</td></tr>
+      <tr><td class="id">127</td><td class="name">Quarzite Calcatta Artemis</td><td class="size">50&Prime; &times; 57&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Quarzite Taj Mahal (2)</td></tr>
+      <tr><td class="id">111</td><td class="name">Quarzite Taj Mahal</td><td class="size">78&Prime; &times; 34&Prime;</td></tr>
+      <tr><td class="id">171</td><td class="name">Quarzite Taj Mahal</td><td class="size">76&Prime; &times; 37&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Quartzite MSI Cirrus Grey</td></tr>
+      <tr><td class="id">124</td><td class="name">Quartzite MSI Cirrus Grey</td><td class="size">75&Prime; &times; 45&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">St. Cecilia Light</td></tr>
+      <tr><td class="id">75</td><td class="name">St. Cecilia Light</td><td class="size">47&Prime; &times; 40&Prime;</td></tr>
+
+      <tr class="group-header"><td colspan="3">Travertine Daino Reale</td></tr>
+      <tr><td class="id">88</td><td class="name">Travertine Daino Reale<span class="sold-badge">Sold</span><span class="note sold-note">PATY</span></td><td class="size">115&Prime; &times; 45&Prime;</td></tr>
+    </tbody>
+  </table>
+  <footer>27 remnants belonging to Quick Countertop &mdash; parsed from Moraware description column &mdash; "Sold" = already sold per source note, "FRV" = annotated as FRV-owned, "Needs New ID#" = flagged in source</footer>
+</body>
+</html>
