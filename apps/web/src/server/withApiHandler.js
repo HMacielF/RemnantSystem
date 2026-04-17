@@ -58,6 +58,67 @@ import {
   createRequiredAuthedContext,
 } from "@/server/private-api";
 
+function extractConstraintName(text) {
+  const match = /constraint "([^"]+)"/.exec(String(text || ""));
+  return match ? match[1] : null;
+}
+
+function extractColumnName(text) {
+  const match = /column "([^"]+)"/.exec(String(text || ""));
+  return match ? match[1] : null;
+}
+
+/**
+ * Translate Supabase / Postgres errors into something the user can act on.
+ * Returns { message, status } — falls back to the raw message when the code
+ * isn't recognized, so nothing useful is hidden.
+ */
+function translateError(error) {
+  const code = error?.code;
+  const raw = error?.message || "";
+  const details = error?.details || "";
+  const hint = error?.hint || "";
+
+  switch (code) {
+    case "23505": return {
+      status: 409,
+      message: details
+        ? `Already exists: ${details}`
+        : "A record with these values already exists.",
+    };
+    case "23503": return {
+      status: 400,
+      message: details
+        ? `Referenced record not found: ${details}`
+        : "A referenced record doesn't exist.",
+    };
+    case "23514": {
+      const constraint = extractConstraintName(raw);
+      return {
+        status: 400,
+        message: constraint
+          ? `Value rejected by constraint "${constraint}". ${details || hint || ""}`.trim()
+          : `Value rejected: ${raw}`,
+      };
+    }
+    case "23502": {
+      const column = extractColumnName(raw);
+      return {
+        status: 400,
+        message: column
+          ? `Missing required field: ${column}`
+          : "A required field is missing.",
+      };
+    }
+    case "22P02": return { status: 400, message: `Invalid value format: ${details || raw}` };
+    case "22001": return { status: 400, message: "A value is too long for its column." };
+    case "PGRST116": return { status: 404, message: "Not found." };
+    case "PGRST301": return { status: 401, message: "Session expired. Please sign in again." };
+    case "42501": return { status: 403, message: "Not allowed to perform this action." };
+    default: return null;
+  }
+}
+
 /**
  * Build a consistent error response.
  * Attaches path + method so logs are immediately greppable.
@@ -65,22 +126,20 @@ import {
 function errorResponse(request, error, authed = null) {
   const path = request?.nextUrl?.pathname ?? "(unknown)";
   const method = request?.method ?? "?";
-  const status = Number(error?.statusCode) || 500;
 
-  console.error(`[${method} ${path}] ${error?.message ?? error}`);
+  const translated = translateError(error);
+  const status = Number(error?.statusCode) || translated?.status || 500;
+  const message = translated?.message || error?.message || "An unexpected error occurred";
+
+  console.error(`[${method} ${path}] ${message}`);
   if (status >= 500) {
     console.error(error);
   }
 
-  const body = {
-    error: error?.message || "An unexpected error occurred",
-    path,
-    method,
-  };
-
-  if (error?.details) {
-    body.details = error.details;
-  }
+  const body = { error: message, path, method };
+  if (error?.details) body.details = error.details;
+  if (error?.hint) body.hint = error.hint;
+  if (error?.code) body.code = error.code;
 
   const response = NextResponse.json(body, { status });
   return authed ? applyAuthCookies(response, authed) : response;

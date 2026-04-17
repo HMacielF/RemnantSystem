@@ -176,7 +176,7 @@ export default function PrivateWorkspaceClient() {
 
   function showErrorMessage(text) {
     setMessageTone("error");
-    setMessage(text);
+    setMessage(text || "Something went wrong. Please try again.");
   }
 
   function openImageViewer(remnant) {

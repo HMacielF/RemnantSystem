@@ -824,7 +824,9 @@ export async function apiFetch(path, options) {
     let message = "Request failed";
     try {
       const payload = await res.json();
-      message = payload?.details ? `${payload.error}: ${payload.details}` : payload?.error || message;
+      const base = payload?.error || message;
+      const extra = payload?.details || payload?.hint || "";
+      message = extra ? `${base} — ${extra}` : base;
     } catch (_error) {
       message = (await res.text().catch(() => "")) || `${res.status} ${res.statusText || "Request failed"}`;
     }
