@@ -1,0 +1,383 @@
+import {
+  getWriteClient,
+  formatRemnant,
+  formatHold,
+  REMNANT_WITH_STONE_SELECT,
+  HOLD_SELECT,
+  REMNANT_INVENTORY_CHECK_EVENT,
+  extractStoneProductColors,
+  fetchRelevantHoldForRemnant,
+  writeAuditLog,
+  runBestEffort,
+  cancelPendingHoldNotifications,
+  isPrivilegedProfile,
+  extractRemnantIdSearch,
+  asNumber,
+  normalizeInventoryCheckOutcome,
+  sanitizeInventorySessionId,
+  fetchInventoryCheckAuditRows,
+} from "./api-utils.js";
+
+export async function lookupInventoryCheckRemnant(client, number, authed, sessionId) {
+  const numeric = extractRemnantIdSearch(number);
+  if (!numeric) {
+    const error = new Error("Enter a remnant number");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const writeClient = getWriteClient(client);
+  const { data, error } = await writeClient
+    .from("remnants")
+    .select(REMNANT_WITH_STONE_SELECT)
+    .is("deleted_at", null)
+    .eq("moraware_remnant_id", numeric)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  const priorRows = sessionId
+    ? await fetchInventoryCheckAuditRows(client, authed, sanitizeInventorySessionId(sessionId))
+    : [];
+  const priorMatch = priorRows.find((row) => Number(row.remnant_id) === Number(data?.id));
+
+  if (!data) {
+    return {
+      entered_number: numeric,
+      remnant: null,
+      existing_check: null,
+    };
+  }
+
+  return {
+    entered_number: numeric,
+    remnant: formatRemnant(data),
+    existing_check: priorMatch
+      ? {
+          outcome: priorMatch?.meta?.outcome || null,
+          created_at: priorMatch.created_at,
+          note: priorMatch.message || null,
+        }
+      : null,
+  };
+}
+
+export async function recordInventoryCheck(client, authed, body) {
+  const sessionId = sanitizeInventorySessionId(body?.session_id);
+  const outcome = normalizeInventoryCheckOutcome(body?.outcome);
+  const enteredNumber = extractRemnantIdSearch(body?.entered_number);
+  const location = String(body?.location || "").trim() || null;
+  if (!enteredNumber) {
+    const error = new Error("Entered number is required");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const writeClient = getWriteClient(client);
+  const remnantId = asNumber(body?.remnant_id);
+
+  if (outcome === "not_in_db") {
+    await writeAuditLog(writeClient, authed, {
+      event_type: REMNANT_INVENTORY_CHECK_EVENT,
+      entity_type: "remnant_inventory_unknown",
+      entity_id: null,
+      remnant_id: null,
+      company_id: null,
+      message: `Marked remnant #${enteredNumber} as physically present but missing from the database`,
+      new_data: {
+        remnant_id: null,
+        moraware_remnant_id: enteredNumber,
+        outcome,
+        session_id: sessionId,
+        entered_number: enteredNumber,
+      },
+      meta: {
+        source: "manage_confirm",
+        session_id: sessionId,
+        outcome,
+        entered_number: enteredNumber,
+      },
+    });
+
+    return {
+      ok: true,
+      outcome,
+      message: `Marked remnant #${enteredNumber} as physically present but missing from the database`,
+      remnant: null,
+    };
+  }
+
+  if (!remnantId) {
+    const error = new Error("Remnant id is required");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const { data: remnant, error } = await writeClient
+    .from("remnants")
+    .select(REMNANT_WITH_STONE_SELECT)
+    .eq("id", remnantId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!remnant) {
+    const nextError = new Error("Remnant not found");
+    nextError.statusCode = 404;
+    throw nextError;
+  }
+
+  let updatedHold = null;
+  if (outcome === "seen") {
+    const currentHold = await fetchRelevantHoldForRemnant(writeClient, remnant.id);
+    if (currentHold?.status === "active") {
+      const { data: releasedHold, error: holdError } = await writeClient
+        .from("holds")
+        .update({
+          status: "released",
+          released_at: new Date().toISOString(),
+          released_by_user_id: authed.profile.id,
+        })
+        .eq("id", currentHold.id)
+        .select(HOLD_SELECT)
+        .single();
+
+      if (holdError) throw holdError;
+      updatedHold = formatHold(releasedHold);
+
+      runBestEffort(async () => {
+        await cancelPendingHoldNotifications(writeClient, currentHold.id);
+        await writeAuditLog(writeClient, authed, {
+          event_type: "hold_released",
+          entity_type: "hold",
+          entity_id: currentHold.id,
+          remnant_id: remnant.id,
+          company_id: remnant.company_id,
+          message: `Released hold for remnant #${remnant.moraware_remnant_id || remnant.id}`,
+          old_data: currentHold,
+          new_data: updatedHold,
+          meta: {
+            source: "manage_confirm",
+            action: "inventory_check_release",
+            override: isPrivilegedProfile(authed.profile)
+              && String(currentHold.hold_owner_user_id) !== String(authed.profile.id),
+          },
+        });
+      }, "Release hold from inventory check");
+    }
+  }
+
+  if (outcome === "seen") {
+    const currentStatus = String(remnant.status || "").trim().toLowerCase();
+    const nextRemnantStatus = currentStatus === "sold"
+      ? remnant.status
+      : (currentStatus === "hold" && !remnant.inventory_hold)
+        ? remnant.status
+        : "available";
+    const seenUpdate = {
+      last_seen_at: new Date().toISOString(),
+      status: nextRemnantStatus,
+      location,
+    };
+    if (remnant.inventory_hold) seenUpdate.inventory_hold = false;
+    const { error: updateError } = await writeClient
+      .from("remnants")
+      .update(seenUpdate)
+      .eq("id", remnant.id)
+      .is("deleted_at", null);
+    if (updateError) throw updateError;
+  } else {
+    const { error: updateError } = await writeClient
+      .from("remnants")
+      .update({ location })
+      .eq("id", remnant.id)
+      .is("deleted_at", null);
+    if (updateError) throw updateError;
+  }
+
+  const message = outcome === "seen"
+    ? String(remnant.status || "").trim().toLowerCase() === "sold"
+      ? `Confirmed remnant #${remnant.moraware_remnant_id || remnant.id} in inventory and kept it marked sold`
+      : `Confirmed remnant #${remnant.moraware_remnant_id || remnant.id} in inventory and marked it available`
+    : outcome === "issue"
+      ? `Flagged remnant #${remnant.moraware_remnant_id || remnant.id} for review`
+      : `Marked remnant #${remnant.moraware_remnant_id || remnant.id} as not seen in inventory`;
+
+  await writeAuditLog(writeClient, authed, {
+    event_type: REMNANT_INVENTORY_CHECK_EVENT,
+    entity_type: "remnant_inventory_check",
+    entity_id: remnant.id,
+    remnant_id: remnant.id,
+    company_id: remnant.company_id,
+    message,
+    new_data: {
+      remnant_id: remnant.id,
+      moraware_remnant_id: remnant.moraware_remnant_id,
+      outcome,
+      session_id: sessionId,
+      entered_number: enteredNumber,
+      location,
+    },
+    meta: {
+      source: "manage_confirm",
+      session_id: sessionId,
+      outcome,
+      entered_number: enteredNumber,
+      location,
+    },
+  });
+
+  return {
+    ok: true,
+    outcome,
+    message,
+    remnant: {
+      ...formatRemnant({
+        ...remnant,
+        location,
+      }),
+      current_hold: updatedHold,
+    },
+  };
+}
+
+export async function bulkInventoryHold(client, authed) {
+  const writeClient = getWriteClient(client);
+
+  const { data: availableRemnants, error: fetchError } = await writeClient
+    .from("remnants")
+    .select("id, company_id")
+    .eq("status", "available")
+    .is("deleted_at", null);
+  if (fetchError) throw fetchError;
+
+  if (!availableRemnants?.length) return { ok: true, count: 0 };
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const holdRows = availableRemnants.map((r) => ({
+    remnant_id: r.id,
+    company_id: r.company_id,
+    hold_owner_user_id: authed.profile.id,
+    hold_started_at: now.toISOString(),
+    expires_at: expiresAt,
+    status: "active",
+    customer_name: "Inventory Double Check",
+    notes: "Bulk hold for inventory re-verification",
+    job_number: null,
+  }));
+
+  const { error: holdError } = await writeClient.from("holds").insert(holdRows);
+  if (holdError) throw holdError;
+
+  const ids = availableRemnants.map((r) => r.id);
+  const { error: updateError } = await writeClient
+    .from("remnants")
+    .update({ status: "hold", inventory_hold: true })
+    .in("id", ids)
+    .is("deleted_at", null);
+  if (updateError) throw updateError;
+
+  const count = ids.length;
+  runBestEffort(async () => {
+    await writeAuditLog(writeClient, authed, {
+      event_type: "inventory_double_check_started",
+      entity_type: "remnant_bulk",
+      entity_id: null,
+      remnant_id: null,
+      company_id: null,
+      message: `Started inventory double check — placed ${count} available remnants on hold`,
+      new_data: { count, affected_ids: ids },
+      meta: { source: "manage_confirm", action: "bulk_inventory_hold" },
+    });
+  }, "Audit bulk inventory hold");
+
+  return { ok: true, count };
+}
+
+export async function fetchInventoryHoldCount(client) {
+  const writeClient = getWriteClient(client);
+  const { count, error } = await writeClient
+    .from("remnants")
+    .select("id", { count: "exact", head: true })
+    .eq("inventory_hold", true)
+    .is("deleted_at", null);
+  if (error) throw error;
+  return { count: count ?? 0 };
+}
+
+export async function fetchInventoryCheckSession(client, authed, sessionId) {
+  const normalizedSessionId = sanitizeInventorySessionId(sessionId);
+  const writeClient = getWriteClient(client);
+  const auditRows = await fetchInventoryCheckAuditRows(client, authed, normalizedSessionId);
+
+  const latestByRemnantId = new Map();
+  const notInDbRows = [];
+  for (const row of auditRows) {
+    if ((row?.meta?.outcome || null) === "not_in_db") {
+      notInDbRows.push(row);
+      continue;
+    }
+    const key = Number(row.remnant_id);
+    if (!key || latestByRemnantId.has(key)) continue;
+    latestByRemnantId.set(key, row);
+  }
+
+  const checkedRemnantIds = [...latestByRemnantId.keys()].filter(Boolean);
+  const checkedCount = checkedRemnantIds.length;
+  const seenCount = [...latestByRemnantId.values()].filter((row) => row?.meta?.outcome === "seen").length;
+  const missingCount = [...latestByRemnantId.values()].filter((row) => row?.meta?.outcome === "missing").length;
+  const issueCount = [...latestByRemnantId.values()].filter((row) => row?.meta?.outcome === "issue").length;
+  const notInDbCount = notInDbRows.length;
+
+  const { count: totalCount, error: totalError } = await writeClient
+    .from("remnants")
+    .select("id", { count: "exact", head: true })
+    .is("deleted_at", null);
+  if (totalError) throw totalError;
+
+  let unseenRows = [];
+  let unseenQuery = writeClient
+    .from("remnants")
+    .select("id,moraware_remnant_id,name,status")
+    .is("deleted_at", null)
+    .order("moraware_remnant_id", { ascending: true, nullsFirst: false })
+    .limit(30);
+
+  if (checkedRemnantIds.length) {
+    unseenQuery = unseenQuery.not("id", "in", `(${checkedRemnantIds.join(",")})`);
+  }
+
+  const { data: unseenData, error: unseenError } = await unseenQuery;
+  if (unseenError) throw unseenError;
+  unseenRows = unseenData || [];
+
+  const recent = auditRows.slice(0, 20).map((row) => ({
+    id: row.id,
+    remnant_id: row.remnant_id,
+    outcome: row?.meta?.outcome || null,
+    entered_number: row?.meta?.entered_number || null,
+    created_at: row.created_at,
+    message: row.message,
+  }));
+
+  return {
+    session_id: normalizedSessionId,
+    summary: {
+      total_count: totalCount || 0,
+      checked_count: checkedCount,
+      seen_count: seenCount,
+      missing_count: missingCount,
+      issue_count: issueCount,
+      not_in_db_count: notInDbCount,
+      unchecked_count: Math.max((totalCount || 0) - checkedCount, 0),
+    },
+    unseen_preview: unseenRows.map((row) => ({
+      id: row.id,
+      moraware_remnant_id: row.moraware_remnant_id,
+      name: row.name,
+      status: row.status,
+    })),
+    recent,
+  };
+}

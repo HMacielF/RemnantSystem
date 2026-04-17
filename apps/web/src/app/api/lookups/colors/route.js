@@ -1,22 +1,10 @@
 import { NextResponse } from "next/server";
-import { applyAuthCookies, createColorLookupRow, createRequiredAuthedContext } from "@/server/private-api";
+import { createColorLookupRow } from "@/server/private-api";
+import { withAuth } from "@/server/withApiHandler";
+import { MANAGERS } from "@/server/roles";
 
-export async function POST(request) {
-  const authed = await createRequiredAuthedContext(request, ["super_admin", "manager"]);
-  if (authed?.errorResponse) return authed.errorResponse;
-
-  try {
-    const body = await request.json();
-    const row = await createColorLookupRow(authed.client, body?.name);
-    return applyAuthCookies(NextResponse.json(row, { status: 201 }), authed);
-  } catch (error) {
-    console.error("Failed to create color:", error);
-    return applyAuthCookies(
-      NextResponse.json(
-        { error: error.message || "Failed to create color" },
-        { status: error.statusCode || 500 },
-      ),
-      authed,
-    );
-  }
-}
+export const POST = withAuth(MANAGERS, async (request, authed) => {
+  const body = await request.json();
+  const row = await createColorLookupRow(authed.client, body?.name);
+  return NextResponse.json(row, { status: 201 });
+});
