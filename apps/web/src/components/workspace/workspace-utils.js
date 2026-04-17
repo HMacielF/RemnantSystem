@@ -803,18 +803,39 @@ export async function fileToPayload(file) {
 }
 
 export async function apiFetch(path, options) {
-  const res = await fetch(path, options);
+  let res;
+  try {
+    res = await fetch(path, options);
+  } catch (networkError) {
+    const raw = String(networkError?.message || "").toLowerCase();
+    const looksTransport =
+      raw.includes("load failed") ||
+      raw.includes("network request failed") ||
+      raw.includes("failed to fetch");
+    const hint = looksTransport
+      ? "Check your connection. If you're uploading a photo, try a smaller one."
+      : networkError?.message || "Network error";
+    const error = new Error(`Couldn't reach ${path}. ${hint}`);
+    error.cause = networkError;
+    throw error;
+  }
+
   if (!res.ok) {
     let message = "Request failed";
     try {
       const payload = await res.json();
       message = payload?.details ? `${payload.error}: ${payload.details}` : payload?.error || message;
     } catch (_error) {
-      message = await res.text().catch(() => message);
+      message = (await res.text().catch(() => "")) || `${res.status} ${res.statusText || "Request failed"}`;
     }
     throw new Error(message);
   }
-  return res.json();
+
+  try {
+    return await res.json();
+  } catch (_parseError) {
+    throw new Error("Server sent an empty or invalid response");
+  }
 }
 
 export function canManageStructure(profile) {
