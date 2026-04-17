@@ -2,7 +2,13 @@
 const config = {
   testEnvironment: "node",
   testMatch: ["**/__tests__/**/*.test.js"],
-  transform: {},          // plain JS, no transform needed
+  transform: {
+    "^.+\\.js$": ["babel-jest", {
+      babelrc: false,
+      configFile: false,
+      presets: [["@babel/preset-env", { targets: { node: "current" } }]],
+    }],
+  },
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",   // resolves @/ path alias
   },

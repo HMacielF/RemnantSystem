@@ -1,9 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { createRequire } from "module";
-
-const require = createRequire(import.meta.url);
-const { getAdminTableConfig, listAdminTables } = require("./adminDbConfig.js");
+import { getAdminTableConfig, listAdminTables } from "./adminDbConfig.js";
 
 export const VALID_STATUSES = new Set(["available", "hold", "sold", "pending_approval"]);
 export const REMNANT_SELECT = `

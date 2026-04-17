@@ -23,6 +23,7 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@babel/preset-env": "^7.29.2",
     "@jest/globals": "^29",
     "@tailwindcss/postcss": "^4",
     "eslint": "^9",

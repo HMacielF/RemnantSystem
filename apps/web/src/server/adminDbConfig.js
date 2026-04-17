@@ -465,12 +465,8 @@ function listAdminTables() {
     }));
 }
 
-function getAdminTableConfig(tableName) {
+export function getAdminTableConfig(tableName) {
     return ADMIN_DB_TABLES[tableName] || null;
 }
 
-module.exports = {
-    ADMIN_DB_TABLES,
-    getAdminTableConfig,
-    listAdminTables,
-};
+export { ADMIN_DB_TABLES, listAdminTables };
