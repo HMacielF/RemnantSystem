@@ -842,6 +842,7 @@ export async function apiFetch(path, options) {
   try {
     res = await fetch(path, options);
   } catch (networkError) {
+    if (networkError?.name === "AbortError") throw networkError;
     const raw = String(networkError?.message || "").toLowerCase();
     const looksTransport =
       raw.includes("load failed") ||

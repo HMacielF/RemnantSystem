@@ -71,6 +71,7 @@ export default function PrivateWorkspaceClient() {
   const [loading, setLoading] = useState(true);
   const [authState, setAuthState] = useState("loading");
   const [error, setError] = useState("");
+  const [editorError, setEditorError] = useState("");
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState("success");
   const [selectedImageIndex, setSelectedImageIndex] = useState(null);
@@ -585,6 +586,7 @@ export default function PrivateWorkspaceClient() {
   function closeEditor() {
     setEditorMode("");
     setEditorForm(null);
+    setEditorError("");
   }
 
   async function saveEditor(event) {
@@ -594,6 +596,7 @@ export default function PrivateWorkspaceClient() {
     try {
       clearMessage();
       setError("");
+      setEditorError("");
       const payload = {
         moraware_remnant_id: editorForm.moraware_remnant_id,
         name: editorForm.name,
@@ -630,7 +633,7 @@ export default function PrivateWorkspaceClient() {
       setFilters((current) => ({ ...current }));
       setLoading(true);
     } catch (saveError) {
-      setError(saveError.message);
+      setEditorError(saveError.message);
     }
   }
 
@@ -1448,6 +1451,7 @@ export default function PrivateWorkspaceClient() {
         lookups={lookups}
         activeLookupColors={activeLookupColors}
         canEditLinkedSlab={canEditLinkedSlab}
+        saveError={editorError}
         showSuccessMessage={showSuccessMessage}
         showErrorMessage={showErrorMessage}
       />

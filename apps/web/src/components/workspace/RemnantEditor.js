@@ -39,6 +39,7 @@ export function RemnantEditor({
   lookups,
   activeLookupColors,
   canEditLinkedSlab,
+  saveError,
   showSuccessMessage,
   showErrorMessage,
 }) {
@@ -56,6 +57,7 @@ export function RemnantEditor({
       lookups={lookups}
       activeLookupColors={activeLookupColors}
       canEditLinkedSlab={canEditLinkedSlab}
+      saveError={saveError}
       showSuccessMessage={showSuccessMessage}
       showErrorMessage={showErrorMessage}
     />
@@ -73,6 +75,7 @@ function RemnantEditorInner({
   lookups,
   activeLookupColors,
   canEditLinkedSlab,
+  saveError,
   showSuccessMessage,
   showErrorMessage,
 }) {
@@ -526,14 +529,21 @@ function RemnantEditorInner({
     <>
       <div className="fixed inset-0 z-[72] overflow-y-auto bg-black/50 px-4 py-8">
         <div className="mx-auto max-w-6xl overflow-visible rounded-[32px] border border-[var(--brand-line)] bg-white shadow-[0_24px_70px_rgba(25,27,28,0.14)]">
-          <div className="flex items-center justify-between border-b border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,#f7f7f7_100%)] px-6 py-5">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Inventory</p>
-              <h2 className="font-display text-2xl font-semibold text-[var(--brand-ink)]">{editorMode === "create" ? "Add Remnant" : "Edit Remnant"}</h2>
+          <div className="border-b border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,#f7f7f7_100%)] px-6 py-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Inventory</p>
+                <h2 className="font-display text-2xl font-semibold text-[var(--brand-ink)]">{editorMode === "create" ? "Add Remnant" : "Edit Remnant"}</h2>
+              </div>
+              <button type="button" onClick={onClose} className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
+                {"\u00D7"}
+              </button>
             </div>
-            <button type="button" onClick={onClose} className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]">
-              {"\u00D7"}
-            </button>
+            {saveError ? (
+              <div className="mt-4 rounded-[16px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
+                {saveError}
+              </div>
+            ) : null}
           </div>
           <form onSubmit={onSave} className="grid gap-4 p-6 md:grid-cols-2">
             <div className="md:col-span-2 grid gap-4 rounded-[28px] border border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,var(--brand-white)_100%)] p-4 lg:grid-cols-[minmax(0,1.15fr)_320px]">
