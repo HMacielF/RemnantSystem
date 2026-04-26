@@ -116,10 +116,25 @@ export default function PublicFooter({ slabCount }) {
                   href={INSTAGRAM_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:text-[color:var(--qc-ink-1)]"
+                  aria-label={`Instagram ${INSTAGRAM_HANDLE}`}
+                  className="inline-flex items-center gap-2 hover:text-[color:var(--qc-ink-1)]"
                 >
-                  <span className="text-[color:var(--qc-ink-3)]">Instagram</span>
-                  <span className="mx-2 text-[color:var(--qc-ink-3)]">·</span>
+                  <svg
+                    aria-hidden="true"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-[color:var(--qc-ink-3)]"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="5" />
+                    <circle cx="12" cy="12" r="4" />
+                    <circle cx="17.5" cy="6.5" r="0.9" fill="currentColor" stroke="none" />
+                  </svg>
                   <span className="text-[color:var(--qc-ink-1)]">{INSTAGRAM_HANDLE}</span>
                 </a>
               </li>
@@ -128,10 +143,19 @@ export default function PublicFooter({ slabCount }) {
                   href={TIKTOK_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:text-[color:var(--qc-ink-1)]"
+                  aria-label={`TikTok ${TIKTOK_HANDLE}`}
+                  className="inline-flex items-center gap-2 hover:text-[color:var(--qc-ink-1)]"
                 >
-                  <span className="text-[color:var(--qc-ink-3)]">TikTok</span>
-                  <span className="mx-2 text-[color:var(--qc-ink-3)]">·</span>
+                  <svg
+                    aria-hidden="true"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className="text-[color:var(--qc-ink-3)]"
+                  >
+                    <path d="M14.5 3h2.6c.2 1.3.9 2.4 1.9 3.2.9.7 2 1.1 3.1 1.2v2.6c-1.7 0-3.3-.5-4.7-1.4v6.6a5.7 5.7 0 1 1-5.7-5.7c.3 0 .6 0 .9.1v2.7a3.1 3.1 0 1 0 2.2 3V3z" />
+                  </svg>
                   <span className="text-[color:var(--qc-ink-1)]">{TIKTOK_HANDLE}</span>
                 </a>
               </li>
