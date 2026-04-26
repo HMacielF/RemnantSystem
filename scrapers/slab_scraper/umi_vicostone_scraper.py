@@ -23,6 +23,29 @@ from urllib.parse import urlencode, urljoin
 
 import requests
 from bs4 import BeautifulSoup
+
+try:
+    from .unified_csv import (
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        parse_dimensions_inches,
+        parse_thickness_to_cm,
+    )
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from unified_csv import (  # type: ignore
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        parse_dimensions_inches,
+        parse_thickness_to_cm,
+    )
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.chrome.options import Options
@@ -497,11 +520,38 @@ def record_to_payload(record: UmiVicostoneRecord) -> dict[str, str | None]:
     }
 
 
+def to_unified(record: UmiVicostoneRecord, scraped_at: str) -> UnifiedSlabRecord:
+    width_in, height_in = parse_dimensions_inches(record.size)
+    extra = {}
+    if record.vicostone_code:
+        extra["vicostone_code"] = record.vicostone_code
+    if record.brand_detail_url:
+        extra["brand_detail_url"] = record.brand_detail_url
+    if record.source_branch:
+        extra["source_branch"] = record.source_branch
+    return UnifiedSlabRecord(
+        supplier="umi_vicostone",
+        source_category="quartz",
+        name=record.name,
+        material=canonical_material(record.material),
+        detail_url=record.detail_url,
+        scraped_at=scraped_at,
+        brand="Vicostone",
+        sku=record.sku or record.vicostone_code,
+        image_url=record.image_url,
+        width_in=width_in,
+        height_in=height_in,
+        size_text=record.size,
+        thickness_cm=parse_thickness_to_cm(record.thickness),
+        finishes=canonical_finishes([record.finish] if record.finish else []),
+        extra=extra,
+    )
+
+
 def export_records(records: list[UmiVicostoneRecord], output_dir: Path) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = now_timestamp_slug()
     json_path = output_dir / f"umi_vicostone_beltsville_{stamp}.json"
-    csv_path = output_dir / f"umi_vicostone_beltsville_{stamp}.csv"
 
     payload = [record_to_payload(record) for record in records]
     json_path.write_text(
@@ -509,25 +559,9 @@ def export_records(records: list[UmiVicostoneRecord], output_dir: Path) -> tuple
         encoding="utf-8",
     )
 
-    fieldnames = list(payload[0].keys()) if payload else list(record_to_payload(
-        UmiVicostoneRecord(
-            name="",
-            size=None,
-            thickness=None,
-            material="Quartz",
-            finish=None,
-            sku=None,
-            vicostone_code=None,
-            image_url=None,
-            detail_url="",
-            brand_detail_url=None,
-            source_branch="Beltsville, MD",
-        )
-    ).keys())
-    with csv_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(payload)
+    scraped_at = iso_now()
+    unified = [to_unified(record, scraped_at) for record in records]
+    csv_path = export_unified_csv(unified, output_dir, supplier="umi_vicostone", suffix="beltsville")
 
     return json_path, csv_path
 

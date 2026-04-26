@@ -28,6 +28,37 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+try:
+    from .unified_csv import (
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        join_list,
+        parse_dimensions_inches,
+        parse_thickness_to_cm,
+    )
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from unified_csv import (  # type: ignore
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        join_list,
+        parse_dimensions_inches,
+        parse_thickness_to_cm,
+    )
+
+
+def _split_comma(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [part.strip() for part in str(value).split(",") if part.strip()]
+
 if __package__ is None or __package__ == "":
     import sys
 
@@ -292,12 +323,33 @@ def scrape_detail_pages(
     return records
 
 
+def to_unified(record: GramacoSlabRecord, scraped_at: str, category_slug: str) -> UnifiedSlabRecord:
+    width_in, height_in = parse_dimensions_inches(record.dimensions)
+    return UnifiedSlabRecord(
+        supplier="gramaco",
+        source_category=category_slug,
+        name=record.name,
+        material=canonical_material(record.material),
+        detail_url=record.detail_url,
+        scraped_at=scraped_at,
+        brand=record.brand,
+        collection=record.source_collection or None,
+        image_url=record.image_url,
+        width_in=width_in,
+        height_in=height_in,
+        size_text=record.dimensions,
+        thickness_cm=parse_thickness_to_cm(record.thickness),
+        finishes=canonical_finishes(_split_comma(record.finishes)),
+        primary_colors=join_list(_split_comma(record.primary_colors)),
+        accent_colors=join_list(_split_comma(record.accent_colors)),
+    )
+
+
 def export_records(records: list[GramacoSlabRecord], output_dir: Path, category_slug: str) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = now_timestamp_slug()
     slug_token = category_slug.strip("/").replace("-", "_")
     json_path = output_dir / f"gramaco_{slug_token}_{stamp}.json"
-    csv_path = output_dir / f"gramaco_{slug_token}_{stamp}.csv"
 
     payload = [
         {
@@ -317,25 +369,9 @@ def export_records(records: list[GramacoSlabRecord], output_dir: Path, category_
     ]
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
 
-    with csv_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=[
-                "name",
-                "detail_url",
-                "image_url",
-                "brand",
-                "primary_colors",
-                "accent_colors",
-                "dimensions",
-                "thickness",
-                "finishes",
-                "material",
-                "source_collection",
-            ],
-        )
-        writer.writeheader()
-        writer.writerows(payload)
+    scraped_at = iso_now()
+    unified = [to_unified(record, scraped_at, category_slug) for record in records]
+    csv_path = export_unified_csv(unified, output_dir, supplier="gramaco", suffix=slug_token)
 
     return json_path, csv_path
 

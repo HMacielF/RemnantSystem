@@ -21,6 +21,27 @@ from typing import Any
 
 import requests
 
+try:
+    from .unified_csv import (
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        parse_thickness_to_cm,
+    )
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from unified_csv import (  # type: ignore
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        parse_thickness_to_cm,
+    )
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -556,6 +577,45 @@ def export_csv(records: list[UltraStoneRecord], output_path: Path) -> None:
             writer.writerow(asdict(record))
 
 
+def to_unified(record: UltraStoneRecord, scraped_at: str) -> UnifiedSlabRecord:
+    extra = {
+        "item_id": record.item_id,
+        "category": record.category,
+        "subcategory": record.subcategory,
+        "origin": record.origin,
+        "product_group": record.product_group,
+        "kind": record.kind,
+        "location": record.location,
+        "available_qty": record.available_qty,
+        "available_slabs": record.available_slabs,
+    }
+    extra = {key: value for key, value in extra.items() if value not in (None, "")}
+    return UnifiedSlabRecord(
+        supplier="ultra_stone",
+        source_category=(record.category or record.material or "").lower(),
+        name=record.name,
+        material=canonical_material(record.material),
+        detail_url=record.detail_url,
+        scraped_at=scraped_at,
+        brand=record.brand,
+        sku=record.sku,
+        block_number=record.block_number,
+        image_url=record.image_url,
+        width_in=record.width_in,
+        height_in=record.height_in,
+        thickness_cm=parse_thickness_to_cm(record.thickness),
+        finishes=canonical_finishes([record.finish] if record.finish else []),
+        color_tone=record.color,
+        extra=extra,
+    )
+
+
+def export_unified(records: list[UltraStoneRecord], output_dir: Path, suffix: str) -> Path:
+    scraped_at = iso_now()
+    unified = [to_unified(record, scraped_at) for record in records]
+    return export_unified_csv(unified, output_dir, supplier="ultra_stone", suffix=suffix)
+
+
 def write_latest_alias(source_path: Path, alias_name: str) -> Path:
     alias_path = source_path.parent / alias_name
     alias_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
@@ -652,6 +712,8 @@ def main() -> int:
     export_csv(records, csv_path)
     export_records(normalized_records, normalized_json_path)
     export_csv(normalized_records, normalized_csv_path)
+    unified_csv_path = export_unified(normalized_records, args.output_dir, suffix="inventory_normalized")
+    logging.info("Ultra Stone unified CSV: %s", unified_csv_path)
     latest_raw_json_path = write_latest_alias(json_path, "latest_raw.json")
     latest_raw_csv_path = write_latest_alias(csv_path, "latest_raw.csv")
     latest_normalized_json_path = write_latest_alias(normalized_json_path, "latest_normalized.json")

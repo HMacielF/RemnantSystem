@@ -29,6 +29,37 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+try:
+    from .unified_csv import (
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        join_list,
+        parse_dimensions_inches,
+        parse_thickness_to_cm,
+    )
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from unified_csv import (  # type: ignore
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        join_list,
+        parse_dimensions_inches,
+        parse_thickness_to_cm,
+    )
+
+
+def _split_comma(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [part.strip() for part in str(value).split(",") if part.strip()]
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -334,52 +365,46 @@ def scrape_detail_pages(
     return records
 
 
+def to_unified(record: MarbleSystemsSlabRecord, scraped_at: str) -> UnifiedSlabRecord:
+    width_in, height_in = parse_dimensions_inches(record.batch_dimensions)
+    extra = {}
+    if record.batch_quantity_pcs is not None:
+        extra["batch_quantity_pcs"] = record.batch_quantity_pcs
+    if record.batch_status:
+        extra["batch_status"] = record.batch_status
+    if record.batch_location:
+        extra["batch_location"] = record.batch_location
+    return UnifiedSlabRecord(
+        supplier="marble_systems",
+        source_category=(record.material or "").lower(),
+        name=record.name,
+        material=canonical_material(record.material),
+        detail_url=record.detail_url,
+        scraped_at=scraped_at,
+        brand="Marble Systems",
+        block_number=record.batch_number,
+        image_url=record.image_url,
+        width_in=width_in,
+        height_in=height_in,
+        size_text=record.batch_dimensions,
+        thickness_cm=parse_thickness_to_cm(record.thickness),
+        finishes=canonical_finishes(_split_comma(record.finishes)),
+        primary_colors=join_list(_split_comma(record.primary_colors)),
+        extra=extra,
+    )
+
+
 def export_records(records: list[MarbleSystemsSlabRecord], output_dir: Path) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = now_timestamp_slug()
     json_path = output_dir / f"marble_systems_slabs_{stamp}.json"
-    csv_path = output_dir / f"marble_systems_slabs_{stamp}.csv"
 
     payload = [record_payload(record) for record in records]
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
 
-    with csv_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=[
-                "name",
-                "detail_url",
-                "material",
-                "primary_colors",
-                "thickness",
-                "finishes",
-                "batch_number",
-                "batch_dimensions",
-                "batch_quantity_pcs",
-                "batch_status",
-                "batch_location",
-                "image_url",
-            ],
-        )
-        writer.writeheader()
-        for record in records:
-            payload_row = record_payload(record)
-            writer.writerow(
-                {
-                    "name": payload_row["name"],
-                    "detail_url": payload_row["detail_url"],
-                    "material": payload_row["material"],
-                    "primary_colors": payload_row["primary_colors"],
-                    "thickness": payload_row["thickness"],
-                    "finishes": payload_row["finishes"],
-                    "batch_number": payload_row["batch_number"],
-                    "batch_dimensions": payload_row["batch_dimensions"],
-                    "batch_quantity_pcs": payload_row["batch_quantity_pcs"],
-                    "batch_status": payload_row["batch_status"],
-                    "batch_location": payload_row["batch_location"],
-                    "image_url": payload_row["image_url"],
-                }
-            )
+    scraped_at = iso_now()
+    unified = [to_unified(record, scraped_at) for record in records]
+    csv_path = export_unified_csv(unified, output_dir, supplier="marble_systems", suffix="slabs")
 
     return json_path, csv_path
 

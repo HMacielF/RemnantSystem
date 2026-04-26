@@ -29,6 +29,33 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+try:
+    from .unified_csv import (
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        join_list,
+    )
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from unified_csv import (  # type: ignore
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        join_list,
+    )
+
+
+def _split_comma(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [part.strip() for part in str(value).split(",") if part.strip()]
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -293,15 +320,37 @@ def scrape_detail_pages(
     return records
 
 
+def to_unified(record: MsiSlabRecord, scraped_at: str) -> UnifiedSlabRecord:
+    extra = {}
+    if record.style:
+        extra["style"] = record.style
+    return UnifiedSlabRecord(
+        supplier="msi",
+        source_category="quartz",
+        name=record.name,
+        material=canonical_material(record.material),
+        detail_url=record.detail_url,
+        scraped_at=scraped_at,
+        brand="MSI",
+        image_url=record.image_url,
+        primary_colors=join_list(_split_comma(record.primary_colors)),
+        accent_colors=join_list(_split_comma(record.accent_colors)),
+        finishes=canonical_finishes(_split_comma(record.finishes)),
+        extra=extra,
+    )
+
+
 def export_records(records: list[MsiSlabRecord], output_dir: Path) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = now_timestamp_slug()
     json_path = output_dir / f"msi_quartz_{stamp}.json"
-    csv_path = output_dir / f"msi_quartz_{stamp}.csv"
 
     payload = [record_to_payload(record) for record in records]
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
-    write_records_csv(csv_path, records)
+
+    scraped_at = iso_now()
+    unified = [to_unified(record, scraped_at) for record in records]
+    csv_path = export_unified_csv(unified, output_dir, supplier="msi", suffix="quartz")
 
     return json_path, csv_path
 

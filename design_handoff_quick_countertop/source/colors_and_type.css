@@ -1,0 +1,348 @@
+/* ============================================================
+   Quick Countertop · Remnant System
+   Colors & Type tokens
+   ============================================================ */
+
+/* ------- FONTS ------- */
+
+@font-face {
+  font-family: "Neuething Sans";
+  src: url("./fonts/NeuethingSans-RegularSemiExpanded.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Neuething Sans";
+  src: url("./fonts/NeuethingSans-MediumSemiExpanded.otf") format("opentype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Neuething Sans";
+  src: url("./fonts/NeuethingSans-SemiBoldSemiExpanded.otf") format("opentype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Neuething Sans";
+  src: url("./fonts/NeuethingSans-BoldSemiExpanded.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Stolzl Display";
+  src: url("./fonts/StolzlDisplay-Light.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Stolzl Display";
+  src: url("./fonts/StolzlDisplay-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Stolzl Display";
+  src: url("./fonts/StolzlDisplay-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Stolzl Display";
+  src: url("./fonts/StolzlDisplay-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* ============================================================
+     COLORS — BRAND PRIMITIVES
+     ============================================================ */
+  --brand-orange:        #f78639; /* primary accent — Quick "Q" mark */
+  --brand-orange-deep:   #e56d1f; /* hover / pressed orange */
+  --brand-ink:           #232323; /* primary text + dark surfaces */
+  --brand-white:         #f2f2f2; /* page surface, soft off-white */
+  --brand-shell:         #f7f7f7; /* secondary surface, hover bg */
+  --brand-line:          #dde1e6; /* hairline borders */
+
+  /* Auth / portal accent palette (warm cream) */
+  --auth-bg-top:         #f8f2eb;
+  --auth-bg-bottom:      #efe4d9;
+  --auth-card-bg:        #fff9f4;
+  --auth-card-line:      #f0e0d4;
+  --auth-text:           #2d2623;
+  --auth-text-muted:     #6d584b;
+  --auth-eyebrow:        #9c7355;
+  --auth-input-line:     #d8c7b8;
+  --auth-input-placeholder: #a5968a;
+  --auth-link:           #b85b1b;
+  --auth-link-hover:     #8f4517;
+
+  /* ============================================================
+     SEMANTIC COLOR TOKENS
+     ============================================================ */
+  --bg-page:             linear-gradient(180deg, #ffffff 0%, #f2f2f2 62%, rgba(247, 134, 57, 0.08) 100%);
+  --bg-page-solid:       #f2f2f2;
+  --bg-surface:          #ffffff;
+  --bg-surface-soft:     rgba(255, 255, 255, 0.96);
+  --bg-surface-muted:    var(--brand-shell);
+
+  --fg-default:          #171717;
+  --fg-strong:           var(--brand-ink);
+  --fg-muted:            rgba(35, 35, 35, 0.72);
+  --fg-subtle:           rgba(35, 35, 35, 0.54);
+  --fg-faint:            rgba(35, 35, 35, 0.45);
+  --fg-on-dark:          #ffffff;
+  --fg-on-dark-muted:    rgba(255, 255, 255, 0.72);
+
+  --border-default:      var(--brand-line);
+  --border-strong:       rgba(25, 27, 28, 0.10);
+  --border-on-dark:      rgba(255, 255, 255, 0.15);
+
+  --accent:              var(--brand-orange);
+  --accent-hover:        var(--brand-orange-deep);
+  --accent-soft:         rgba(247, 134, 57, 0.12);
+  --accent-soft-hover:   rgba(247, 134, 57, 0.18);
+  --accent-ring:         rgba(247, 134, 57, 0.14);
+
+  /* Status / state colors */
+  --status-available-bg:    #d1fae5;
+  --status-available-fg:    #065f46;
+  --status-available-ring:  #6ee7b7;
+  --status-hold-bg:         #fef3c7;
+  --status-hold-fg:         #78350f;
+  --status-hold-ring:       #fcd34d;
+  --status-sold-bg:         #ffe4e6;
+  --status-sold-fg:         #9f1239;
+  --status-sold-ring:       #fda4af;
+
+  /* ============================================================
+     GRADIENT TOKENS
+     ============================================================ */
+  --gradient-hero:          linear-gradient(135deg, rgba(18,31,51,0.96) 0%, rgba(42,64,95,0.88) 100%);
+  --gradient-page:          linear-gradient(180deg, #f5efe7 0%, #efe6dc 28%, #e9edf3 100%);
+  --gradient-card:          linear-gradient(180deg, #fff7f0 0%, #fffdfb 100%);
+  --gradient-card-soft:     linear-gradient(180deg, #ffffff 0%, rgba(242,242,242,0.92) 100%);
+  --gradient-manage-header: linear-gradient(135deg, rgba(255,255,255,0.99) 0%, rgba(242,242,242,0.96) 100%);
+  --gradient-admin-bg:      linear-gradient(180deg, #ffffff 0%, var(--brand-white) 52%, rgba(247,134,57,0.08) 100%);
+  --gradient-orange-btn:    linear-gradient(135deg, var(--brand-orange) 0%, var(--brand-orange-deep) 100%);
+  --gradient-image-pad:     linear-gradient(180deg, var(--brand-white) 0%, rgba(255,255,255,0.94) 100%);
+  --gradient-modal-bg:      radial-gradient(circle at top, rgba(255,255,255,0.08), transparent 24%),
+                            linear-gradient(180deg, rgba(12,12,12,0.86), rgba(8,8,8,0.92));
+  --gradient-radial-corner: radial-gradient(circle at top left, rgba(247,134,57,0.22), transparent 36%),
+                            radial-gradient(circle at top right, rgba(25,27,28,0.09), transparent 32%);
+
+  /* ============================================================
+     SHADOW SYSTEM
+     ============================================================ */
+  --shadow-hero:             0 30px 90px rgba(15, 23, 39, 0.18);
+  --shadow-card:             0 14px 30px rgba(25, 27, 28, 0.08);
+  --shadow-card-deep:        0 18px 50px rgba(31, 41, 55, 0.08);
+  --shadow-panel:            0 24px 70px rgba(25, 27, 28, 0.10);
+  --shadow-panel-deep:       0 28px 90px rgba(25, 27, 28, 0.10);
+  --shadow-modal:            0 24px 70px rgba(35, 35, 35, 0.14);
+  --shadow-toast:            0 18px 45px rgba(15, 23, 39, 0.18);
+  --shadow-btn-orange:       0 18px 38px rgba(247, 134, 57, 0.24);
+  --shadow-btn-orange-hover: 0 22px 46px rgba(247, 134, 57, 0.30);
+  --shadow-input:            0 1px 0 rgba(255,255,255,0.75), 0 10px 24px rgba(25, 27, 28, 0.05);
+  --shadow-image-modal:      0 32px 90px rgba(0, 0, 0, 0.38);
+
+  /* ============================================================
+     RADII — Generously rounded; capsules + 2xl pill cards
+     ============================================================ */
+  --radius-xs:   8px;
+  --radius-sm:   12px;
+  --radius-md:   16px;   /* metric tiles */
+  --radius-lg:   22px;   /* inset cards */
+  --radius-xl:   24px;   /* outer cards (mobile) */
+  --radius-2xl:  28px;   /* outer cards / sections */
+  --radius-3xl:  32px;   /* hero cards */
+  --radius-4xl:  34px;   /* image viewer */
+  --radius-pill: 9999px;
+
+  /* ============================================================
+     SPACING — 4px base scale
+     ============================================================ */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-7:  28px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Layout */
+  --content-max:        1680px;
+  --content-max-narrow: 1240px;
+
+  /* ============================================================
+     TYPE — FAMILIES
+     ============================================================ */
+  --font-sans:    "Neuething Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Stolzl Display", "Neuething Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono:    "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* ============================================================
+     TYPE — TRACKING SCALE
+     The brand leans on letter-spaced uppercase eyebrows.
+     ============================================================ */
+  --tracking-tight:   -0.01em;
+  --tracking-normal:  0em;
+  --tracking-eyebrow: 0.18em;
+  --tracking-label:   0.12em;
+  --tracking-button:  0.16em;
+  --tracking-mega:    0.24em;
+
+  /* ============================================================
+     MOTION
+     ============================================================ */
+  --ease-default:  cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-out:      cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+
+  /* ============================================================
+     SEMANTIC TYPE ROLES
+     ============================================================ */
+  --type-display-1-size:   3.35rem;  /* 53.6px — auth hero */
+  --type-display-1-leading: 1.05;
+  --type-display-1-weight:  600;
+
+  --type-h1-size:    2.35rem;        /* ~37.6px — page H1 */
+  --type-h1-leading: 1.1;
+  --type-h1-weight:  600;
+
+  --type-h2-size:    2rem;
+  --type-h2-leading: 1.15;
+  --type-h2-weight:  600;
+
+  --type-h3-size:    1.5rem;
+  --type-h3-leading: 1.2;
+  --type-h3-weight:  600;
+
+  --type-card-title-size:    1.0625rem;  /* 17px */
+  --type-card-title-leading: 1.3;
+  --type-card-title-weight:  600;
+
+  --type-body-size:    1rem;
+  --type-body-leading: 1.6;
+  --type-body-weight:  400;
+
+  --type-small-size:    0.875rem;
+  --type-small-leading: 1.5;
+
+  --type-eyebrow-size:    0.6875rem;   /* 11px */
+  --type-eyebrow-leading: 1.2;
+  --type-eyebrow-weight:  600;
+
+  --type-button-size:    0.875rem;
+  --type-button-weight:  600;
+
+  --type-mono-size:    0.875rem;
+}
+
+/* ============================================================
+   SEMANTIC HELPER CLASSES (optional shortcuts)
+   ============================================================ */
+
+.font-display { font-family: var(--font-display); }
+.font-sans    { font-family: var(--font-sans);    }
+.font-mono    { font-family: var(--font-mono);    }
+
+.t-display {
+  font-family: var(--font-display);
+  font-size: var(--type-display-1-size);
+  line-height: var(--type-display-1-leading);
+  font-weight: var(--type-display-1-weight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg-strong);
+}
+.t-h1 {
+  font-family: var(--font-display);
+  font-size: var(--type-h1-size);
+  line-height: var(--type-h1-leading);
+  font-weight: var(--type-h1-weight);
+  color: var(--fg-strong);
+}
+.t-h2 {
+  font-family: var(--font-display);
+  font-size: var(--type-h2-size);
+  line-height: var(--type-h2-leading);
+  font-weight: var(--type-h2-weight);
+  color: var(--fg-strong);
+}
+.t-h3 {
+  font-family: var(--font-display);
+  font-size: var(--type-h3-size);
+  line-height: var(--type-h3-leading);
+  font-weight: var(--type-h3-weight);
+  color: var(--fg-strong);
+}
+.t-card-title {
+  font-family: var(--font-display);
+  font-size: var(--type-card-title-size);
+  line-height: var(--type-card-title-leading);
+  font-weight: var(--type-card-title-weight);
+  color: var(--fg-strong);
+}
+.t-body {
+  font-family: var(--font-sans);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-leading);
+  color: var(--fg-default);
+}
+.t-small {
+  font-family: var(--font-sans);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-leading);
+  color: var(--fg-muted);
+}
+.t-eyebrow {
+  font-family: var(--font-sans);
+  font-size: var(--type-eyebrow-size);
+  line-height: var(--type-eyebrow-leading);
+  font-weight: var(--type-eyebrow-weight);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-eyebrow);
+  color: var(--accent);
+}
+.t-eyebrow-warm {
+  font-family: var(--font-sans);
+  font-size: var(--type-eyebrow-size);
+  line-height: var(--type-eyebrow-leading);
+  font-weight: var(--type-eyebrow-weight);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-eyebrow);
+  color: var(--auth-eyebrow);
+}
+.t-label {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--fg-subtle);
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--fg-default);
+  background: var(--bg-page);
+  background-color: var(--bg-page-solid);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

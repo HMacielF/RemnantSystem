@@ -19,10 +19,10 @@ function uniqueSorted(values) {
 }
 
 const THICKNESS_ORDER = new Map([
-  ["6 MM", 1],
-  ["10 MM", 2],
-  ["12 MM", 3],
-  ["15 MM", 4],
+  ["5 MM", 1],
+  ["6 MM", 2],
+  ["1 CM", 3],
+  ["12 MM", 4],
   ["2 CM", 5],
   ["3 CM", 6],
 ]);

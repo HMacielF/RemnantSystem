@@ -21,6 +21,27 @@ from typing import Any
 
 import requests
 
+try:
+    from .unified_csv import (
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        parse_thickness_to_cm,
+    )
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from unified_csv import (  # type: ignore
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        parse_thickness_to_cm,
+    )
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -372,20 +393,53 @@ def scrape_records(
     return records
 
 
+def to_unified(record: GraniteCentralRecord, scraped_at: str) -> UnifiedSlabRecord:
+    extra = {
+        "item_id": record.item_id,
+        "category": record.category,
+        "subcategory": record.subcategory,
+        "product_form": record.product_form,
+        "origin": record.origin,
+        "location": record.location,
+        "location_id": record.location_id,
+        "available_qty": record.available_qty,
+        "available_slabs": record.available_slabs,
+        "uom": record.uom,
+        "file_id": record.file_id,
+        "filename": record.filename,
+    }
+    extra = {key: value for key, value in extra.items() if value not in (None, "")}
+    image_url = record.image_url or record.primary_image_url or record.cover_image_url
+    return UnifiedSlabRecord(
+        supplier="granite_central",
+        source_category=(record.category or record.material or "").lower(),
+        name=record.name,
+        material=canonical_material(record.material),
+        detail_url=record.detail_url,
+        scraped_at=scraped_at,
+        brand=record.brand,
+        sku=record.sku,
+        block_number=record.block_number,
+        image_url=image_url,
+        width_in=record.width_in,
+        height_in=record.height_in,
+        thickness_cm=parse_thickness_to_cm(record.thickness),
+        finishes=canonical_finishes([record.finish] if record.finish else []),
+        extra=extra,
+    )
+
+
 def export_records(records: list[GraniteCentralRecord], output_dir: Path) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = now_timestamp_slug()
     json_path = output_dir / f"granite_central_inventory_{stamp}.json"
-    csv_path = output_dir / f"granite_central_inventory_{stamp}.csv"
 
     payload = [asdict(record) for record in records]
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
-    fieldnames = list(GraniteCentralRecord.__dataclass_fields__.keys())
-    with csv_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(payload)
+    scraped_at = iso_now()
+    unified = [to_unified(record, scraped_at) for record in records]
+    csv_path = export_unified_csv(unified, output_dir, supplier="granite_central", suffix="inventory")
 
     return json_path, csv_path
 
@@ -394,16 +448,13 @@ def export_normalized_records(records: list[GraniteCentralRecord], output_dir: P
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = now_timestamp_slug()
     json_path = output_dir / f"granite_central_inventory_normalized_{stamp}.json"
-    csv_path = output_dir / f"granite_central_inventory_normalized_{stamp}.csv"
 
     payload = [asdict(record) for record in records]
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
-    fieldnames = list(GraniteCentralRecord.__dataclass_fields__.keys())
-    with csv_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(payload)
+    scraped_at = iso_now()
+    unified = [to_unified(record, scraped_at) for record in records]
+    csv_path = export_unified_csv(unified, output_dir, supplier="granite_central", suffix="inventory_normalized")
 
     return json_path, csv_path
 

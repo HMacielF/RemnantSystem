@@ -29,6 +29,31 @@ import requests
 from bs4 import BeautifulSoup
 from requests import RequestException
 
+try:
+    from .unified_csv import (
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+    )
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from unified_csv import (  # type: ignore
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+    )
+
+
+def _split_delim(value: str | None, delim: str = ",") -> list[str]:
+    if not value:
+        return []
+    return [part.strip() for part in str(value).split(delim) if part.strip()]
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -332,39 +357,57 @@ def collect_detail_record(
     )
 
 
+def to_unified(record: LaminamRecord, scraped_at: str) -> UnifiedSlabRecord:
+    extra: dict = {"book_match": bool(record.book_match)}
+    if record.sizes:
+        extra["sizes"] = record.sizes
+    if record.size_thickness_options:
+        extra["size_thickness_options"] = record.size_thickness_options
+    if record.finish_count_listing is not None:
+        extra["finish_count_listing"] = record.finish_count_listing
+    if record.size_count_listing is not None:
+        extra["size_count_listing"] = record.size_count_listing
+    if record.listing_summary:
+        extra["listing_summary"] = record.listing_summary
+
+    # Laminam stores thicknesses as a multi-value string like "12 mm / 20 mm".
+    thickness_cm_parts: list[str] = []
+    for part in re.findall(r"(\d+(?:\.\d+)?)\s*(mm|cm)", record.thicknesses or "", flags=re.IGNORECASE):
+        value = float(part[0])
+        unit = part[1].lower()
+        cm = value / 10 if unit == "mm" else value
+        formatted = f"{cm:g}"
+        if formatted not in thickness_cm_parts:
+            thickness_cm_parts.append(formatted)
+
+    return UnifiedSlabRecord(
+        supplier="emerstone",
+        source_category="porcelain",
+        name=record.name,
+        material=canonical_material(record.material),
+        detail_url=record.detail_url,
+        scraped_at=scraped_at,
+        brand=record.brand or "Laminam",
+        collection=record.collection,
+        image_url=record.image_url,
+        gallery_image_urls=record.gallery_image_urls or None,
+        thickness_cm=";".join(thickness_cm_parts) if thickness_cm_parts else None,
+        finishes=canonical_finishes(_split_delim(record.finishes, ",")),
+        extra=extra,
+    )
+
+
 def export_records(records: list[LaminamRecord], output_dir: Path) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = now_timestamp_slug()
     json_path = output_dir / f"laminam_inventory_{stamp}.json"
-    csv_path = output_dir / f"laminam_inventory_{stamp}.csv"
 
     payload = [asdict(record) for record in records]
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
 
-    with csv_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=list(payload[0].keys()) if payload else [
-                "name",
-                "supplier",
-                "brand",
-                "material",
-                "detail_url",
-                "image_url",
-                "gallery_image_urls",
-                "collection",
-                "finishes",
-                "sizes",
-                "thicknesses",
-                "size_thickness_options",
-                "finish_count_listing",
-                "size_count_listing",
-                "listing_summary",
-                "book_match",
-            ],
-        )
-        writer.writeheader()
-        writer.writerows(payload)
+    scraped_at = iso_now()
+    unified = [to_unified(record, scraped_at) for record in records]
+    csv_path = export_unified_csv(unified, output_dir, supplier="laminam", suffix="inventory")
 
     return json_path, csv_path
 

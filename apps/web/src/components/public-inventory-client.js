@@ -4,6 +4,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useBodyScrollLock from "@/components/use-body-scroll-lock";
+import PublicHeader from "@/components/public/PublicHeader";
+import PublicHero from "@/components/public/PublicHero";
+import PublicFooter from "@/components/public/PublicFooter";
+import StatusPill from "@/components/public/StatusPill";
 
 function useDebouncedValue(value, delayMs = 250) {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -190,17 +194,18 @@ function SelectField({ wrapperClassName = "relative mt-2", className = "", child
     <div className={wrapperClassName}>
       <select
         {...props}
-        className={`h-12 w-full appearance-none rounded-2xl border border-[var(--brand-line)] bg-white px-4 pr-10 text-sm font-medium text-[var(--brand-ink)] shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] ${className}`}
+        className={`font-inter h-11 w-full appearance-none border bg-white px-3 pr-9 text-[14px] font-normal text-[color:var(--qc-ink-1)] outline-none transition-colors focus:border-[color:var(--qc-ink-1)] ${className}`}
+        style={{ borderColor: "var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
       >
         {children}
       </select>
       <svg
         aria-hidden="true"
         viewBox="0 0 20 20"
-        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--brand-orange)]"
+        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--qc-ink-3)]"
         fill="none"
         stroke="currentColor"
-        strokeWidth="1.8"
+        strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       >
@@ -274,19 +279,17 @@ function buildSearchQuery(filters) {
 
 function PublicInventorySkeletonCard() {
   return (
-    <div className="overflow-hidden rounded-[24px] border border-white/80 bg-white/92 shadow-[0_14px_30px_rgba(58,37,22,0.07)] sm:rounded-[26px]">
-      <div className="relative aspect-[4/3] overflow-hidden bg-[linear-gradient(180deg,var(--brand-white)_0%,rgba(255,255,255,0.92)_100%)]">
-        <div className="absolute inset-0 animate-pulse bg-[linear-gradient(90deg,rgba(242,242,242,0.96),rgba(255,255,255,0.88),rgba(242,242,242,0.96))]" />
-        <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
-          <div className="h-6 w-20 animate-pulse rounded-full bg-white/75" />
-          <div className="h-6 w-24 animate-pulse rounded-full bg-white/70" />
-        </div>
+    <div
+      className="overflow-hidden bg-white"
+      style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
+    >
+      <div className="relative aspect-square overflow-hidden bg-[#f3f1ee]">
+        <div className="absolute inset-0 animate-pulse bg-[linear-gradient(90deg,rgba(0,0,0,0.04),rgba(0,0,0,0.08),rgba(0,0,0,0.04))]" />
       </div>
-      <div className="space-y-2.5 p-3.5 sm:p-4">
-        <div className="rounded-[22px] bg-[var(--brand-white)] px-3 py-3">
-          <div className="h-4 w-3/5 animate-pulse rounded-full bg-[rgba(35,35,35,0.10)]" />
-          <div className="mt-3 h-4 w-2/3 animate-pulse rounded-full bg-[rgba(35,35,35,0.08)]" />
-        </div>
+      <div className="space-y-3 p-4">
+        <div className="h-3 w-2/5 animate-pulse rounded-sm bg-[rgba(0,0,0,0.06)]" />
+        <div className="h-4 w-3/4 animate-pulse rounded-sm bg-[rgba(0,0,0,0.08)]" />
+        <div className="mt-4 h-3 w-1/2 animate-pulse rounded-sm bg-[rgba(0,0,0,0.06)]" />
       </div>
     </div>
   );
@@ -659,101 +662,76 @@ export default function PublicInventoryClient() {
   }, [modalImageItems.length, selectedImageIndex]);
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,var(--brand-white)_52%,rgba(247,134,57,0.08)_100%)] text-[var(--brand-ink)]">
-      <div className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-[440px] bg-[radial-gradient(circle_at_top_left,rgba(247,134,57,0.22),transparent_36%),radial-gradient(circle_at_top_right,rgba(25,27,28,0.09),transparent_32%)]" />
-        <div className="pointer-events-none absolute left-[-120px] top-[120px] h-[260px] w-[260px] rounded-full bg-[rgba(247,134,57,0.18)] blur-3xl" />
-        <div className="pointer-events-none absolute right-[-60px] top-[40px] h-[220px] w-[220px] rounded-full bg-[rgba(25,27,28,0.08)] blur-3xl" />
+    <main className="font-inter min-h-screen bg-[color:var(--qc-bg-page)] text-[color:var(--qc-ink-1)]">
+      <PublicHeader />
+      <PublicHero slabCount={cards.length} />
 
-        <div className="relative mx-auto w-full max-w-[1680px] px-3 py-3 sm:px-4 md:px-6 md:py-5 2xl:px-8">
-          <section className="mb-4 overflow-hidden rounded-[28px] border border-[var(--brand-line)] bg-[linear-gradient(135deg,rgba(255,255,255,0.99),rgba(242,242,242,0.96))] px-4 py-5 shadow-[0_24px_70px_rgba(25,27,28,0.10)] backdrop-blur sm:rounded-[32px] sm:px-6 lg:px-8">
-            <div className="flex justify-center">
-              <div className="mx-auto flex max-w-4xl flex-col items-center text-center">
-                <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-orange)] md:text-[15px]">
-                  Remnant Inventory System
-                </p>
-                <h1 className="font-display mt-2 text-[1.9rem] font-semibold leading-tight text-[var(--brand-ink)] md:text-[2.15rem] lg:text-[2.35rem] xl:whitespace-nowrap">
-                  Find your remnant before someone else does.
-                </h1>
-              </div>
-            </div>
-          </section>
+      <div className="relative">
+        <div className="relative mx-auto w-full max-w-[1680px] px-8 pb-16">
 
           <section
             id="filter_menu"
-            className="mb-4 rounded-[28px] border border-[var(--brand-line)] bg-[linear-gradient(135deg,rgba(255,255,255,0.99),rgba(242,242,242,0.96))] p-4 shadow-[0_24px_70px_rgba(25,27,28,0.08)] backdrop-blur sm:rounded-[30px] sm:p-5"
+            className="mb-8 bg-white p-5"
+            style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
           >
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:grid-cols-[fit-content(30rem)_minmax(260px,1fr)_110px_110px_140px] xl:items-end">
-              <div className="min-w-0 sm:col-span-2 lg:col-span-1 xl:max-w-[30rem]">
-                <p className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
-                  Material Types
-                </p>
-                <div className="overflow-hidden rounded-2xl border border-[var(--brand-line)] bg-white px-1.5 py-1 shadow-[0_1px_0_rgba(255,255,255,0.8),0_10px_24px_rgba(25,27,28,0.05)]">
-                  <div
-                    ref={materialRailRef}
-                    onScroll={(event) => {
-                      materialRailScrollRef.current = event.currentTarget.scrollLeft;
-                    }}
-                    className="flex min-h-10 w-full max-w-full snap-x snap-mandatory items-center gap-2 overflow-x-auto whitespace-nowrap px-0.5 text-sm text-[var(--brand-ink)] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(260px,1fr)_110px_110px_160px] lg:items-end">
+              <label className="block text-[10.5px] uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
+                Search
+                <div className="relative mt-2">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--qc-ink-3)]"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                   >
-                    {materialOptions.map((material) => {
-                      const checked = filters.materials.includes(material);
-                      return (
-                        <button
-                          key={material}
-                          type="button"
-                          aria-pressed={checked}
-                          onClick={() => toggleMaterialFilter(material)}
-                          className={`inline-flex shrink-0 snap-start items-center rounded-xl border px-3 py-2 text-[13px] font-medium transition-all ${
-                            checked
-                              ? "border-[var(--brand-orange)] bg-[rgba(247,134,57,0.12)] text-[var(--brand-orange-deep)] shadow-sm"
-                              : "border-[var(--brand-line)] bg-white text-[rgba(25,27,28,0.72)] hover:border-[rgba(247,134,57,0.32)] hover:bg-[var(--brand-shell)]"
-                          }`}
-                        >
-                          {material}
-                        </button>
-                      );
-                    })}
-                  </div>
+                    <circle cx="11" cy="11" r="7" />
+                    <path d="m20 20-3.5-3.5" />
+                  </svg>
+                  <input
+                    type="text"
+                    value={filters.stone}
+                    onChange={(event) => setFilters((current) => ({ ...current, stone: event.target.value }))}
+                    placeholder="Search stone, brand, finish, or ID #741"
+                    className="font-inter h-11 w-full bg-white pl-10 pr-3 text-[14px] font-normal normal-case tracking-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors focus:border-[color:var(--qc-ink-1)]"
+                    style={{
+                      border: "1px solid var(--qc-line)",
+                      borderRadius: "var(--qc-radius-sharp)",
+                    }}
+                  />
                 </div>
-              </div>
-
-              <label className="block min-w-0 sm:col-span-2 lg:col-span-1 xl:col-span-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
-                Stone / Brand / Color / Finish / ID #
-                <input
-                  type="text"
-                  value={filters.stone}
-                  onChange={(event) => setFilters((current) => ({ ...current, stone: event.target.value }))}
-                  placeholder="Search by stone, brand, color, finish or #741"
-                  className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
-                />
               </label>
 
-              <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
-                Min Width
+              <label className="block text-[10.5px] uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
+                Min W&quot;
                 <input
                   type="text"
                   inputMode="decimal"
                   value={filters.minWidth}
                   onChange={(event) => setFilters((current) => ({ ...current, minWidth: event.target.value }))}
-                  placeholder="W"
-                  className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-3 text-sm font-medium text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                  placeholder="0"
+                  className="font-inter mt-2 h-11 w-full bg-white px-3 text-[14px] font-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors focus:border-[color:var(--qc-ink-1)]"
+                  style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
                 />
               </label>
 
-              <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
-                Min Height
+              <label className="block text-[10.5px] uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
+                Min H&quot;
                 <input
                   type="text"
                   inputMode="decimal"
                   value={filters.minHeight}
                   onChange={(event) => setFilters((current) => ({ ...current, minHeight: event.target.value }))}
-                  placeholder="H"
-                  className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-3 text-sm font-medium text-[var(--brand-ink)] placeholder:text-[rgba(25,27,28,0.45)] shadow-[0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(25,27,28,0.05)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                  placeholder="0"
+                  className="font-inter mt-2 h-11 w-full bg-white px-3 text-[14px] font-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors focus:border-[color:var(--qc-ink-1)]"
+                  style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
                 />
               </label>
 
-              <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
+              <label className="block text-[10.5px] uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
                 Status
                 <SelectField
                   value={filters.status}
@@ -768,187 +746,269 @@ export default function PublicInventoryClient() {
                 </SelectField>
               </label>
             </div>
+
+            {materialOptions.length ? (
+              <div
+                className="mt-5 flex flex-wrap items-center gap-3 pt-5"
+                style={{ borderTop: "1px solid var(--qc-line)" }}
+              >
+                <span className="text-[10.5px] uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
+                  Material
+                </span>
+                <button
+                  type="button"
+                  aria-pressed={filters.materials.length === 0}
+                  onClick={() =>
+                    setFilters((current) => ({ ...current, materials: [] }))
+                  }
+                  className="font-inter inline-flex items-center px-3 py-1.5 text-[12px] font-medium transition-colors"
+                  style={{
+                    border: "1px solid var(--qc-line)",
+                    borderRadius: "var(--qc-radius-sharp)",
+                    backgroundColor: filters.materials.length === 0 ? "var(--qc-ink-1)" : "transparent",
+                    color: filters.materials.length === 0 ? "#fff" : "var(--qc-ink-1)",
+                    borderColor: filters.materials.length === 0 ? "var(--qc-ink-1)" : "var(--qc-line)",
+                  }}
+                >
+                  All
+                </button>
+                <div
+                  ref={materialRailRef}
+                  onScroll={(event) => {
+                    materialRailScrollRef.current = event.currentTarget.scrollLeft;
+                  }}
+                  className="flex flex-wrap items-center gap-2 text-[12px] text-[color:var(--qc-ink-1)]"
+                >
+                  {materialOptions.map((material) => {
+                    const checked = filters.materials.includes(material);
+                    return (
+                      <button
+                        key={material}
+                        type="button"
+                        aria-pressed={checked}
+                        onClick={() => toggleMaterialFilter(material)}
+                        className="font-inter inline-flex shrink-0 items-center px-3 py-1.5 text-[12px] font-medium transition-colors"
+                        style={{
+                          border: "1px solid",
+                          borderRadius: "var(--qc-radius-sharp)",
+                          backgroundColor: checked ? "var(--qc-ink-1)" : "transparent",
+                          color: checked ? "#fff" : "var(--qc-ink-1)",
+                          borderColor: checked ? "var(--qc-ink-1)" : "var(--qc-line)",
+                        }}
+                      >
+                        {material}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span className="ml-auto text-[12px] text-[color:var(--qc-ink-3)]">
+                  {cards.length} {cards.length === 1 ? "result" : "results"}
+                </span>
+              </div>
+            ) : null}
           </section>
 
           {loading ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-              {Array.from({ length: 6 }).map((_, index) => (
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, index) => (
                 <PublicInventorySkeletonCard key={index} />
               ))}
             </div>
           ) : error ? (
-            <div className="rounded-[28px] border border-rose-200 bg-white/80 px-6 py-10 text-center text-rose-700 shadow-sm">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-rose-500">Load Failed</p>
-              <h3 className="font-display mt-2 text-xl font-semibold text-rose-800">We couldn&apos;t load the remnants right now.</h3>
-              <p className="mt-2 text-sm">{error}</p>
+            <div
+              className="bg-white px-6 py-12 text-center"
+              style={{
+                border: "1px solid var(--qc-line)",
+                borderRadius: "var(--qc-radius-sharp)",
+                borderLeft: "2px solid var(--qc-status-sold-dot)",
+              }}
+            >
+              <p className="font-italic-accent text-[18px] text-[color:var(--qc-status-sold-fg)]">
+                Couldn&apos;t load the inventory.
+              </p>
+              <p className="mt-2 text-[13px] text-[color:var(--qc-ink-2)]">{error}</p>
             </div>
           ) : cards.length === 0 ? (
-            <div className="rounded-[28px] border border-dashed border-[var(--brand-line)] bg-white/88 px-6 py-12 text-center text-[rgba(35,35,35,0.68)] shadow-sm">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--brand-orange)]">No Matches</p>
-              <h3 className="font-display mt-2 text-2xl font-semibold text-[var(--brand-ink)]">No remnants match these filters.</h3>
-              <p className="mt-2 text-sm">Try changing the stone, brand, color, finish, ID, material, or size filters to widen the search.</p>
+            <div className="px-6 py-20 text-center">
+              <p className="font-italic-accent text-[28px] text-[color:var(--qc-ink-2)]">No matches.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setFilters(emptyFilters());
+                  router.replace(pathname, { scroll: false });
+                }}
+                className="font-inter mt-5 text-[13px] text-[color:var(--qc-ink-1)]"
+                style={{
+                  textDecoration: "underline",
+                  textDecorationColor: "var(--qc-line-strong)",
+                  textUnderlineOffset: 4,
+                }}
+              >
+                Clear filters
+              </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {cards.map((remnant, index) => {
                 const image = imageSrc(remnant);
                 const status = statusText(remnant);
-                const metricLayout = publicCardMetricLayout(remnant);
+                const isAvailable = String(remnant.status || "").toLowerCase() === "available";
+                const eyebrow = publicCardSubheading(remnant);
+                const heading = publicCardHeading(remnant);
+                const colors = remnantColors(remnant);
+                const thick = thicknessText(remnant);
+                const finish = finishText(remnant);
                 return (
                   <article
                     key={`${displayRemnantId(remnant)}-${index}`}
-                    className="group relative overflow-hidden rounded-[24px] border border-[var(--brand-line)] bg-[rgba(255,255,255,0.96)] shadow-[0_14px_30px_rgba(25,27,28,0.08)] transition-transform [contain-intrinsic-size:420px] [content-visibility:auto] hover:-translate-y-1 sm:rounded-[26px]"
+                    className="group relative flex flex-col overflow-hidden bg-[color:var(--qc-bg-surface)] transition-colors"
+                    style={{
+                      border: "1px solid var(--qc-line)",
+                      borderRadius: "var(--qc-radius-sharp)",
+                    }}
+                    onMouseEnter={(event) => {
+                      event.currentTarget.style.borderColor = "var(--qc-line-strong)";
+                    }}
+                    onMouseLeave={(event) => {
+                      event.currentTarget.style.borderColor = "var(--qc-line)";
+                    }}
                   >
-                    <div className="relative">
-                      <div className="overflow-hidden">
-                        <div className="relative aspect-[4/3] overflow-hidden bg-[linear-gradient(180deg,var(--brand-white)_0%,rgba(255,255,255,0.94)_100%)]">
-                          {image ? (
-                            <button
-                              type="button"
-                              className="absolute inset-0 z-[1] block w-full overflow-hidden text-left"
-                              onClick={() => openImageViewer(remnant)}
-                              aria-label={`Open image for remnant ${displayRemnantId(remnant)}`}
-                            />
-                          ) : null}
-                          <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-24 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.45),transparent_72%)]" />
-                          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-16 bg-[linear-gradient(180deg,rgba(35,35,35,0),rgba(35,35,35,0.18))]" />
-                          <div className="pointer-events-none absolute inset-x-0 top-0 z-[2] flex items-start justify-between gap-2 p-3">
-                            <span className="inline-flex items-center rounded-full border border-white/70 bg-white/88 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-orange-deep)] shadow-sm backdrop-blur">
-                              ID #{displayRemnantId(remnant)}
-                          </span>
-                          <span
-                            className={`inline-flex max-w-[72%] items-center justify-end rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] shadow-sm backdrop-blur ${statusBadgeClass(status)}`}
-                          >
-                            {status}
-                          </span>
+                    <div className="relative aspect-square overflow-hidden bg-[#f3f1ee]">
+                      {image ? (
+                        <button
+                          type="button"
+                          className="absolute inset-0 z-[1] block h-full w-full overflow-hidden text-left"
+                          onClick={() => openImageViewer(remnant)}
+                          aria-label={`Open image for remnant ${displayRemnantId(remnant)}`}
+                        >
+                          <img
+                            src={image}
+                            alt={`Remnant ${displayRemnantId(remnant)}`}
+                            className="h-full w-full object-cover"
+                            decoding="async"
+                            loading={index < 8 ? "eager" : "lazy"}
+                          />
+                        </button>
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-[11px] uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+                          No image
                         </div>
-                          {image ? (
-                          <div className="pointer-events-none flex h-full w-full items-center justify-center overflow-hidden p-1.5 sm:p-2">
-                            <img
-                              src={image}
-                              alt={`Remnant ${displayRemnantId(remnant)}`}
-                              className="h-full w-full scale-[1.05] object-contain object-center transition-transform duration-300 motion-safe:md:group-hover:scale-[1.08]"
-                              decoding="async"
-                              loading={index < 8 ? "eager" : "lazy"}
-                            />
-                          </div>
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-[var(--brand-white)] text-sm font-semibold uppercase tracking-[0.16em] text-[var(--brand-orange)]">
-                            No Image
-                          </div>
-                        )}
-                        {image ? (
-                          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] flex justify-center pb-2 sm:hidden">
-                            <span className="rounded-full border border-white/60 bg-white/78 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[rgba(35,35,35,0.68)] shadow-sm backdrop-blur">
-                              Tap image to enlarge
+                      )}
+
+                      <div className="pointer-events-none absolute left-3 top-3 z-[2]">
+                        <StatusPill status={status} label={`#${displayRemnantId(remnant)}`} />
+                      </div>
+
+                      {isAvailable ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openHoldRequest(remnant).catch((requestError) =>
+                              setNotice({
+                                type: "error",
+                                message: requestError.message,
+                              })
+                            );
+                          }}
+                          className="font-inter absolute bottom-3 right-3 z-[3] inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-white"
+                          style={{
+                            backgroundColor: "var(--qc-ink-1)",
+                            borderRadius: "var(--qc-radius-sharp)",
+                          }}
+                          aria-label="Request a hold"
+                          title="Request a hold"
+                        >
+                          Request hold
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 24 24"
+                            className="h-3.5 w-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M5 12h14" />
+                            <path d="m13 5 7 7-7 7" />
+                          </svg>
+                        </button>
+                      ) : null}
+                    </div>
+
+                    <div className="flex flex-1 flex-col gap-3 p-4">
+                      <div>
+                        {eyebrow ? (
+                          <p
+                            className="font-inter text-[10px] font-semibold uppercase leading-none tracking-[0.18em]"
+                            style={{ color: "var(--qc-orange)" }}
+                          >
+                            {eyebrow}
+                          </p>
+                        ) : null}
+                        <h3 className="font-inter mt-2 text-[17px] font-medium leading-snug tracking-[-0.01em] text-[color:var(--qc-ink-1)]">
+                          {heading}
+                        </h3>
+                        {colors.length ? (
+                          <div className="mt-3 flex items-center gap-2">
+                            <div className="flex items-center gap-1.5">
+                              {colors.slice(0, 3).map((color) => (
+                                <span
+                                  key={`${displayRemnantId(remnant)}-${color}`}
+                                  aria-hidden="true"
+                                  className="h-3.5 w-3.5 rounded-full"
+                                  style={{
+                                    ...colorSwatchStyle(color),
+                                    boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.10)",
+                                  }}
+                                  title={color}
+                                />
+                              ))}
+                            </div>
+                            <span className="text-[11px] text-[color:var(--qc-ink-3)]">
+                              {colors.slice(0, 3).join(" · ")}
                             </span>
                           </div>
                         ) : null}
-                        {String(remnant.status || "").toLowerCase() === "available" ? (
-                          <div className="absolute bottom-0 left-0 z-[3] p-3">
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openHoldRequest(remnant).catch((requestError) =>
-                                  setNotice({
-                                    type: "error",
-                                    message: requestError.message,
-                                  })
-                                );
-                              }}
-                              className="group/hold inline-flex h-10 items-center justify-center gap-0 overflow-hidden rounded-2xl border border-[var(--brand-orange)] bg-[rgba(247,134,57,0.94)] pl-2.5 pr-2.5 text-[11px] font-medium text-white shadow-[0_12px_30px_rgba(25,27,28,0.18)] backdrop-blur transition-all hover:-translate-y-0.5 hover:gap-2 hover:bg-[var(--brand-orange-deep)] hover:border-[var(--brand-orange-deep)] active:scale-[0.99]"
-                              aria-label="Request a hold"
-                              title="Request a hold"
-                            >
-                              <svg
-                                aria-hidden="true"
-                                viewBox="0 0 24 24"
-                                className="h-4 w-4"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.9"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <path d="M10.9 4.75H6.75A2 2 0 0 0 4.75 6.75v4.15l7.34 7.35a1.8 1.8 0 0 0 2.55 0l3.62-3.62a1.8 1.8 0 0 0 0-2.55L10.9 4.75Z" />
-                                <circle cx="7.75" cy="7.75" r="1.05" />
-                                <path d="m9.9 13.95 4.2-4.2" />
-                                <circle cx="10.85" cy="10.95" r=".72" />
-                                <circle cx="13.2" cy="13.3" r=".72" />
-                              </svg>
-                              <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 ease-out group-hover/hold:max-w-[10rem] group-hover/hold:opacity-100">
-                                Request a hold
-                              </span>
-                            </button>
-                          </div>
-                        ) : null}
-                        </div>
                       </div>
-                    </div>
 
-                    <div className="p-3 text-sm text-[#232323] sm:p-3.5">
-                      <div className="rounded-[22px] border border-[var(--brand-line)] bg-[linear-gradient(180deg,#ffffff_0%,rgba(242,242,242,0.92)_100%)] px-3.5 py-3 text-[var(--brand-ink)] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+                      <div
+                        className="mt-auto flex items-end justify-between gap-3 pt-3"
+                        style={{ borderTop: "1px solid var(--qc-line)" }}
+                      >
                         <div className="min-w-0">
-                          <div className="min-w-0">
-                            <h3 className="font-display text-[16px] font-semibold leading-snug text-[var(--brand-ink)] sm:text-[17px]">
-                              {publicCardHeading(remnant)}
-                            </h3>
-                            {publicCardSubheading(remnant) ? (
-                              <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgba(35,35,35,0.54)]">
-                                {publicCardSubheading(remnant)}
-                              </p>
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className={`mt-3 grid items-stretch gap-2 ${metricLayout.grid}`}>
-                          <div className={`flex min-w-0 flex-col rounded-[16px] border border-[var(--brand-line)] bg-white/88 px-3 py-2 ${metricLayout.sizeTile}`}>
-                            <p className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)] sm:text-[11px]">
-                              Size
-                            </p>
-                            <p className="mt-1 text-[12px] font-semibold leading-tight text-[var(--brand-ink)] sm:text-[13px]">
-                              <CardSizeValue remnant={remnant} />
-                            </p>
-                          </div>
-                          {thicknessText(remnant) ? (
-                            <div className="flex min-w-0 flex-col rounded-[16px] border border-[var(--brand-line)] bg-white/88 px-3 py-2">
-                              <p
-                                className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)] sm:text-[11px]"
-                                title="Thickness"
-                              >
-                                Thick
-                              </p>
-                              <p className="mt-1 break-words text-[13px] font-semibold leading-tight text-[var(--brand-ink)] sm:text-[14px]">
-                                {thicknessText(remnant)}
-                              </p>
-                            </div>
-                          ) : null}
-                          {finishText(remnant) ? (
-                            <div className="flex min-w-0 flex-col rounded-[16px] border border-[var(--brand-line)] bg-white/88 px-3 py-2">
-                              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)] sm:text-[11px]">
-                                Finish
-                              </p>
-                              <p className="mt-1 break-words text-[13px] font-semibold leading-tight text-[var(--brand-ink)] sm:text-[14px]">
-                                {finishText(remnant)}
-                              </p>
-                            </div>
-                          ) : null}
-                        </div>
-                        {remnantColors(remnant).length ? (
-                          <div className="mt-3 flex flex-wrap justify-center gap-2">
-                            {remnantColors(remnant).map((color) => (
+                          <p className="font-inter flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+                            <span>Size</span>
+                            {remnant.l_shape ? (
                               <span
-                                key={`${displayRemnantId(remnant)}-${color}`}
-                                className="inline-flex items-center gap-2 rounded-full border border-[var(--brand-line)] bg-white/92 px-2.5 py-1 text-[11px] font-semibold text-[rgba(25,27,28,0.72)]"
+                                className="px-1 text-[9px] tracking-[0.12em] text-[color:var(--qc-ink-2)]"
+                                style={{ border: "1px solid var(--qc-line-strong)" }}
                               >
-                                <span
-                                  aria-hidden="true"
-                                  className="h-3 w-3 rounded-full border border-black/10 shadow-inner"
-                                  style={colorSwatchStyle(color)}
-                                />
-                                {color}
+                                L
                               </span>
-                            ))}
+                            ) : null}
+                          </p>
+                          <p className="mt-1 text-[13px] font-medium text-[color:var(--qc-ink-1)]">
+                            <CardSizeValue remnant={remnant} />
+                          </p>
+                          {thick ? (
+                            <p
+                              className="mt-0.5 text-[11px] text-[color:var(--qc-ink-3)]"
+                              style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                            >
+                              {thick}
+                            </p>
+                          ) : null}
+                        </div>
+                        {finish ? (
+                          <div className="text-right">
+                            <p className="font-inter text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+                              Finish
+                            </p>
+                            <p className="mt-1 text-[13px] font-medium text-[color:var(--qc-ink-1)]">
+                              {finish}
+                            </p>
                           </div>
                         ) : null}
                       </div>
@@ -961,13 +1021,7 @@ export default function PublicInventoryClient() {
         </div>
       </div>
 
-      <footer className="px-3 pb-10 pt-2 md:px-6">
-        <div className="mx-auto max-w-[1680px] rounded-[24px] border border-[var(--brand-line)] bg-white/80 px-4 py-5 text-center shadow-sm backdrop-blur sm:rounded-[28px] sm:px-6">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--brand-orange)]">Remnant Inventory System</p>
-          <p className="mt-2 text-sm text-[rgba(25,27,28,0.72)]">Live remnant availability with simple hold requests.</p>
-          <p className="mt-2 text-[11px] font-medium uppercase tracking-[0.18em] text-[rgba(25,27,28,0.48)]">Created by EndoM14</p>
-        </div>
-      </footer>
+      <PublicFooter slabCount={cards.length} />
 
       {selectedImageRemnant ? (
         <div
@@ -1277,30 +1331,23 @@ export default function PublicInventoryClient() {
       ) : null}
 
       {notice ? (
-        <div className="pointer-events-none fixed inset-x-3 bottom-4 z-[80] flex justify-center sm:inset-x-auto sm:right-4 sm:justify-end">
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[80] flex justify-center px-4">
           <div
-            className={`pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-[22px] border px-4 py-3 shadow-[0_18px_50px_rgba(44,29,18,0.18)] backdrop-blur sm:w-auto ${
-              notice.type === "error"
-                ? "border-rose-200 bg-white text-rose-700"
-                : "border-emerald-200 bg-white text-[#245a42]"
-            }`}
+            className="font-inter pointer-events-auto flex max-w-md items-center gap-3 px-5 py-3 text-[13px] text-white"
+            style={{
+              backgroundColor:
+                notice.type === "error" ? "var(--qc-status-sold-fg)" : "var(--qc-ink-1)",
+              borderRadius: "var(--qc-radius-sharp)",
+              boxShadow: "var(--qc-shadow-toast)",
+            }}
             role="status"
             aria-live="polite"
           >
-            <div
-              className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                notice.type === "error"
-                  ? "bg-rose-100 text-rose-700"
-                  : "bg-emerald-100 text-emerald-700"
-              }`}
-            >
-              {notice.type === "error" ? "!" : "\u2713"}
-            </div>
-            <p className="min-w-0 flex-1 text-sm font-medium">{notice.message}</p>
+            <p className="min-w-0 flex-1">{notice.message}</p>
             <button
               type="button"
               onClick={() => setNotice(null)}
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-lg leading-none text-current/70 transition-colors hover:bg-black/5 hover:text-current"
+              className="text-[18px] leading-none text-white/70 transition-colors hover:text-white"
               aria-label="Dismiss notification"
             >
               {"\u00D7"}
@@ -1310,14 +1357,26 @@ export default function PublicInventoryClient() {
       ) : null}
 
       {mobileFilterPinned && !isModalOpen ? (
-        <div className="fixed inset-x-3 bottom-4 z-[75] sm:hidden">
+        <div className="fixed inset-x-4 bottom-4 z-[75] sm:hidden">
           <button
             type="button"
             onClick={openFilterMenu}
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-[var(--brand-line)] bg-white/96 px-4 text-sm font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)] shadow-[0_18px_40px_rgba(25,27,28,0.16)] backdrop-blur"
+            className="font-inter flex h-11 w-full items-center justify-center gap-2 bg-white px-4 text-[13px] font-medium text-[color:var(--qc-ink-1)]"
+            style={{
+              border: "1px solid var(--qc-line-strong)",
+              borderRadius: "var(--qc-radius-sharp)",
+              boxShadow: "var(--qc-shadow-toast)",
+            }}
           >
             Filters
-            {activeFilterCount ? <span className="rounded-full bg-[rgba(247,134,57,0.14)] px-2 py-0.5 text-[11px] text-[var(--brand-orange-deep)]">{activeFilterCount}</span> : null}
+            {activeFilterCount ? (
+              <span
+                className="px-1.5 py-0.5 text-[11px] font-medium text-white"
+                style={{ backgroundColor: "var(--qc-ink-1)", borderRadius: "var(--qc-radius-sharp)" }}
+              >
+                {activeFilterCount}
+              </span>
+            ) : null}
           </button>
         </div>
       ) : null}

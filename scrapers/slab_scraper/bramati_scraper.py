@@ -30,6 +30,29 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support.ui import WebDriverWait
 
+try:
+    from .unified_csv import (
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        parse_dimensions_inches,
+        parse_thickness_to_cm,
+    )
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from unified_csv import (  # type: ignore
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        parse_dimensions_inches,
+        parse_thickness_to_cm,
+    )
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,7 +67,7 @@ CATEGORY_URLS = {
     "granite": f"{BASE_URL}/?product_cat=granite&post_type=product&s=",
     "quartzite": f"{BASE_URL}/?product_cat=quartzite&post_type=product&s=",
     "soapstone": f"{BASE_URL}/?product_cat=soapstone&post_type=product&s=",
-    "dolomite": f"{BASE_URL}/page/1/?product_cat=dolomite&post_type=product&s",
+    "dolomite": f"{BASE_URL}/?product_cat=dolomite&post_type=product&s=",
 }
 SUPPORTED_CATEGORIES = tuple(CATEGORY_URLS.keys())
 PER_PAGE_SELECT_SELECTOR = ".woocommerce-perpage select"
@@ -132,7 +155,7 @@ def normalize_name(raw_name: str, category_slug: str) -> tuple[str, str | None, 
     extracted_finishes: list[str] = []
     thickness_override = None
 
-    thickness_match = re.search(r"\b([23]\s*cm)\b", cleaned, re.IGNORECASE)
+    thickness_match = re.search(r"\b(\d+(?:\.\d+)?\s*(?:cm|mm))\b", cleaned, re.IGNORECASE)
     if thickness_match:
         thickness_override = thickness_match.group(1).replace(" ", "").lower()
 
@@ -143,21 +166,24 @@ def normalize_name(raw_name: str, category_slug: str) -> tuple[str, str | None, 
             lower_cleaned = cleaned.lower()
 
     cleaned = re.sub(r"\bjumbo\b", " ", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"\b3\s*cm\b", " ", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"\b2\s*cm\b", " ", cleaned, flags=re.IGNORECASE)
-
-    material_tokens = [
-        material_label_from_category(category_slug),
-        "Quartz",
-        "Marble",
-        "Granite",
-        "Quartzite",
-        "Soapstone",
-    ]
-    for token in material_tokens:
-        cleaned = re.sub(rf"\b{re.escape(token)}\b", " ", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\b\d+(?:\.\d+)?\s*(?:cm|mm)\b", " ", cleaned, flags=re.IGNORECASE)
 
     cleaned = " ".join(cleaned.split()).strip(" -")
+
+    # Strip a trailing material-category word so names don't end with
+    # "... Quartz" / "... Marble" / etc. Soapstone is intentionally
+    # excluded because "Black Soapstone" is a distinct product name.
+    # If stripping would leave the name empty, leave the material in place.
+    trailing_material = re.search(
+        r"\s+(Quartz|Quartzite|Marble|Granite|Dolomite)\s*$",
+        cleaned,
+        re.IGNORECASE,
+    )
+    if trailing_material:
+        without_material = cleaned[:trailing_material.start()].strip()
+        if without_material:
+            cleaned = without_material
+
     cleaned = cleaned.title()
     unique_finishes = list(dict.fromkeys(extracted_finishes))
     if len(unique_finishes) == 1:
@@ -414,13 +440,33 @@ def apply_limit(records: list[BramatiSlabRecord], limit: int | None) -> list[Bra
     return records[:limit]
 
 
+def to_unified(record: BramatiSlabRecord, category_slug: str, scraped_at: str) -> UnifiedSlabRecord:
+    width_in, height_in = parse_dimensions_inches(record.dimensions)
+    finishes = [f.strip() for f in (record.finishes or "").split(",") if f.strip()]
+    return UnifiedSlabRecord(
+        supplier="bramati",
+        source_category=category_slug,
+        name=record.name,
+        material=canonical_material(record.material),
+        detail_url=record.detail_url or "",
+        scraped_at=scraped_at,
+        block_number=record.block_number,
+        image_url=record.image_url,
+        width_in=width_in,
+        height_in=height_in,
+        size_text=record.dimensions,
+        thickness_cm=parse_thickness_to_cm(record.thickness),
+        finishes=canonical_finishes(finishes),
+    )
+
+
 def export_records(records: list[BramatiSlabRecord], output_dir: Path, category_slug: str) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = now_timestamp_slug()
     slug_token = category_slug.strip("/").replace("-", "_")
-    json_path = output_dir / f"bramati_{slug_token}_{stamp}.json"
-    csv_path = output_dir / f"bramati_{slug_token}_{stamp}.csv"
 
+    # Raw JSON preserves the scraper-native shape for debugging / re-processing.
+    json_path = output_dir / f"bramati_{slug_token}_{stamp}.json"
     payload = [
         {
             "name": record.name,
@@ -436,22 +482,10 @@ def export_records(records: list[BramatiSlabRecord], output_dir: Path, category_
     ]
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
 
-    with csv_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=[
-                "name",
-                "detail_url",
-                "image_url",
-                "block_number",
-                "dimensions",
-                "thickness",
-                "finishes",
-                "material",
-            ],
-        )
-        writer.writeheader()
-        writer.writerows(payload)
+    # CSV uses the shared unified schema so every supplier produces the same columns.
+    scraped_at = iso_now()
+    unified = [to_unified(record, category_slug, scraped_at) for record in records]
+    csv_path = export_unified_csv(unified, output_dir, supplier="bramati", suffix=slug_token)
 
     return json_path, csv_path
 
@@ -461,9 +495,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--headed", action="store_true", help="Run Chrome with a visible window.")
     parser.add_argument(
         "--category",
-        choices=SUPPORTED_CATEGORIES,
+        choices=(*SUPPORTED_CATEGORIES, "all"),
         default=DEFAULT_CATEGORY,
-        help="Bramati category slug to scrape.",
+        help="Bramati category slug to scrape. Pass 'all' to sweep every category.",
     )
     parser.add_argument(
         "--output-dir",
@@ -485,24 +519,35 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def scrape_category(driver, wait, category: str, output_dir: Path, limit: int) -> int:
+    """Scrape a single category, export JSON+CSV, return the record count."""
+    listing_url = build_listing_url(category)
+    open_listing_page(driver, wait, listing_url)
+    try_switch_to_per_page_60(driver, wait)
+    records = apply_limit(collect_listing_products(driver, wait, category), limit)
+
+    json_path, csv_path = export_records(records, output_dir, category)
+    logging.info("%s complete — JSON: %s | CSV: %s", category, json_path, csv_path)
+    logging.info("Collected %s Bramati %s slabs", len(records), category)
+    return len(records)
+
+
 def main() -> None:
     args = parse_args()
     output_dir = Path(args.output_dir)
-    listing_url = build_listing_url(args.category)
+    categories = SUPPORTED_CATEGORIES if args.category == "all" else (args.category,)
 
     driver = create_driver(headless=not args.headed)
     wait = WebDriverWait(driver, args.timeout_sec)
 
     try:
-        open_listing_page(driver, wait, listing_url)
-        try_switch_to_per_page_60(driver, wait)
-        records = apply_limit(collect_listing_products(driver, wait, args.category), args.limit)
+        total = 0
+        for category in categories:
+            logging.info("=== Scraping %s ===", category)
+            total += scrape_category(driver, wait, category, output_dir, args.limit)
 
-        json_path, csv_path = export_records(records, output_dir, args.category)
-        logging.info("Export complete")
-        logging.info("JSON: %s", json_path)
-        logging.info("CSV: %s", csv_path)
-        logging.info("Collected %s Bramati %s slabs", len(records), args.category)
+        if len(categories) > 1:
+            logging.info("Swept %s categories, %s total records", len(categories), total)
     except TimeoutException as error:
         raise RuntimeError("Timed out while loading Bramati listing pages") from error
     finally:

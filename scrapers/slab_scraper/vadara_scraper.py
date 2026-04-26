@@ -28,6 +28,29 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+try:
+    from .unified_csv import (
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        parse_dimensions_inches,
+        parse_thickness_to_cm,
+    )
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from unified_csv import (  # type: ignore
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        parse_dimensions_inches,
+        parse_thickness_to_cm,
+    )
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -258,11 +281,46 @@ def scrape_detail_pages(
     return records
 
 
+def to_unified(record: VadaraSlabRecord, scraped_at: str) -> UnifiedSlabRecord:
+    width_in, height_in = parse_dimensions_inches(record.slab_size)
+    extra = {}
+    if record.description:
+        extra["description"] = record.description
+    if record.style_inspiration:
+        extra["style_inspiration"] = record.style_inspiration
+    if record.background_color:
+        extra["background_color"] = record.background_color
+    if record.vein_color:
+        extra["vein_color"] = record.vein_color
+    if record.hue:
+        extra["hue"] = record.hue
+    if record.features:
+        extra["features"] = record.features
+    return UnifiedSlabRecord(
+        supplier="vadara",
+        source_category="quartz",
+        name=record.name,
+        material=canonical_material(record.material),
+        detail_url=record.detail_url,
+        scraped_at=scraped_at,
+        brand="Vadara",
+        collection=record.collection,
+        sku=record.code,
+        image_url=record.image_url,
+        width_in=width_in,
+        height_in=height_in,
+        size_text=record.slab_size,
+        thickness_cm=parse_thickness_to_cm(record.thickness),
+        finishes=canonical_finishes([record.finish] if record.finish else []),
+        color_tone=record.hue,
+        extra=extra,
+    )
+
+
 def export_records(records: list[VadaraSlabRecord], output_dir: Path) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = now_timestamp_slug()
     json_path = output_dir / f"vadara_quartz_{stamp}.json"
-    csv_path = output_dir / f"vadara_quartz_{stamp}.csv"
 
     payload = [
         {
@@ -286,29 +344,9 @@ def export_records(records: list[VadaraSlabRecord], output_dir: Path) -> tuple[P
     ]
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
 
-    with csv_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=[
-                "name",
-                "code",
-                "detail_url",
-                "image_url",
-                "description",
-                "collection",
-                "thickness",
-                "style_inspiration",
-                "background_color",
-                "vein_color",
-                "hue",
-                "features",
-                "slab_size",
-                "finish",
-                "material",
-            ],
-        )
-        writer.writeheader()
-        writer.writerows(payload)
+    scraped_at = iso_now()
+    unified = [to_unified(record, scraped_at) for record in records]
+    csv_path = export_unified_csv(unified, output_dir, supplier="vadara", suffix="quartz")
 
     return json_path, csv_path
 

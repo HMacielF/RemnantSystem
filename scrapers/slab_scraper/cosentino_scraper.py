@@ -31,6 +31,35 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+try:
+    from .unified_csv import (
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        parse_dimensions_inches,
+        parse_thickness_to_cm,
+    )
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from unified_csv import (  # type: ignore
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        parse_dimensions_inches,
+        parse_thickness_to_cm,
+    )
+
+
+def _split_comma(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [part.strip() for part in str(value).split(",") if part.strip()]
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -274,19 +303,45 @@ def scrape_detail_pages(
     crawl_delay_sec: float,
 ) -> list[CosentinoSlabRecord]:
     records: list[CosentinoSlabRecord] = []
+    skipped: list[str] = []
 
     for index, (listing_name, detail_url) in enumerate(products, start=1):
         logging.info("Scraping Cosentino detail %s/%s: %s", index, len(products), detail_url)
-        records.append(collect_detail_record(driver, wait, listing_name, detail_url, brand, crawl_delay_sec))
+        try:
+            records.append(collect_detail_record(driver, wait, listing_name, detail_url, brand, crawl_delay_sec))
+        except TimeoutException:
+            logging.warning("Cosentino detail %s timed out — skipping: %s", index, detail_url)
+            skipped.append(detail_url)
+
+    if skipped:
+        logging.warning("Cosentino skipped %s detail pages: %s", len(skipped), skipped)
 
     return records
+
+
+def to_unified(record: CosentinoSlabRecord, scraped_at: str, brand: str) -> UnifiedSlabRecord:
+    width_in, height_in = parse_dimensions_inches(record.dimensions)
+    return UnifiedSlabRecord(
+        supplier="cosentino",
+        source_category=brand,
+        name=record.name,
+        material=canonical_material(record.material),
+        detail_url=record.detail_url,
+        scraped_at=scraped_at,
+        brand=brand.capitalize() if brand else None,
+        image_url=record.image_url,
+        width_in=width_in,
+        height_in=height_in,
+        size_text=record.dimensions,
+        thickness_cm=parse_thickness_to_cm(record.thickness),
+        finishes=canonical_finishes(_split_comma(record.finishes)),
+    )
 
 
 def export_records(records: list[CosentinoSlabRecord], output_dir: Path, brand: str) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = now_timestamp_slug()
     json_path = output_dir / f"cosentino_{brand}_{stamp}.json"
-    csv_path = output_dir / f"cosentino_{brand}_{stamp}.csv"
 
     payload = [
         {
@@ -302,21 +357,9 @@ def export_records(records: list[CosentinoSlabRecord], output_dir: Path, brand: 
     ]
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
 
-    with csv_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=[
-                "name",
-                "detail_url",
-                "image_url",
-                "dimensions",
-                "thickness",
-                "finishes",
-                "material",
-            ],
-        )
-        writer.writeheader()
-        writer.writerows(payload)
+    scraped_at = iso_now()
+    unified = [to_unified(record, scraped_at, brand) for record in records]
+    csv_path = export_unified_csv(unified, output_dir, supplier="cosentino", suffix=brand)
 
     return json_path, csv_path
 

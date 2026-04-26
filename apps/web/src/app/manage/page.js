@@ -3,7 +3,7 @@ import PrivateWorkspaceClient from "@/components/private-workspace-client";
 
 export default function ManagePage() {
   return (
-    <Suspense fallback={<main className="min-h-screen bg-[#edf1f6] px-6 py-10 text-[#172230]">Loading private workspace...</main>}>
+    <Suspense fallback={<main className="font-inter min-h-screen bg-[color:var(--qc-bg-page)] px-8 py-10 text-[color:var(--qc-ink-2)]">Loading private workspace…</main>}>
       <PrivateWorkspaceClient />
     </Suspense>
   );

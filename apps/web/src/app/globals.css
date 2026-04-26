@@ -27,6 +27,45 @@
   --shadow-toast:            0 18px 45px rgba(15, 23, 39, 0.18);
   --shadow-btn-orange:       0 18px 38px rgba(247, 134, 57, 0.24);
   --shadow-btn-orange-hover: 0 22px 46px rgba(247, 134, 57, 0.30);
+
+  /* Quick Countertop redesign tokens (additive — public inventory only).
+     Old --brand-* / --gradient-* / --shadow-* tokens above are still in use
+     by /slabs, /portal, /manage, /admin, and workspace surfaces. */
+  --qc-bg-page:             #fafaf9;
+  --qc-bg-surface:          #ffffff;
+  --qc-ink-1:               #0f0f0f;
+  --qc-ink-2:               #4a4a4a;
+  --qc-ink-3:               #8a8a8a;
+  --qc-line:                rgba(0, 0, 0, 0.10);
+  --qc-line-strong:         rgba(0, 0, 0, 0.18);
+  --qc-orange:              #f78639;
+  --qc-orange-wash:         rgba(247, 134, 57, 0.06);
+  --qc-status-available-fg: #065f46;
+  --qc-status-available-bg: #d1fae5;
+  --qc-status-available-dot:#16a34a;
+  --qc-status-hold-fg:      #78350f;
+  --qc-status-hold-bg:      #fef3c7;
+  --qc-status-hold-dot:     #d97706;
+  --qc-status-sold-fg:      #9f1239;
+  --qc-status-sold-bg:      #ffe4e6;
+  --qc-status-sold-dot:     #e11d48;
+  --qc-radius-sharp:        2px;
+  --qc-shadow-toast:        0 18px 45px rgba(15, 23, 39, 0.18);
+}
+
+@keyframes qcPulse {
+  0%, 100% { transform: scale(1);    opacity: 1;   }
+  50%      { transform: scale(0.85); opacity: 0.5; }
+}
+
+@layer utilities {
+  .qc-pulse        { animation: qcPulse 1.8s ease-in-out infinite; }
+  .font-italic-accent {
+    font-family: var(--font-instrument-serif), Georgia, serif;
+    font-style: italic;
+    font-weight: 400;
+  }
+  .font-inter      { font-family: var(--font-inter), "Helvetica Neue", Arial, sans-serif; }
 }
 
 @theme inline {

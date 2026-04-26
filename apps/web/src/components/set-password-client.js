@@ -4,7 +4,13 @@ import { useState } from "react";
 import Script from "next/script";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import AuthShell from "@/components/auth-shell";
+import AuthShell, {
+  AUTH_INPUT_CLASS,
+  AUTH_INPUT_STYLE,
+  AUTH_LABEL_CLASS,
+  AUTH_PRIMARY_BUTTON_CLASS,
+  AUTH_PRIMARY_BUTTON_STYLE,
+} from "@/components/auth-shell";
 
 function readAuthParams(searchParams) {
   const hash =
@@ -160,10 +166,17 @@ export default function SetPasswordClient() {
 
   const statusColor =
     status.tone === "error"
-      ? "text-[#b42318]"
+      ? "text-[color:var(--qc-status-sold-fg)]"
       : status.tone === "success"
-        ? "text-[#067647]"
-        : "text-[#6d584b]";
+        ? "text-[color:var(--qc-status-available-fg)]"
+        : "text-[color:var(--qc-ink-2)]";
+
+  const statusAccent =
+    status.tone === "error"
+      ? "var(--qc-status-sold-dot)"
+      : status.tone === "success"
+        ? "var(--qc-status-available-dot)"
+        : "var(--qc-line-strong)";
 
   return (
     <>
@@ -179,58 +192,93 @@ export default function SetPasswordClient() {
       />
 
       <AuthShell
-        eyebrow="Secure Access"
-        title="Set your password and get back into the workspace."
+        eyebrow="Secure access"
+        title={
+          <>
+            Set your password and get{" "}
+            <span className="font-italic-accent text-[color:var(--qc-ink-2)]">
+              back to work.
+            </span>
+          </>
+        }
         description="This secure page finishes your invite or password reset so you can return to live remnant management without waiting on manual setup."
-        cardEyebrow="Password Setup"
+        cardEyebrow="Password setup"
         cardTitle="Choose a password"
       >
-        <p className={`rounded-2xl border border-[#f0e0d4] bg-[#fff9f4] px-4 py-4 text-sm leading-6 ${statusColor}`}>
+        <p
+          className={`px-4 py-3 text-[13px] leading-[1.5] ${statusColor}`}
+          style={{
+            border: "1px solid var(--qc-line)",
+            borderLeft: `2px solid ${statusAccent}`,
+            borderRadius: "var(--qc-radius-sharp)",
+          }}
+        >
           {status.message}
         </p>
 
         {ready ? (
           <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-            <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
-              New Password
-              <input
-                type="password"
-                name="password"
-                placeholder="At least 8 characters"
-                minLength={8}
-                required
-                className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition-colors focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
-              />
-            </label>
+            <div>
+              <label htmlFor="set-password-new" className={AUTH_LABEL_CLASS}>
+                New password
+              </label>
+              <div className="mt-2">
+                <input
+                  id="set-password-new"
+                  type="password"
+                  name="password"
+                  placeholder="At least 8 characters"
+                  minLength={8}
+                  required
+                  className={AUTH_INPUT_CLASS}
+                  style={AUTH_INPUT_STYLE}
+                />
+              </div>
+            </div>
 
-            <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[#9c7355]">
-              Confirm Password
-              <input
-                type="password"
-                name="confirmPassword"
-                placeholder="Re-enter your password"
-                minLength={8}
-                required
-                className="mt-2 h-12 w-full rounded-2xl border border-[#d8c7b8] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[#2d2623] placeholder:text-[#a5968a] shadow-sm outline-none transition-colors focus:border-[#E78B4B] focus:ring-4 focus:ring-[#E78B4B]/10"
-              />
-            </label>
+            <div>
+              <label htmlFor="set-password-confirm" className={AUTH_LABEL_CLASS}>
+                Confirm password
+              </label>
+              <div className="mt-2">
+                <input
+                  id="set-password-confirm"
+                  type="password"
+                  name="confirmPassword"
+                  placeholder="Re-enter your password"
+                  minLength={8}
+                  required
+                  className={AUTH_INPUT_CLASS}
+                  style={AUTH_INPUT_STYLE}
+                />
+              </div>
+            </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-[#232323] px-6 text-sm font-semibold uppercase tracking-[0.16em] text-white shadow-lg shadow-[#232323]/15 transition-all hover:-translate-y-0.5 hover:bg-[#E78B4B] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
+              className={AUTH_PRIMARY_BUTTON_CLASS}
+              style={AUTH_PRIMARY_BUTTON_STYLE}
             >
-              {loading ? "Saving..." : "Save Password"}
+              {loading ? "Saving…" : "Save password"}
             </button>
           </form>
         ) : null}
 
-        <div className="mt-5 text-sm">
+        <div
+          className="mt-7 pt-5 text-[12px]"
+          style={{ borderTop: "1px solid var(--qc-line)" }}
+        >
           <Link
             href="/portal"
-            className="font-medium text-[#b85b1b] transition-colors hover:text-[#8f4517]"
+            className="text-[color:var(--qc-ink-2)] hover:text-[color:var(--qc-ink-1)]"
+            style={{
+              textDecoration: "underline",
+              textDecorationColor: "var(--qc-line-strong)",
+              textUnderlineOffset: 4,
+            }}
           >
-            Back to sign in
+            ← Back to sign in
           </Link>
         </div>
       </AuthShell>

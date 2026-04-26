@@ -29,6 +29,35 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+try:
+    from .unified_csv import (
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        join_list,
+        parse_dimensions_inches,
+    )
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from unified_csv import (  # type: ignore
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        join_list,
+        parse_dimensions_inches,
+    )
+
+
+def _split_comma(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [part.strip() for part in str(value).split(",") if part.strip()]
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -268,11 +297,34 @@ def scrape_detail_pages(
     return records
 
 
+def to_unified(record: HanstoneSlabRecord, scraped_at: str) -> UnifiedSlabRecord:
+    width_in, height_in = parse_dimensions_inches(record.dimensions)
+    extra = {}
+    if record.vein:
+        extra["vein"] = record.vein
+    return UnifiedSlabRecord(
+        supplier="hanstone",
+        source_category="quartz",
+        name=record.name,
+        material=canonical_material(record.material),
+        detail_url=record.detail_url,
+        scraped_at=scraped_at,
+        brand="HanStone",
+        image_url=record.image_url,
+        width_in=width_in,
+        height_in=height_in,
+        size_text=record.dimensions,
+        finishes=canonical_finishes(_split_comma(record.finishes)),
+        primary_colors=join_list(_split_comma(record.primary_colors)),
+        accent_colors=join_list(_split_comma(record.accent_colors)),
+        extra=extra,
+    )
+
+
 def export_records(records: list[HanstoneSlabRecord], output_dir: Path) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = now_timestamp_slug()
     json_path = output_dir / f"hanstone_quartz_{stamp}.json"
-    csv_path = output_dir / f"hanstone_quartz_{stamp}.csv"
 
     payload = [
         {
@@ -290,23 +342,9 @@ def export_records(records: list[HanstoneSlabRecord], output_dir: Path) -> tuple
     ]
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
 
-    with csv_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=[
-                "name",
-                "detail_url",
-                "image_url",
-                "primary_colors",
-                "accent_colors",
-                "vein",
-                "dimensions",
-                "finishes",
-                "material",
-            ],
-        )
-        writer.writeheader()
-        writer.writerows(payload)
+    scraped_at = iso_now()
+    unified = [to_unified(record, scraped_at) for record in records]
+    csv_path = export_unified_csv(unified, output_dir, supplier="hanstone", suffix="quartz")
 
     return json_path, csv_path
 

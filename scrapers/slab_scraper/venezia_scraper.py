@@ -30,6 +30,25 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+try:
+    from .unified_csv import (
+        UnifiedSlabRecord,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        parse_thickness_to_cm,
+    )
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from unified_csv import (  # type: ignore
+        UnifiedSlabRecord,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        parse_thickness_to_cm,
+    )
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -207,6 +226,23 @@ def scrape_detail_pages(
     return records
 
 
+def to_unified(record: VeneziaSlabRecord, scraped_at: str, category_slug: str) -> UnifiedSlabRecord:
+    gallery = ";".join(record.image_urls) if record.image_urls else None
+    return UnifiedSlabRecord(
+        supplier="venezia",
+        source_category=category_slug.strip("/"),
+        name=record.name,
+        material=canonical_material(record.material),
+        detail_url=record.detail_url,
+        scraped_at=scraped_at,
+        brand="Venezia",
+        image_url=record.image_url,
+        gallery_image_urls=gallery,
+        thickness_cm=parse_thickness_to_cm(record.thickness),
+        color_tone=record.color,
+    )
+
+
 def export_records(
     records: list[VeneziaSlabRecord],
     output_dir: Path,
@@ -216,7 +252,6 @@ def export_records(
     stamp = now_timestamp_slug()
     slug_token = category_slug.strip("/").replace("-", "_")
     json_path = output_dir / f"venezia_{slug_token}_dmv_{stamp}.json"
-    csv_path = output_dir / f"venezia_{slug_token}_dmv_{stamp}.csv"
 
     payload = [
         {
@@ -232,32 +267,9 @@ def export_records(
     ]
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
 
-    with csv_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=[
-                "name",
-                "detail_url",
-                "image_url",
-                "image_urls_json",
-                "color",
-                "thickness",
-                "material",
-            ],
-        )
-        writer.writeheader()
-        writer.writerows(
-            {
-                "name": record.name,
-                "detail_url": record.detail_url,
-                "image_url": record.image_url,
-                "image_urls_json": json.dumps(record.image_urls, ensure_ascii=True),
-                "color": record.color,
-                "thickness": record.thickness,
-                "material": record.material,
-            }
-            for record in records
-        )
+    scraped_at = iso_now()
+    unified = [to_unified(record, scraped_at, category_slug) for record in records]
+    csv_path = export_unified_csv(unified, output_dir, supplier="venezia", suffix=f"{slug_token}_dmv")
 
     return json_path, csv_path
 

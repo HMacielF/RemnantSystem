@@ -23,6 +23,29 @@ from urllib.parse import urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
 
+try:
+    from .unified_csv import (
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        parse_dimensions_inches,
+        parse_thickness_to_cm,
+    )
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from unified_csv import (  # type: ignore
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        parse_dimensions_inches,
+        parse_thickness_to_cm,
+    )
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -458,9 +481,35 @@ def record_to_payload(record: RaphaelSlabRecord) -> dict[str, str | None]:
     }
 
 
+def to_unified(record: RaphaelSlabRecord, scraped_at: str) -> UnifiedSlabRecord:
+    width_in, height_in = parse_dimensions_inches(record.size)
+    extra = {}
+    if record.source_name:
+        extra["source_name"] = record.source_name
+    return UnifiedSlabRecord(
+        supplier="raphael_stones",
+        source_category=record.material.lower() if record.material else "",
+        name=record.name,
+        material=canonical_material(record.material),
+        detail_url=record.detail_url,
+        scraped_at=scraped_at,
+        brand="Raphael Stones",
+        collection=record.source_name,
+        sku=record.sku,
+        image_url=record.image_url,
+        width_in=width_in,
+        height_in=height_in,
+        size_text=record.size,
+        thickness_cm=parse_thickness_to_cm(record.thickness),
+        finishes=canonical_finishes([record.finish] if record.finish else []),
+        extra=extra,
+    )
+
+
 def export_records(records: list[RaphaelSlabRecord], output_dir: Path) -> list[tuple[str, Path, Path]]:
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = now_timestamp_slug()
+    scraped_at = iso_now()
     exports: list[tuple[str, Path, Path]] = []
 
     for material_slug, material_label in (("quartz", "Quartz"), ("printed_quartz", "Printed Quartz")):
@@ -469,27 +518,11 @@ def export_records(records: list[RaphaelSlabRecord], output_dir: Path) -> list[t
             continue
 
         json_path = output_dir / f"raphael_stones_{material_slug}_{stamp}.json"
-        csv_path = output_dir / f"raphael_stones_{material_slug}_{stamp}.csv"
         payload = [record_to_payload(record) for record in material_records]
-
         json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
-        with csv_path.open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(
-                handle,
-                fieldnames=[
-                    "name",
-                    "sku",
-                    "size",
-                    "thickness",
-                    "finish",
-                    "material",
-                    "detail_url",
-                    "image_url",
-                    "source_name",
-                ],
-            )
-            writer.writeheader()
-            writer.writerows(payload)
+
+        unified = [to_unified(record, scraped_at) for record in material_records]
+        csv_path = export_unified_csv(unified, output_dir, supplier="raphael_stones", suffix=material_slug)
 
         exports.append((material_label, json_path, csv_path))
 

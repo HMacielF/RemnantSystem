@@ -29,6 +29,37 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+try:
+    from .unified_csv import (
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        join_list,
+        parse_dimensions_inches,
+        parse_thickness_to_cm,
+    )
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from unified_csv import (  # type: ignore
+        UnifiedSlabRecord,
+        canonical_finishes,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        join_list,
+        parse_dimensions_inches,
+        parse_thickness_to_cm,
+    )
+
+
+def _split_comma(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [part.strip() for part in str(value).split(",") if part.strip()]
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -332,12 +363,38 @@ def scrape_detail_pages(
     return records
 
 
+def to_unified(record: CaesarstoneSlabRecord, scraped_at: str, material_slug: str) -> UnifiedSlabRecord:
+    width_in, height_in = parse_dimensions_inches(record.dimensions)
+    extra = {}
+    if record.pattern:
+        extra["pattern"] = record.pattern
+    return UnifiedSlabRecord(
+        supplier="caesarstone",
+        source_category=material_slug,
+        name=record.name,
+        material=canonical_material(record.material),
+        detail_url=record.detail_url,
+        scraped_at=scraped_at,
+        brand="Caesarstone",
+        collection=record.collection,
+        sku=record.product_code,
+        image_url=record.image_url,
+        width_in=width_in,
+        height_in=height_in,
+        size_text=record.dimensions,
+        thickness_cm=parse_thickness_to_cm(record.thickness),
+        finishes=canonical_finishes(_split_comma(record.finishes)),
+        primary_colors=join_list(_split_comma(record.primary_colors)),
+        accent_colors=join_list(_split_comma(record.accent_colors)),
+        extra=extra,
+    )
+
+
 def export_records(records: list[CaesarstoneSlabRecord], output_dir: Path, material_slug: str) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = now_timestamp_slug()
     slug_token = material_slug.strip("/").replace("-", "_")
     json_path = output_dir / f"caesarstone_{slug_token}_{stamp}.json"
-    csv_path = output_dir / f"caesarstone_{slug_token}_{stamp}.csv"
 
     payload = [
         {
@@ -358,26 +415,9 @@ def export_records(records: list[CaesarstoneSlabRecord], output_dir: Path, mater
     ]
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
 
-    with csv_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=[
-                "name",
-                "product_code",
-                "detail_url",
-                "image_url",
-                "primary_colors",
-                "accent_colors",
-                "dimensions",
-                "thickness",
-                "finishes",
-                "collection",
-                "pattern",
-                "material",
-            ],
-        )
-        writer.writeheader()
-        writer.writerows(payload)
+    scraped_at = iso_now()
+    unified = [to_unified(record, scraped_at, material_slug) for record in records]
+    csv_path = export_unified_csv(unified, output_dir, supplier="caesarstone", suffix=slug_token)
 
     return json_path, csv_path
 

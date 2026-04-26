@@ -24,6 +24,25 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 
+try:
+    from .unified_csv import (
+        UnifiedSlabRecord,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        parse_thickness_to_cm,
+    )
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from unified_csv import (  # type: ignore
+        UnifiedSlabRecord,
+        canonical_material,
+        export_unified_csv,
+        iso_now,
+        parse_thickness_to_cm,
+    )
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -408,6 +427,34 @@ def write_csv(path: Path, rows: list[StoneActionRecord]) -> None:
             writer.writerow(asdict(row))
 
 
+def to_unified(record: StoneActionRecord, scraped_at: str) -> UnifiedSlabRecord:
+    extra = {}
+    if record.archive_thumbnail_url:
+        extra["archive_thumbnail_url"] = record.archive_thumbnail_url
+    if record.archive_url:
+        extra["archive_url"] = record.archive_url
+    if record.category_key:
+        extra["category_key"] = record.category_key
+    return UnifiedSlabRecord(
+        supplier="stone_action",
+        source_category=record.category_key or "",
+        name=record.name,
+        material=canonical_material(record.material),
+        detail_url=record.detail_url,
+        scraped_at=scraped_at,
+        brand=record.brand,
+        block_number=record.block_number,
+        image_url=record.image_url,
+        gallery_image_urls=record.gallery_image_urls or None,
+        width_in=record.width_in,
+        height_in=record.height_in,
+        size_text=record.avg_size_text,
+        thickness_cm=parse_thickness_to_cm(record.thickness),
+        color_tone=record.base_color,
+        extra=extra,
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Scrape Stone Action slabs into local JSON and CSV files.")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
@@ -433,6 +480,11 @@ def main() -> None:
     write_csv(csv_path, rows)
     write_json(normalized_json_path, normalized_rows)
     write_csv(normalized_csv_path, normalized_rows)
+
+    scraped_at = iso_now()
+    unified_rows = [to_unified(row, scraped_at) for row in normalized_rows]
+    unified_csv_path = export_unified_csv(unified_rows, args.output_dir, supplier="stone_action")
+    logging.info("Stone Action unified CSV output: %s", unified_csv_path)
 
     material_counts: dict[str, int] = {}
     for row in normalized_rows:

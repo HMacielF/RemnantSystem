@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { getAdminTableConfig, listAdminTables } from "./adminDbConfig.js";
+import { compareThicknessLabels } from "./thicknessOrder.js";
 
 export const VALID_STATUSES = new Set(["available", "hold", "sold", "pending_approval"]);
 export const REMNANT_SELECT = `
@@ -314,6 +315,9 @@ export async function fetchLookupRows(tableName, client = getReadClient()) {
     .order("name", { ascending: true });
 
   if (error) throw error;
+  if (tableName === "thicknesses") {
+    return (data || []).slice().sort((a, b) => compareThicknessLabels(a?.name, b?.name));
+  }
   if (tableName === "colors") {
     const seen = new Set();
     return (data || []).reduce((rows, row) => {

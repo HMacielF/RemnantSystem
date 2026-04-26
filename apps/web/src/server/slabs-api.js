@@ -10,6 +10,7 @@ import {
   writeAuditLog,
   runBestEffort,
 } from "./api-utils.js";
+import { uniqueSortedThicknesses } from "./thicknessOrder.js";
 
 export const SLAB_SELECT = `
   id,
@@ -31,9 +32,9 @@ export const SLAB_SELECT = `
   ),
   supplier:suppliers(id,name,website_url),
   material:materials(id,name),
-  slab_colors(role,color:colors(id,name)),
-  slab_finishes(finish:finishes(id,name)),
-  slab_thicknesses(thickness:thicknesses(id,name))
+  slab_colors(role,color:colors(id,name,active)),
+  slab_finishes(finish:finishes(id,name,active)),
+  slab_thicknesses(thickness:thicknesses(id,name,active))
 `;
 
 function normalizeStoneLookupKeyPart(value) {
@@ -44,41 +45,6 @@ function uniqueSortedStrings(values = []) {
   return [...new Set((Array.isArray(values) ? values : []).filter(Boolean))].sort((a, b) =>
     String(a).localeCompare(String(b)),
   );
-}
-
-const THICKNESS_ORDER = new Map([
-  ["5 MM", 1],
-  ["6 MM", 2],
-  ["1 CM", 3],
-  ["12 MM", 4],
-  ["2 CM", 5],
-  ["3 CM", 6],
-]);
-
-function normalizeThicknessLabel(value) {
-  return String(value || "")
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, " ");
-}
-
-function compareThicknessLabels(left, right) {
-  const normalizedLeft = normalizeThicknessLabel(left);
-  const normalizedRight = normalizeThicknessLabel(right);
-  const leftRank = THICKNESS_ORDER.get(normalizedLeft);
-  const rightRank = THICKNESS_ORDER.get(normalizedRight);
-
-  if (leftRank !== undefined || rightRank !== undefined) {
-    if (leftRank === undefined) return 1;
-    if (rightRank === undefined) return -1;
-    if (leftRank !== rightRank) return leftRank - rightRank;
-  }
-
-  return normalizedLeft.localeCompare(normalizedRight);
-}
-
-function uniqueSortedThicknesses(values = []) {
-  return [...new Set((Array.isArray(values) ? values : []).filter(Boolean))].sort(compareThicknessLabels);
 }
 
 const NATURAL_STONE_GROUP_MATERIALS = new Set([
@@ -404,13 +370,22 @@ export function normalizeSlabRow(row, priceRows = [], pricePerSqft = null) {
 
   const colorSource = slabColors.length ? slabColors : stoneProductColors;
   const normalizedColors = dedupeColorList(
-    colorSource.map((item) => item?.color?.name).filter(Boolean),
+    colorSource
+      .filter((item) => item?.color?.active !== false)
+      .map((item) => item?.color?.name)
+      .filter(Boolean),
   );
   const finishes = dedupeStringList(
-    slabFinishes.map((item) => item?.finish?.name).filter(Boolean),
+    slabFinishes
+      .filter((item) => item?.finish?.active !== false)
+      .map((item) => item?.finish?.name)
+      .filter(Boolean),
   );
   const thicknesses = dedupeStringList(
-    slabThicknesses.map((item) => item?.thickness?.name).filter(Boolean),
+    slabThicknesses
+      .filter((item) => item?.thickness?.active !== false)
+      .map((item) => item?.thickness?.name)
+      .filter(Boolean),
   );
   const pricing_codes = [...new Set(
     (Array.isArray(priceRows) ? priceRows : [])

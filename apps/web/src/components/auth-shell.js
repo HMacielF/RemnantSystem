@@ -1,51 +1,115 @@
 import Link from "next/link";
 
+export const AUTH_INPUT_CLASS =
+  "font-inter h-[42px] w-full bg-white px-3.5 text-[14px] font-normal normal-case tracking-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors focus:border-[color:var(--qc-ink-1)]";
+
+export const AUTH_INPUT_STYLE = {
+  border: "1px solid var(--qc-line)",
+  borderRadius: "var(--qc-radius-sharp)",
+};
+
+export const AUTH_LABEL_CLASS =
+  "font-inter block text-[10px] font-medium uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]";
+
+export const AUTH_PRIMARY_BUTTON_CLASS =
+  "font-inter inline-flex h-11 w-full items-center justify-center gap-2 px-5 text-[13px] font-medium text-white transition-colors hover:bg-[#232323] disabled:cursor-not-allowed disabled:opacity-60";
+
+export const AUTH_PRIMARY_BUTTON_STYLE = {
+  backgroundColor: "var(--qc-ink-1)",
+  borderRadius: "var(--qc-radius-sharp)",
+};
+
+export const AUTH_SECONDARY_BUTTON_CLASS =
+  "font-inter inline-flex h-11 w-full items-center justify-center gap-2 bg-white px-5 text-[13px] font-medium text-[color:var(--qc-ink-1)] transition-colors hover:border-[color:var(--qc-ink-1)]";
+
+export const AUTH_SECONDARY_BUTTON_STYLE = {
+  border: "1px solid var(--qc-line)",
+  borderRadius: "var(--qc-radius-sharp)",
+};
+
 export default function AuthShell({
   eyebrow,
   title,
   description,
+  liveStatus,
   cardEyebrow,
   cardTitle,
   cardDescription,
   children,
 }) {
   return (
-    <main className="relative min-h-screen bg-[linear-gradient(180deg,#f8f2eb_0%,#efe4d9_100%)] text-[#2d2623]">
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute left-[-120px] top-[-80px] h-[360px] w-[360px] rounded-full bg-[#f7dcc5]/70 blur-3xl" />
-        <div className="absolute bottom-[-120px] right-[-80px] h-[360px] w-[360px] rounded-full bg-[#ead0bc]/70 blur-3xl" />
-      </div>
+    <main className="font-inter relative min-h-screen bg-[color:var(--qc-bg-page)] text-[color:var(--qc-ink-1)]">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -left-32 -top-24 h-[480px] w-[480px]"
+        style={{
+          background:
+            "radial-gradient(closest-side, var(--qc-orange-wash), transparent 70%)",
+          filter: "blur(40px)",
+        }}
+      />
 
-      <div className="relative mx-auto flex min-h-screen w-full max-w-[1240px] items-center px-4 py-10 sm:px-6 lg:px-10 lg:py-12 xl:px-12">
-        <div className="grid w-full gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(380px,460px)] lg:items-center xl:gap-10">
-          <section className="max-w-3xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#9c7355]">
-              {eyebrow}
-            </p>
-            <h1 className="font-display mt-4 text-[2.2rem] font-semibold tracking-tight text-[#241c18] sm:text-[2.6rem] lg:text-[3.1rem] xl:text-[3.35rem]">
+      <div className="relative mx-auto flex min-h-screen w-full max-w-[1240px] items-center px-8 py-[72px]">
+        <div className="grid w-full gap-x-16 gap-y-12 lg:grid-cols-[minmax(0,1.1fr)_minmax(380px,440px)] lg:items-center">
+          <section className="max-w-[640px]">
+            {eyebrow ? (
+              <p className="inline-flex items-center gap-2 text-[10.5px] uppercase tracking-[0.24em] text-[color:var(--qc-ink-3)]">
+                <span
+                  aria-hidden="true"
+                  className="inline-block h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: "var(--qc-orange)" }}
+                />
+                {eyebrow}
+              </p>
+            ) : null}
+            <h1 className="mt-5 text-[clamp(2.4rem,4.4vw,3.4rem)] font-medium leading-[1.05] tracking-[-0.02em] text-[color:var(--qc-ink-1)]">
               {title}
             </h1>
-            <p className="mt-5 max-w-2xl text-[1.02rem] leading-8 text-[#6d584b]">
-              {description}
-            </p>
+            {description ? (
+              <p className="mt-5 max-w-[520px] text-[14.5px] leading-[1.6] text-[color:var(--qc-ink-2)]">
+                {description}
+              </p>
+            ) : null}
+            {liveStatus ? (
+              <div className="mt-7 inline-flex items-center gap-2 text-[11.5px] text-[color:var(--qc-ink-2)]">
+                <span
+                  aria-hidden="true"
+                  className="qc-pulse inline-block h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: "var(--qc-status-available-dot)" }}
+                />
+                <span style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}>
+                  {liveStatus}
+                </span>
+              </div>
+            ) : null}
           </section>
 
-          <section className="w-full max-w-[460px] rounded-[34px] border border-white/75 bg-white/82 p-6 shadow-[0_20px_50px_rgba(73,49,31,0.12)] backdrop-blur sm:p-8 lg:ml-auto">
-            <div className="rounded-[26px] border border-[#f0e0d4] bg-[#fff9f4] p-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#9c7355]">
+          <section
+            className="w-full bg-[color:var(--qc-bg-surface)] p-8 lg:ml-auto"
+            style={{
+              border: "1px solid var(--qc-line)",
+              borderRadius: "var(--qc-radius-sharp)",
+            }}
+          >
+            {cardEyebrow ? (
+              <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-[color:var(--qc-ink-3)]">
                 {cardEyebrow}
               </p>
-              <h2 className="font-display mt-3 text-3xl font-semibold text-[#241c18]">
+            ) : null}
+            {cardTitle ? (
+              <h2 className="mt-3 text-[22px] font-medium leading-tight tracking-[-0.015em] text-[color:var(--qc-ink-1)]">
                 {cardTitle}
               </h2>
-              {cardDescription ? (
-                <p className="mt-2 text-sm leading-6 text-[#6d584b]">
-                  {cardDescription}
-                </p>
-              ) : null}
-            </div>
+            ) : null}
+            {cardDescription ? (
+              <p className="mt-2 text-[13px] leading-[1.6] text-[color:var(--qc-ink-2)]">
+                {cardDescription}
+              </p>
+            ) : null}
 
-            <div className="mt-6">{children}</div>
+            <div className={cardEyebrow || cardTitle || cardDescription ? "mt-6" : ""}>
+              {children}
+            </div>
           </section>
         </div>
       </div>
@@ -55,11 +119,19 @@ export default function AuthShell({
 
 export function AuthActions({ primary, secondary }) {
   return (
-    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-sm">
+    <div
+      className="mt-6 flex flex-wrap items-center justify-between gap-3 pt-5 text-[12px]"
+      style={{ borderTop: "1px solid var(--qc-line)" }}
+    >
       {primary ? (
         <Link
           href={primary.href}
-          className="font-medium text-[#b85b1b] transition-colors hover:text-[#8f4517]"
+          className="text-[color:var(--qc-ink-2)] hover:text-[color:var(--qc-ink-1)]"
+          style={{
+            textDecoration: "underline",
+            textDecorationColor: "var(--qc-line-strong)",
+            textUnderlineOffset: 4,
+          }}
         >
           {primary.label}
         </Link>
@@ -69,7 +141,7 @@ export function AuthActions({ primary, secondary }) {
       {secondary ? (
         <Link
           href={secondary.href}
-          className="font-medium text-[#6d584b] transition-colors hover:text-[#2d2623]"
+          className="text-[color:var(--qc-ink-3)] hover:text-[color:var(--qc-ink-1)]"
         >
           {secondary.label}
         </Link>
