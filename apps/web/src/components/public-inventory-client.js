@@ -1025,99 +1025,133 @@ export default function PublicInventoryClient() {
 
       {selectedImageRemnant ? (
         <div
-          className="fixed inset-0 z-[74] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_24%),linear-gradient(180deg,rgba(12,12,12,0.86),rgba(8,8,8,0.92))] px-3 py-4 sm:px-4 sm:py-6"
+          className="font-inter fixed inset-0 z-[74] bg-black/60 px-4 py-6 sm:px-6 sm:py-10"
           onClick={closeImageViewer}
         >
-          <div className="mx-auto flex h-full max-w-[1180px] flex-col" onClick={(event) => event.stopPropagation()}>
-            <div className="flex min-h-0 flex-1 items-center justify-center">
-              <div className="flex h-full w-full flex-col overflow-hidden rounded-[34px] border border-white/10 bg-[linear-gradient(180deg,rgba(30,30,30,0.82),rgba(16,16,16,0.9))] shadow-[0_32px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl">
-                <div className="flex items-start justify-between gap-4 border-b border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] px-4 py-4 text-white sm:px-5">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center rounded-full border border-white/15 bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85">
-                        ID #{displayRemnantId(selectedImageRemnant)}
-                      </span>
-                      <span className="inline-flex items-center rounded-full border border-white/15 bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
-                        {selectedImageIndex + 1} / {modalImageItems.length}
-                      </span>
-                      <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${statusBadgeClass(statusText(selectedImageRemnant))}`}>
-                        {statusText(selectedImageRemnant)}
-                      </span>
-                    </div>
-                    <h2 className="font-display mt-3 text-xl font-semibold text-white sm:text-[2rem]">
-                      {publicCardHeading(selectedImageRemnant)}
-                    </h2>
-                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/68">
-                      {publicCardSubheading(selectedImageRemnant) ? (
-                        <span>{publicCardSubheading(selectedImageRemnant)}</span>
-                      ) : null}
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {remnantMetricEntries(selectedImageRemnant).map((entry) => (
-                        <span
-                          key={`${displayRemnantId(selectedImageRemnant)}-${entry.label}`}
-                          title={entry.title}
-                          className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-[11px] text-white/88"
-                        >
-                          <span className="font-semibold uppercase tracking-[0.08em] text-white/60">{entry.label}</span>
-                          <span className="whitespace-nowrap font-medium">{entry.value}</span>
-                        </span>
-                      ))}
-                      {remnantColors(selectedImageRemnant).map((color) => (
-                        <span
-                          key={`${displayRemnantId(selectedImageRemnant)}-viewer-${color}`}
-                          className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-2.5 py-1 text-[11px] font-medium text-white/82"
-                        >
-                          <span
-                            aria-hidden="true"
-                            className="h-3 w-3 rounded-full border border-white/20"
-                            style={colorSwatchStyle(color)}
-                          />
-                          {color}
-                        </span>
-                      ))}
-                    </div>
+          <div
+            className="mx-auto flex h-full max-w-[1180px] flex-col"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div
+              className="flex h-full w-full flex-col overflow-hidden bg-[color:var(--qc-bg-surface)]"
+              style={{
+                border: "1px solid var(--qc-line)",
+                borderRadius: "var(--qc-radius-sharp)",
+                boxShadow: "0 32px 90px rgba(0, 0, 0, 0.38)",
+              }}
+            >
+              <div
+                className="flex items-start justify-between gap-4 px-5 py-4"
+                style={{ borderBottom: "1px solid var(--qc-line)" }}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusPill
+                      status={statusText(selectedImageRemnant)}
+                      label={`#${displayRemnantId(selectedImageRemnant)}`}
+                    />
+                    <span
+                      className="px-2 py-1 text-[11px] text-[color:var(--qc-ink-3)]"
+                      style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                    >
+                      {selectedImageIndex + 1} / {modalImageItems.length}
+                    </span>
                   </div>
-                  <div className="flex shrink-0 items-center">
+                  <h2 className="mt-3 text-[22px] font-medium leading-tight tracking-[-0.015em] text-[color:var(--qc-ink-1)] sm:text-[26px]">
+                    {publicCardHeading(selectedImageRemnant)}
+                  </h2>
+                  {publicCardSubheading(selectedImageRemnant) ? (
+                    <p className="mt-1 text-[10.5px] uppercase tracking-[0.18em] text-[color:var(--qc-orange)]">
+                      {publicCardSubheading(selectedImageRemnant)}
+                    </p>
+                  ) : null}
+                  <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-[color:var(--qc-ink-2)]">
+                    {remnantMetricEntries(selectedImageRemnant).map((entry) => (
+                      <span
+                        key={`${displayRemnantId(selectedImageRemnant)}-${entry.label}`}
+                        title={entry.title}
+                        className="inline-flex items-center gap-1.5"
+                      >
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+                          {entry.label}
+                        </span>
+                        <span className="whitespace-nowrap text-[color:var(--qc-ink-1)]">{entry.value}</span>
+                      </span>
+                    ))}
+                    {remnantColors(selectedImageRemnant).length ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+                          Color
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          {remnantColors(selectedImageRemnant).slice(0, 4).map((color) => (
+                            <span
+                              key={`${displayRemnantId(selectedImageRemnant)}-viewer-${color}`}
+                              aria-hidden="true"
+                              className="h-3.5 w-3.5 rounded-full"
+                              style={{
+                                ...colorSwatchStyle(color),
+                                boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.10)",
+                              }}
+                              title={color}
+                            />
+                          ))}
+                        </span>
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeImageViewer}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center text-[20px] leading-none text-[color:var(--qc-ink-2)] transition-colors hover:text-[color:var(--qc-ink-1)]"
+                  style={{
+                    border: "1px solid var(--qc-line)",
+                    borderRadius: "var(--qc-radius-sharp)",
+                  }}
+                  aria-label="Close image preview"
+                >
+                  {"\u00D7"}
+                </button>
+              </div>
+              <div
+                className="relative flex min-h-0 flex-1 items-center justify-center bg-[#f3f1ee] p-4 sm:p-6"
+                onTouchStart={handleImageViewerTouchStart}
+                onTouchEnd={handleImageViewerTouchEnd}
+              >
+                {modalImageItems.length > 1 ? (
+                  <>
                     <button
                       type="button"
-                      onClick={closeImageViewer}
-                      className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/8 text-2xl text-white transition-colors hover:border-white/25 hover:bg-white/16"
-                      aria-label="Close image preview"
+                      onClick={showPreviousImage}
+                      className="absolute left-4 top-1/2 z-10 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center bg-white text-[20px] leading-none text-[color:var(--qc-ink-1)] transition-colors hover:border-[color:var(--qc-ink-1)]"
+                      style={{
+                        border: "1px solid var(--qc-line)",
+                        borderRadius: "var(--qc-radius-sharp)",
+                      }}
+                      aria-label="Previous image"
                     >
-                      {"\u00D7"}
+                      {"\u2039"}
                     </button>
-                  </div>
-                </div>
-                <div className="flex min-h-0 flex-1 items-center justify-center p-3 sm:p-4">
-                  <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[28px] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_26%),linear-gradient(180deg,#1a1a1a_0%,#111111_100%)] p-2 sm:p-3">
-                    {modalImageItems.length > 1 ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={showPreviousImage}
-                          className="absolute left-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white shadow-lg backdrop-blur transition-colors hover:bg-black/50"
-                          aria-label="Previous image"
-                        >
-                          ‹
-                        </button>
-                        <button
-                          type="button"
-                          onClick={showNextImage}
-                          className="absolute right-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white shadow-lg backdrop-blur transition-colors hover:bg-black/50"
-                          aria-label="Next image"
-                        >
-                          ›
-                        </button>
-                      </>
-                    ) : null}
-                    <img
-                      src={imageSrc(selectedImageRemnant)}
-                      alt={`Remnant ${displayRemnantId(selectedImageRemnant)}`}
-                      className="max-h-full max-w-full rounded-[24px] object-contain shadow-[0_24px_60px_rgba(0,0,0,0.3)]"
-                    />
-                  </div>
-                </div>
+                    <button
+                      type="button"
+                      onClick={showNextImage}
+                      className="absolute right-4 top-1/2 z-10 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center bg-white text-[20px] leading-none text-[color:var(--qc-ink-1)] transition-colors hover:border-[color:var(--qc-ink-1)]"
+                      style={{
+                        border: "1px solid var(--qc-line)",
+                        borderRadius: "var(--qc-radius-sharp)",
+                      }}
+                      aria-label="Next image"
+                    >
+                      {"\u203A"}
+                    </button>
+                  </>
+                ) : null}
+                <img
+                  src={imageSrc(selectedImageRemnant)}
+                  alt={`Remnant ${displayRemnantId(selectedImageRemnant)}`}
+                  className="max-h-full max-w-full object-contain"
+                />
               </div>
             </div>
           </div>
@@ -1125,192 +1159,241 @@ export default function PublicInventoryClient() {
       ) : null}
 
       {holdRemnant ? (
-        <div className="fixed inset-0 z-[72] overflow-y-auto bg-black/50 px-3 py-4 sm:px-4 sm:py-8">
-          <div className="mx-auto max-w-2xl overflow-hidden rounded-[28px] border border-white/70 bg-white shadow-[0_24px_70px_rgba(44,29,18,0.10)] sm:rounded-[32px]">
-            <div className="flex items-start justify-between gap-4 border-b border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,var(--brand-white)_100%)] px-4 py-4 sm:px-6 sm:py-5">
+        <div className="font-inter fixed inset-0 z-[72] overflow-y-auto bg-black/40 px-4 py-8">
+          <div
+            className="mx-auto max-w-2xl overflow-hidden bg-[color:var(--qc-bg-surface)]"
+            style={{
+              border: "1px solid var(--qc-line)",
+              borderRadius: "var(--qc-radius-sharp)",
+            }}
+          >
+            <div
+              className="flex items-start justify-between gap-4 px-6 py-5"
+              style={{ borderBottom: "1px solid var(--qc-line)" }}
+            >
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Hold Request</p>
-                <h2 className="font-display text-xl font-semibold text-[var(--brand-ink)] sm:text-2xl">Request this remnant</h2>
-                <p className="mt-1 text-sm text-[rgba(35,35,35,0.68)]">
+                <p className="text-[10.5px] uppercase tracking-[0.24em] text-[color:var(--qc-ink-3)]">
+                  Hold request
+                </p>
+                <h2 className="mt-2 text-[22px] font-medium leading-tight tracking-[-0.015em] text-[color:var(--qc-ink-1)]">
+                  Request this{" "}
+                  <span className="font-italic-accent text-[color:var(--qc-ink-2)]">remnant.</span>
+                </h2>
+                <p className="mt-2 max-w-[440px] text-[13px] leading-[1.6] text-[color:var(--qc-ink-2)]">
                   Send your request and we&apos;ll confirm availability with your sales rep before anything is placed on hold.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setHoldRemnant(null)}
-                className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)] active:bg-[rgba(247,134,57,0.08)]"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center text-[20px] leading-none text-[color:var(--qc-ink-2)] transition-colors hover:text-[color:var(--qc-ink-1)]"
+                style={{
+                  border: "1px solid var(--qc-line)",
+                  borderRadius: "var(--qc-radius-sharp)",
+                }}
                 aria-label="Close hold request form"
               >
                 {"\u00D7"}
               </button>
             </div>
-            <form onSubmit={submitHoldRequest} className="grid gap-3 p-4 sm:gap-4 sm:p-6">
-              <section className="rounded-[26px] border border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,var(--brand-white)_100%)] p-3.5 shadow-[0_16px_38px_rgba(25,27,28,0.06)] sm:p-4">
-                <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_240px] sm:items-start">
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-orange)]">
-                      Remnant Summary
-                    </p>
-                    <div className="mt-3">
-                      <h3 className="font-display text-lg font-semibold text-[var(--brand-ink)] sm:text-xl">
-                        {publicCardHeading(holdRemnant)}
-                      </h3>
-                      {publicCardSubheading(holdRemnant) ? (
-                        <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgba(35,35,35,0.54)]">
-                          {publicCardSubheading(holdRemnant)}
-                        </p>
-                      ) : null}
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <span className="inline-flex rounded-full border border-[var(--brand-line)] bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-orange-deep)]">
-                          ID #{displayRemnantId(holdRemnant)}
-                        </span>
-                        <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${statusBadgeClass(statusText(holdRemnant))}`}>
-                          {statusText(holdRemnant)}
-                        </span>
-                      </div>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-[20px] border border-[var(--brand-line)] bg-white/92 px-4 py-3">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
-                            Material
-                          </p>
-                          <p className="mt-1 text-sm font-medium text-[var(--brand-ink)]">
-                            {holdRemnant.material_name || holdRemnant.material || "Not listed"}
-                          </p>
-                        </div>
-                        {remnantMetricEntries(holdRemnant).map((entry) => (
-                          <div
-                            key={`${displayRemnantId(holdRemnant)}-hold-${entry.label}`}
-                            className="rounded-[20px] border border-[var(--brand-line)] bg-white/92 px-4 py-3"
-                          >
-                            <p
-                              className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]"
-                              title={entry.title}
-                            >
-                              {entry.label}
-                            </p>
-                            <p className="mt-1 text-sm font-medium text-[var(--brand-ink)]">{entry.value}</p>
-                          </div>
-                        ))}
-                      </div>
+            <form onSubmit={submitHoldRequest} className="grid gap-6 p-6">
+              <section
+                className="grid gap-4 p-5 sm:grid-cols-[minmax(0,1fr)_180px]"
+                style={{
+                  border: "1px solid var(--qc-line)",
+                  borderRadius: "var(--qc-radius-sharp)",
+                }}
+              >
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.20em] text-[color:var(--qc-orange)]">
+                    {publicCardSubheading(holdRemnant) || "Remnant"}
+                  </p>
+                  <h3 className="mt-2 text-[18px] font-medium leading-tight tracking-[-0.01em] text-[color:var(--qc-ink-1)]">
+                    {publicCardHeading(holdRemnant)}
+                  </h3>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <StatusPill
+                      status={statusText(holdRemnant)}
+                      label={`#${displayRemnantId(holdRemnant)}`}
+                    />
+                  </div>
+                  <dl className="mt-4 grid gap-3 text-[12px] text-[color:var(--qc-ink-2)] sm:grid-cols-2">
+                    <div>
+                      <dt className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+                        Material
+                      </dt>
+                      <dd className="mt-1 text-[13px] text-[color:var(--qc-ink-1)]">
+                        {holdRemnant.material_name || holdRemnant.material || "Not listed"}
+                      </dd>
                     </div>
-                  </div>
-                  <div className="self-start">
-                    {imageSrc(holdRemnant) ? (
-                      <button
-                        type="button"
-                        onClick={() => openImageViewer(holdRemnant)}
-                        className="overflow-hidden rounded-[22px] border border-white/80 bg-white text-left shadow-[0_12px_24px_rgba(25,27,28,0.08)] transition-transform hover:-translate-y-0.5"
-                      >
-                        <img
-                          src={imageSrc(holdRemnant)}
-                          alt={`Remnant ${displayRemnantId(holdRemnant)}`}
-                          className="h-36 w-full bg-[var(--brand-white)] p-2 object-contain object-center"
+                    {remnantMetricEntries(holdRemnant).map((entry) => (
+                      <div key={`${displayRemnantId(holdRemnant)}-hold-${entry.label}`}>
+                        <dt
+                          className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]"
+                          title={entry.title}
+                        >
+                          {entry.label}
+                        </dt>
+                        <dd className="mt-1 text-[13px] text-[color:var(--qc-ink-1)]">{entry.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+                <div className="self-start">
+                  {imageSrc(holdRemnant) ? (
+                    <button
+                      type="button"
+                      onClick={() => openImageViewer(holdRemnant)}
+                      className="block w-full overflow-hidden bg-[#f3f1ee]"
+                      style={{
+                        border: "1px solid var(--qc-line)",
+                        borderRadius: "var(--qc-radius-sharp)",
+                      }}
+                    >
+                      <img
+                        src={imageSrc(holdRemnant)}
+                        alt={`Remnant ${displayRemnantId(holdRemnant)}`}
+                        className="h-32 w-full object-cover"
+                      />
+                    </button>
+                  ) : (
+                    <div
+                      className="flex h-32 items-center justify-center text-[12px] text-[color:var(--qc-ink-3)]"
+                      style={{
+                        border: "1px solid var(--qc-line)",
+                        borderRadius: "var(--qc-radius-sharp)",
+                      }}
+                    >
+                      No image
+                    </div>
+                  )}
+                  {remnantColors(holdRemnant).length ? (
+                    <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                      {remnantColors(holdRemnant).slice(0, 4).map((color) => (
+                        <span
+                          key={`${displayRemnantId(holdRemnant)}-hold-color-${color}`}
+                          aria-hidden="true"
+                          className="h-3.5 w-3.5 rounded-full"
+                          style={{
+                            ...colorSwatchStyle(color),
+                            boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.10)",
+                          }}
+                          title={color}
                         />
-                      </button>
-                    ) : (
-                      <div className="flex h-36 items-center justify-center rounded-[22px] border border-dashed border-[var(--brand-line)] bg-white/80 text-center text-sm text-[rgba(35,35,35,0.62)]">
-                        No image available
-                      </div>
-                    )}
-                    {remnantColors(holdRemnant).length ? (
-                      <div className="mt-3 flex flex-wrap justify-center gap-2">
-                        {remnantColors(holdRemnant).map((color) => (
-                          <span
-                            key={`${displayRemnantId(holdRemnant)}-hold-color-${color}`}
-                            className="inline-flex items-center gap-2 rounded-full border border-[var(--brand-line)] bg-white/92 px-2.5 py-1 text-[11px] font-semibold text-[rgba(25,27,28,0.72)]"
-                          >
-                            <span
-                              aria-hidden="true"
-                              className="h-3 w-3 rounded-full border border-black/10 shadow-inner"
-                              style={colorSwatchStyle(color)}
-                            />
-                            {color}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               </section>
 
               {holdFormMessage ? (
-                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+                <div
+                  className="px-4 py-3 text-[13px] text-[color:var(--qc-status-sold-fg)]"
+                  style={{
+                    border: "1px solid var(--qc-line)",
+                    borderLeft: "2px solid var(--qc-status-sold-dot)",
+                    borderRadius: "var(--qc-radius-sharp)",
+                  }}
+                >
                   {holdFormMessage}
                 </div>
               ) : null}
 
-              <section className="rounded-[26px] border border-[var(--brand-line)] bg-white p-3.5 shadow-[0_12px_28px_rgba(25,27,28,0.05)] sm:p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-orange)]">
-                  Your Contact
-                </p>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <label className="block text-sm font-medium text-gray-700">
+              <section className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="block text-[10px] font-medium uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
                     Name
-                    <input
-                      required
-                      value={holdForm.requester_name}
-                      onChange={(event) => setHoldForm((current) => ({ ...current, requester_name: event.target.value }))}
-                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.10)]"
-                      placeholder="Your full name"
-                    />
-                  </label>
-                  <label className="block text-sm font-medium text-gray-700">
+                  </span>
+                  <input
+                    required
+                    value={holdForm.requester_name}
+                    onChange={(event) =>
+                      setHoldForm((current) => ({ ...current, requester_name: event.target.value }))
+                    }
+                    placeholder="Your full name"
+                    className="mt-2 h-[42px] w-full bg-white px-3.5 text-[14px] font-normal normal-case tracking-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors focus:border-[color:var(--qc-ink-1)]"
+                    style={{
+                      border: "1px solid var(--qc-line)",
+                      borderRadius: "var(--qc-radius-sharp)",
+                    }}
+                  />
+                </label>
+                <label className="block">
+                  <span className="block text-[10px] font-medium uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
                     Email
-                    <input
-                      required
-                      type="email"
-                      value={holdForm.requester_email}
-                      onChange={(event) => setHoldForm((current) => ({ ...current, requester_email: event.target.value }))}
-                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.10)]"
-                      placeholder="you@example.com"
-                    />
-                  </label>
-                </div>
+                  </span>
+                  <input
+                    required
+                    type="email"
+                    value={holdForm.requester_email}
+                    onChange={(event) =>
+                      setHoldForm((current) => ({ ...current, requester_email: event.target.value }))
+                    }
+                    placeholder="you@example.com"
+                    className="mt-2 h-[42px] w-full bg-white px-3.5 text-[14px] font-normal normal-case tracking-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors focus:border-[color:var(--qc-ink-1)]"
+                    style={{
+                      border: "1px solid var(--qc-line)",
+                      borderRadius: "var(--qc-radius-sharp)",
+                    }}
+                  />
+                </label>
               </section>
 
-              <section className="rounded-[26px] border border-[var(--brand-line)] bg-white p-3.5 shadow-[0_12px_28px_rgba(25,27,28,0.05)] sm:p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-orange)]">
-                  Request Details
-                </p>
-                <div className="mt-4 grid gap-4">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Sales Rep
-                    <SelectField
-                      value={holdForm.sales_rep_user_id}
-                      onChange={(event) => setHoldForm((current) => ({ ...current, sales_rep_user_id: event.target.value }))}
-                      disabled={salesReps.length === 0}
-                      wrapperClassName="relative mt-2"
-                      className="disabled:bg-[rgba(35,35,35,0.05)] disabled:text-[rgba(35,35,35,0.42)]"
-                    >
-                      <option value="">
-                        {salesReps.length === 0 ? "No active sales reps available" : "Select sales rep"}
+              <section className="grid gap-4">
+                <label className="block">
+                  <span className="block text-[10px] font-medium uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
+                    Sales rep
+                  </span>
+                  <SelectField
+                    value={holdForm.sales_rep_user_id}
+                    onChange={(event) =>
+                      setHoldForm((current) => ({ ...current, sales_rep_user_id: event.target.value }))
+                    }
+                    disabled={salesReps.length === 0}
+                    wrapperClassName="relative mt-2"
+                    className="disabled:bg-[#f3f1ee] disabled:text-[color:var(--qc-ink-3)]"
+                  >
+                    <option value="">
+                      {salesReps.length === 0
+                        ? "No active sales reps available"
+                        : "Select sales rep"}
+                    </option>
+                    {salesReps.map((row) => (
+                      <option key={row.id} value={row.id}>
+                        {row.display_name || row.full_name || row.email || "User"}
                       </option>
-                      {salesReps.map((row) => (
-                        <option key={row.id} value={row.id}>
-                          {row.display_name || row.full_name || row.email || "User"}
-                        </option>
-                      ))}
-                    </SelectField>
-                  </label>
+                    ))}
+                  </SelectField>
+                </label>
 
-                  <label className="block text-sm font-medium text-gray-700">
+                <label className="block">
+                  <span className="block text-[10px] font-medium uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
                     Notes
-                    <textarea
-                      rows="4"
-                      value={holdForm.notes}
-                      onChange={(event) => setHoldForm((current) => ({ ...current, notes: event.target.value }))}
-                      className="mt-2 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 py-3 text-sm text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.10)]"
-                      placeholder="Anything the sales rep should know about timing, pickup, or questions"
-                    />
-                  </label>
-                </div>
+                  </span>
+                  <textarea
+                    rows="4"
+                    value={holdForm.notes}
+                    onChange={(event) =>
+                      setHoldForm((current) => ({ ...current, notes: event.target.value }))
+                    }
+                    placeholder="Anything the sales rep should know about timing, pickup, or questions"
+                    className="mt-2 w-full bg-white px-3.5 py-3 text-[14px] font-normal normal-case tracking-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors focus:border-[color:var(--qc-ink-1)]"
+                    style={{
+                      border: "1px solid var(--qc-line)",
+                      borderRadius: "var(--qc-radius-sharp)",
+                    }}
+                  />
+                </label>
               </section>
 
-              <div className="flex flex-col gap-3 rounded-[24px] border border-[var(--brand-line)] bg-[var(--brand-white)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm leading-6 text-[rgba(35,35,35,0.68)]">
+              <div
+                className="flex flex-col items-stretch justify-between gap-4 pt-5 sm:flex-row sm:items-center"
+                style={{ borderTop: "1px solid var(--qc-line)" }}
+              >
+                <p className="font-italic-accent text-[14px] leading-[1.5] text-[color:var(--qc-ink-2)] sm:max-w-[320px]">
                   {salesReps.length === 0
-                    ? "No active sales reps are set up yet. Create one in the admin workspace first."
-                    : "This is a request only. Your sales rep will review it and follow up with next steps before any hold is approved."}
+                    ? "No active sales reps yet. Add one in the admin workspace first."
+                    : "One slab. First come, first served."}
                 </p>
                 <input
                   type="hidden"
@@ -1320,9 +1403,26 @@ export default function PublicInventoryClient() {
                 <button
                   type="submit"
                   disabled={holdSubmitting || salesReps.length === 0}
-                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--brand-orange)_0%,var(--brand-orange-deep)_100%)] px-6 text-sm font-semibold text-white shadow-btn-orange transition-all hover:-translate-y-0.5 hover:shadow-[0_22px_46px_rgba(247,134,57,0.30)] disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+                  className="inline-flex h-11 items-center justify-center gap-2 px-6 text-[13px] font-medium text-white transition-colors hover:bg-[#232323] disabled:cursor-not-allowed disabled:opacity-60"
+                  style={{
+                    backgroundColor: "var(--qc-ink-1)",
+                    borderRadius: "var(--qc-radius-sharp)",
+                  }}
                 >
-                  {holdSubmitting ? "Sending..." : "Send hold request"}
+                  {holdSubmitting ? "Sending\u2026" : "Send hold request"}
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    className="h-3.5 w-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M5 12h14" />
+                    <path d="m13 5 7 7-7 7" />
+                  </svg>
                 </button>
               </div>
             </form>
