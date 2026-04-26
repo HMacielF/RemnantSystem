@@ -94,7 +94,9 @@ export default function PrivateWorkspaceClient() {
  const enrichmentRef = useRef(null);
  const lastPathnameRef = useRef(pathname);
  const canStructure = canManageStructure(profile);
- const canEditLinkedSlab = profile?.system_role === "super_admin";
+ // DECOUPLED: linked-slab editor disabled while remnants stabilizes. Restore
+ // to `profile?.system_role === "super_admin"` when re-merging slabs and remnants.
+ const canEditLinkedSlab = false;
  const isStatusUser = profile?.system_role === "status_user";
  const roleDisplay = humanizeRole(profile?.system_role);
  const activeLookupColors = Array.isArray(lookups.colors)

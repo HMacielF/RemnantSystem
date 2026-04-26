@@ -656,43 +656,20 @@ export function extractStoneProductColors(row) {
   };
 }
 
-export function withSharedStoneColorFallback(rows, stoneProducts) {
-  const fallbackMap = new Map(
-    (Array.isArray(stoneProducts) ? stoneProducts : [])
-      .map((row) => [stoneProductLookupKey(row.material_id, row.display_name || row.stone_name), row])
-      .filter(([key]) => Boolean(key)),
-  );
-
+// DECOUPLED: while remnants stabilizes, no longer fall back to colors on the
+// shared stone_products table. A remnant displays only its own colors. Restore
+// the lookup body when re-merging slabs and remnants.
+export function withSharedStoneColorFallback(rows, _stoneProducts) {
   return (Array.isArray(rows) ? rows : []).map((row) => {
     const colors = dedupeColorList([
       ...(Array.isArray(row?.colors) ? row.colors : []),
       ...(Array.isArray(row?.primary_colors) ? row.primary_colors : []),
       ...(Array.isArray(row?.accent_colors) ? row.accent_colors : []),
     ]);
-    if (colors.length) {
-      return {
-        ...row,
-        colors,
-        primary_colors: colors,
-        accent_colors: [],
-      };
-    }
-
-    const fallback = fallbackMap.get(stoneProductLookupKey(row?.material_id, row?.name));
-    if (!fallback) {
-      return {
-        ...row,
-        colors,
-        primary_colors: colors,
-        accent_colors: [],
-      };
-    }
-
-    const fallbackColors = dedupeColorList(fallback.colors);
     return {
       ...row,
-      colors: fallbackColors,
-      primary_colors: fallbackColors,
+      colors,
+      primary_colors: colors,
       accent_colors: [],
     };
   });
@@ -1045,48 +1022,14 @@ function chooseBestSlabPrice(remnant, priceRows = []) {
   return normalizedRows[0]?.list_price_per_sqft ?? null;
 }
 
-export async function withRemnantPriceFallback(client, rows) {
-  const normalizedRows = Array.isArray(rows) ? rows : [];
-  const slabIds = [...new Set(normalizedRows.map((row) => asNumber(row?.parent_slab_id)).filter((value) => value !== null))];
-  if (!slabIds.length) {
-    return normalizedRows.map((row) => ({
-      ...row,
-      price_per_sqft: normalizePriceValue(row?.price_per_sqft),
-    }));
-  }
-
-  const { data, error } = await client
-    .from("slab_supplier_prices")
-    .select("slab_id,finish_id,thickness_id,list_price_per_sqft,active")
-    .in("slab_id", slabIds)
-    .eq("active", true);
-  if (error) throw error;
-
-  const priceMap = new Map();
-  for (const row of data || []) {
-    const slabId = asNumber(row?.slab_id);
-    if (slabId === null) continue;
-    const bucket = priceMap.get(slabId) || [];
-    bucket.push(row);
-    priceMap.set(slabId, bucket);
-  }
-
-  return normalizedRows.map((row) => {
-    const existingPrice = normalizePriceValue(row?.price_per_sqft);
-    if (existingPrice !== null) {
-      return {
-        ...row,
-        price_per_sqft: existingPrice,
-      };
-    }
-
-    const slabId = asNumber(row?.parent_slab_id);
-    const derivedPrice = slabId === null ? null : chooseBestSlabPrice(row, priceMap.get(slabId) || []);
-    return {
-      ...row,
-      price_per_sqft: derivedPrice,
-    };
-  });
+// DECOUPLED: while remnants stabilizes, this no longer reaches into
+// slab_supplier_prices. Each remnant displays only its own price_per_sqft.
+// Restore the slab-fallback body when re-merging slabs and remnants.
+export async function withRemnantPriceFallback(_client, rows) {
+  return (Array.isArray(rows) ? rows : []).map((row) => ({
+    ...row,
+    price_per_sqft: normalizePriceValue(row?.price_per_sqft),
+  }));
 }
 
 async function findCompanyName(writeClient, companyId) {
@@ -1287,66 +1230,12 @@ async function ensureSlabForManualPrice(writeClient, remnant, payload, supplierI
   return slabId;
 }
 
-export async function upsertRemnantManualPrice(writeClient, remnant, payload) {
-  const normalizedPrice = parsePricePerSqft(payload?.price_per_sqft);
-  if (normalizedPrice === null || !remnant?.id) {
-    return asNumber(remnant?.parent_slab_id);
-  }
-
-  const supplierId = await ensureSupplierForManualPrice(writeClient, remnant, payload);
-  if (supplierId === null) return asNumber(remnant?.parent_slab_id);
-
-  const slabId = await ensureSlabForManualPrice(writeClient, remnant, payload, supplierId);
-  if (slabId === null) return null;
-
-  const tierId = await ensureManualPriceTier(writeClient, supplierId, payload?.material_id, normalizedPrice);
-  if (tierId === null) return slabId;
-
-  let existingQuery = writeClient
-    .from("slab_supplier_prices")
-    .select("id")
-    .eq("slab_id", slabId)
-    .eq("active", true)
-    .order("id", { ascending: false })
-    .limit(1);
-
-  const numericFinishId = asNumber(payload?.finish_id);
-  const numericThicknessId = asNumber(payload?.thickness_id);
-  existingQuery = numericFinishId === null ? existingQuery.is("finish_id", null) : existingQuery.eq("finish_id", numericFinishId);
-  existingQuery = numericThicknessId === null ? existingQuery.is("thickness_id", null) : existingQuery.eq("thickness_id", numericThicknessId);
-
-  const { data: existing, error: existingError } = await existingQuery.maybeSingle();
-  if (existingError) throw existingError;
-
-  const pricePayload = {
-    supplier_id: supplierId,
-    slab_id: slabId,
-    material_id: asNumber(payload?.material_id),
-    finish_id: numericFinishId,
-    thickness_id: numericThicknessId,
-    tier_id: tierId,
-    supplier_product_name: String(payload?.name || remnant?.name || "").trim() || `Remnant ${remnant.id}`,
-    list_price_per_sqft: normalizedPrice,
-    price_source: "manual_manage_editor",
-    active: true,
-  };
-
-  if (existing?.id) {
-    const { error: updateError } = await writeClient
-      .from("slab_supplier_prices")
-      .update(pricePayload)
-      .eq("id", existing.id);
-
-    if (updateError) throw updateError;
-    return slabId;
-  }
-
-  const { error: insertError } = await writeClient
-    .from("slab_supplier_prices")
-    .insert(pricePayload);
-
-  if (insertError) throw insertError;
-  return slabId;
+// DECOUPLED: while remnants stabilizes, manual price edits no longer create
+// supplier rows, synthetic slab rows, or slab_supplier_prices entries. The
+// remnant's own price_per_sqft is still persisted by parseRemnantPayload /
+// createRemnant / updateRemnant. Restore the slab-write body when re-merging.
+export async function upsertRemnantManualPrice(_writeClient, remnant, _payload) {
+  return asNumber(remnant?.parent_slab_id);
 }
 
 // ─── Image helpers ────────────────────────────────────────────────────────────
