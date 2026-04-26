@@ -34,7 +34,7 @@ export default function StatusPill({ status, label, className = "" }) {
       style={{
         color: tokens.fg,
         backgroundColor: tokens.bg,
-        borderRadius: 9999,
+        borderRadius: "var(--qc-radius-sharp)",
       }}
     >
       <span

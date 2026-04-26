@@ -1,8 +1,72 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
-export default function PublicHeader() {
+function deriveInitials(profile) {
+  const name = String(profile?.full_name || "").trim();
+  if (name) {
+    const parts = name.split(/\s+/).slice(0, 2);
+    return parts.map((part) => part[0]).join("").toUpperCase();
+  }
+  const email = String(profile?.email || "").trim();
+  return email ? email[0].toUpperCase() : "?";
+}
+
+function deriveDisplayName(profile) {
+  return (
+    String(profile?.full_name || "").trim() ||
+    String(profile?.email || "").trim() ||
+    "Account"
+  );
+}
+
+export default function PublicHeader({ initialProfile = null } = {}) {
+  const [profile, setProfile] = useState(initialProfile);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function probeSession() {
+      try {
+        const res = await fetch("/api/me", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+        if (cancelled) return;
+        if (!res.ok) {
+          setProfile(null);
+          return;
+        }
+        const payload = await res.json().catch(() => ({}));
+        setProfile(payload?.profile || null);
+      } catch {
+        if (cancelled) return;
+        setProfile(null);
+      }
+    }
+
+    probeSession();
+
+    function handleFocus() {
+      probeSession();
+    }
+    function handlePageShow(event) {
+      if (event.persisted) probeSession();
+    }
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("pageshow", handlePageShow);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("pageshow", handlePageShow);
+    };
+  }, []);
+
+  const isAuthed = Boolean(profile);
+
   return (
     <header
       className="font-inter w-full bg-[color:var(--qc-bg-page)]"
@@ -36,22 +100,53 @@ export default function PublicHeader() {
           >
             Inventory
           </Link>
-          <Link
-            href="/manage"
-            className="text-[color:var(--qc-ink-2)] hover:text-[color:var(--qc-ink-1)]"
-          >
-            Manage
-          </Link>
-          <Link
-            href="/portal"
-            className="inline-flex items-center px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#232323]"
-            style={{
-              backgroundColor: "var(--qc-ink-1)",
-              borderRadius: "var(--qc-radius-sharp)",
-            }}
-          >
-            Sign in
-          </Link>
+          {isAuthed ? (
+            <Link
+              href="/manage"
+              className="text-[color:var(--qc-ink-2)] hover:text-[color:var(--qc-ink-1)]"
+            >
+              Manage
+            </Link>
+          ) : null}
+          {isAuthed ? (
+            <span className="flex items-center gap-3">
+              <span className="flex items-center gap-2 text-[color:var(--qc-ink-2)]">
+                <span
+                  aria-hidden="true"
+                  className="inline-flex h-7 w-7 items-center justify-center text-[11px] font-semibold text-white"
+                  style={{
+                    backgroundColor: "var(--qc-ink-1)",
+                    borderRadius: "var(--qc-radius-sharp)",
+                  }}
+                >
+                  {deriveInitials(profile)}
+                </span>
+                <span className="hidden text-[13px] sm:inline">{deriveDisplayName(profile)}</span>
+              </span>
+              <a
+                href="/api/auth/logout"
+                className="text-[13px] text-[color:var(--qc-ink-2)] hover:text-[color:var(--qc-ink-1)]"
+                style={{
+                  textDecoration: "underline",
+                  textDecorationColor: "var(--qc-line-strong)",
+                  textUnderlineOffset: 4,
+                }}
+              >
+                Sign out
+              </a>
+            </span>
+          ) : (
+            <Link
+              href="/portal"
+              className="inline-flex items-center px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#232323]"
+              style={{
+                backgroundColor: "var(--qc-ink-1)",
+                borderRadius: "var(--qc-radius-sharp)",
+              }}
+            >
+              Sign in
+            </Link>
+          )}
         </nav>
       </div>
     </header>

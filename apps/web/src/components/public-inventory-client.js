@@ -233,6 +233,7 @@ function statusBadgeClass(status) {
 function currentFiltersFromSearch(searchParams) {
   return {
     materials: searchParams.getAll("material"),
+    colors: searchParams.getAll("color"),
     stone: searchParams.get("stone") || "",
     minWidth: searchParams.get("min-width") || "",
     minHeight: searchParams.get("min-height") || "",
@@ -243,6 +244,7 @@ function currentFiltersFromSearch(searchParams) {
 function emptyFilters() {
   return {
     materials: [],
+    colors: [],
     stone: "",
     minWidth: "",
     minHeight: "",
@@ -270,6 +272,9 @@ function buildSearchQuery(filters) {
   filters.materials.forEach((material) => {
     if (material) params.append("material", material);
   });
+  filters.colors.forEach((color) => {
+    if (color) params.append("color", color);
+  });
   if (filters.stone.trim()) params.set("stone", filters.stone.trim());
   if (filters.minWidth.trim()) params.set("min-width", filters.minWidth.trim());
   if (filters.minHeight.trim()) params.set("min-height", filters.minHeight.trim());
@@ -295,7 +300,7 @@ function PublicInventorySkeletonCard() {
   );
 }
 
-export default function PublicInventoryClient() {
+export default function PublicInventoryClient({ initialProfile = null } = {}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -303,6 +308,7 @@ export default function PublicInventoryClient() {
   const [filters, setFilters] = useState(() => emptyFilters());
   const debouncedFilters = useDebouncedValue(filters, 250);
   const [remnants, setRemnants] = useState([]);
+  const [allRemnants, setAllRemnants] = useState([]);
   const [salesReps, setSalesReps] = useState([]);
   const [materialOptions, setMaterialOptions] = useState([]);
   const [lookupsLoaded, setLookupsLoaded] = useState(false);
@@ -310,7 +316,7 @@ export default function PublicInventoryClient() {
   const [error, setError] = useState("");
   const [selectedImageIndex, setSelectedImageIndex] = useState(null);
   const [holdRemnant, setHoldRemnant] = useState(null);
-  const [mobileFilterPinned, setMobileFilterPinned] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
   const [holdForm, setHoldForm] = useState({
     requester_name: "",
     requester_email: "",
@@ -358,7 +364,10 @@ export default function PublicInventoryClient() {
 
     async function loadBootData() {
       try {
-        const lookupPayload = await apiFetch("/api/public/lookups");
+        const [lookupPayload, allRows] = await Promise.all([
+          apiFetch("/api/public/lookups"),
+          apiFetch("/api/public/remnants?enrich=0"),
+        ]);
         if (!mounted) return;
         setMaterialOptions(
           uniqueMaterialOptions(
@@ -367,6 +376,7 @@ export default function PublicInventoryClient() {
               : [],
           ),
         );
+        setAllRemnants(Array.isArray(allRows) ? allRows : []);
         setLookupsLoaded(true);
       } catch (loadError) {
         if (!mounted) return;
@@ -455,6 +465,18 @@ export default function PublicInventoryClient() {
     });
   }
 
+  function toggleColorFilter(color) {
+    setFilters((current) => {
+      const isSelected = current.colors.includes(color);
+      return {
+        ...current,
+        colors: isSelected
+          ? current.colors.filter((value) => value !== color)
+          : [...current.colors, color],
+      };
+    });
+  }
+
   async function ensureSalesRepsLoaded(remnant) {
     const params = new URLSearchParams();
     const remnantId = internalRemnantId(remnant);
@@ -512,18 +534,44 @@ export default function PublicInventoryClient() {
   }
 
   const cards = useMemo(() => {
-    if (!filters.materials.length) return remnants;
+    const allowedMaterials = filters.materials.length
+      ? new Set(filters.materials.map((material) => normalizeMaterialName(material)))
+      : null;
+    const allowedColors = filters.colors.length
+      ? new Set(filters.colors.map((color) => normalizeStoneLookupName(color)))
+      : null;
 
-    const allowedMaterials = new Set(
-      filters.materials.map((material) => normalizeMaterialName(material)),
-    );
+    if (!allowedMaterials && !allowedColors) return remnants;
 
-    return remnants.filter((remnant) =>
-      allowedMaterials.has(
-        normalizeMaterialName(remnant.material_name || remnant.material?.name || remnant.material),
-      ),
-    );
-  }, [filters.materials, remnants]);
+    return remnants.filter((remnant) => {
+      if (allowedMaterials) {
+        const material = normalizeMaterialName(remnant.material_name || remnant.material?.name || remnant.material);
+        if (!allowedMaterials.has(material)) return false;
+      }
+      if (allowedColors) {
+        const remnantColorSet = new Set(
+          remnantColors(remnant).map((color) => normalizeStoneLookupName(color)),
+        );
+        const matched = [...allowedColors].some((color) => remnantColorSet.has(color));
+        if (!matched) return false;
+      }
+      return true;
+    });
+  }, [filters.materials, filters.colors, remnants]);
+
+  const availableColors = useMemo(() => {
+    const seen = new Set();
+    const result = [];
+    for (const remnant of remnants) {
+      for (const color of remnantColors(remnant)) {
+        const key = normalizeStoneLookupName(color);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        result.push(color);
+      }
+    }
+    return result.sort((a, b) => a.localeCompare(b));
+  }, [remnants]);
 
   const modalImageItems = useMemo(
     () => cards.filter((remnant) => Boolean(imageSrc(remnant))),
@@ -535,12 +583,6 @@ export default function PublicInventoryClient() {
       ? modalImageItems[selectedImageIndex]
       : null;
   const isModalOpen = Boolean(selectedImageRemnant || holdRemnant);
-  const activeFilterCount =
-    filters.materials.length +
-    (filters.stone.trim() ? 1 : 0) +
-    (filters.minWidth.trim() ? 1 : 0) +
-    (filters.minHeight.trim() ? 1 : 0) +
-    (filters.status.trim() ? 1 : 0);
 
   useBodyScrollLock(isModalOpen);
 
@@ -551,19 +593,16 @@ export default function PublicInventoryClient() {
   }, [materialOptions, filters.materials]);
 
   useEffect(() => {
-    function syncMobileFilterPinned() {
-      const filterMenu = document.getElementById("filter_menu");
-      if (!filterMenu) return;
-      const rect = filterMenu.getBoundingClientRect();
-      setMobileFilterPinned(window.innerWidth < 640 && rect.bottom < 56);
+    function syncBackToTop() {
+      setShowBackToTop(window.scrollY > 600);
     }
 
-    syncMobileFilterPinned();
-    window.addEventListener("scroll", syncMobileFilterPinned, { passive: true });
-    window.addEventListener("resize", syncMobileFilterPinned);
+    syncBackToTop();
+    window.addEventListener("scroll", syncBackToTop, { passive: true });
+    window.addEventListener("resize", syncBackToTop);
     return () => {
-      window.removeEventListener("scroll", syncMobileFilterPinned);
-      window.removeEventListener("resize", syncMobileFilterPinned);
+      window.removeEventListener("scroll", syncBackToTop);
+      window.removeEventListener("resize", syncBackToTop);
     };
   }, []);
 
@@ -605,12 +644,6 @@ export default function PublicInventoryClient() {
     } else {
       showPreviousImage();
     }
-  }
-
-  function openFilterMenu() {
-    const filterMenu = document.getElementById("filter_menu");
-    if (!filterMenu) return;
-    filterMenu.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function showPreviousImage() {
@@ -663,146 +696,181 @@ export default function PublicInventoryClient() {
 
   return (
     <main className="font-inter min-h-screen bg-[color:var(--qc-bg-page)] text-[color:var(--qc-ink-1)]">
-      <PublicHeader />
-      <PublicHero slabCount={cards.length} />
+      <PublicHeader initialProfile={initialProfile} />
+      <PublicHero remnants={allRemnants} />
 
       <div className="relative">
         <div className="relative mx-auto w-full max-w-[1680px] px-8 pb-16">
 
           <section
             id="filter_menu"
-            className="mb-8 bg-white p-5"
-            style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
+            className="sticky top-0 z-40 mb-8 bg-[color:var(--qc-bg-page)] py-6"
+            style={{
+              borderTop: "1px solid var(--qc-line)",
+              borderBottom: "1px solid var(--qc-line)",
+            }}
           >
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(260px,1fr)_110px_110px_160px] lg:items-end">
-              <label className="block text-[10.5px] uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
-                Search
-                <div className="relative mt-2">
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 24 24"
-                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--qc-ink-3)]"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <circle cx="11" cy="11" r="7" />
-                    <path d="m20 20-3.5-3.5" />
-                  </svg>
-                  <input
-                    type="text"
-                    value={filters.stone}
-                    onChange={(event) => setFilters((current) => ({ ...current, stone: event.target.value }))}
-                    placeholder="Search stone, brand, finish, or ID #741"
-                    className="font-inter h-11 w-full bg-white pl-10 pr-3 text-[14px] font-normal normal-case tracking-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors focus:border-[color:var(--qc-ink-1)]"
-                    style={{
-                      border: "1px solid var(--qc-line)",
-                      borderRadius: "var(--qc-radius-sharp)",
-                    }}
-                  />
-                </div>
-              </label>
-
-              <label className="block text-[10.5px] uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
-                Min W&quot;
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={filters.minWidth}
-                  onChange={(event) => setFilters((current) => ({ ...current, minWidth: event.target.value }))}
-                  placeholder="0"
-                  className="font-inter mt-2 h-11 w-full bg-white px-3 text-[14px] font-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors focus:border-[color:var(--qc-ink-1)]"
-                  style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
-                />
-              </label>
-
-              <label className="block text-[10.5px] uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
-                Min H&quot;
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={filters.minHeight}
-                  onChange={(event) => setFilters((current) => ({ ...current, minHeight: event.target.value }))}
-                  placeholder="0"
-                  className="font-inter mt-2 h-11 w-full bg-white px-3 text-[14px] font-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors focus:border-[color:var(--qc-ink-1)]"
-                  style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
-                />
-              </label>
-
-              <label className="block text-[10.5px] uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
-                Status
-                <SelectField
-                  value={filters.status}
-                  onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
-                  wrapperClassName="relative mt-2"
-                  className="px-3"
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative h-11 min-w-[260px] flex-1">
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--qc-ink-3)]"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 >
-                  <option value="">All</option>
-                  <option value="available">Available</option>
-                  <option value="hold">On Hold</option>
-                  <option value="sold">Sold</option>
-                </SelectField>
-              </label>
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
+                <input
+                  type="text"
+                  value={filters.stone}
+                  onChange={(event) => setFilters((current) => ({ ...current, stone: event.target.value }))}
+                  placeholder="Search stone, brand, finish, or ID #741"
+                  className="font-inter h-11 w-full bg-white pl-11 pr-4 text-[14px] font-normal normal-case tracking-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors focus:border-[color:var(--qc-ink-1)]"
+                  style={{
+                    border: "1px solid var(--qc-line)",
+                    borderRadius: "var(--qc-radius-sharp)",
+                  }}
+                />
+              </div>
+
+              <input
+                type="text"
+                inputMode="decimal"
+                value={filters.minWidth}
+                onChange={(event) => setFilters((current) => ({ ...current, minWidth: event.target.value }))}
+                placeholder='Min W"'
+                aria-label="Minimum width"
+                className="font-inter h-11 w-[110px] bg-white px-4 text-center text-[14px] font-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors focus:border-[color:var(--qc-ink-1)]"
+                style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
+              />
+
+              <input
+                type="text"
+                inputMode="decimal"
+                value={filters.minHeight}
+                onChange={(event) => setFilters((current) => ({ ...current, minHeight: event.target.value }))}
+                placeholder='Min H"'
+                aria-label="Minimum height"
+                className="font-inter h-11 w-[110px] bg-white px-4 text-center text-[14px] font-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors focus:border-[color:var(--qc-ink-1)]"
+                style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
+              />
+
+              <div
+                className="flex h-11 items-center bg-white"
+                style={{
+                  border: "1px solid var(--qc-line)",
+                  borderRadius: "var(--qc-radius-sharp)",
+                }}
+              >
+                {[
+                  { value: "available", label: "Available", dot: "var(--qc-status-available-dot)" },
+                  { value: "hold", label: "On Hold", dot: "var(--qc-status-hold-dot)" },
+                  { value: "sold", label: "Sold", dot: "var(--qc-status-sold-dot)" },
+                ].map((option, index) => {
+                  const checked = filters.status === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={checked}
+                      onClick={() =>
+                        setFilters((current) => ({
+                          ...current,
+                          status: current.status === option.value ? "" : option.value,
+                        }))
+                      }
+                      className="font-inter inline-flex h-full items-center gap-1.5 px-4 text-[13px] transition-colors"
+                      style={{
+                        borderLeft: index === 0 ? "none" : "1px solid var(--qc-line)",
+                        color: checked ? "var(--qc-ink-1)" : "var(--qc-ink-2)",
+                        fontWeight: checked ? 500 : 400,
+                      }}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="inline-block h-1.5 w-1.5 rounded-full"
+                        style={{ backgroundColor: option.dot }}
+                      />
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            {materialOptions.length ? (
-              <div
-                className="mt-5 flex flex-wrap items-center gap-3 pt-5"
-                style={{ borderTop: "1px solid var(--qc-line)" }}
-              >
-                <span className="text-[10.5px] uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
-                  Material
-                </span>
+            {(materialOptions.length || availableColors.length) ? (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   aria-pressed={filters.materials.length === 0}
                   onClick={() =>
                     setFilters((current) => ({ ...current, materials: [] }))
                   }
-                  className="font-inter inline-flex items-center px-3 py-1.5 text-[12px] font-medium transition-colors"
+                  className="font-inter inline-flex items-center px-4 py-2 text-[13px] font-medium transition-colors"
                   style={{
-                    border: "1px solid var(--qc-line)",
                     borderRadius: "var(--qc-radius-sharp)",
-                    backgroundColor: filters.materials.length === 0 ? "var(--qc-ink-1)" : "transparent",
+                    backgroundColor:
+                      filters.materials.length === 0
+                        ? "var(--qc-ink-1)"
+                        : "rgba(0,0,0,0.04)",
                     color: filters.materials.length === 0 ? "#fff" : "var(--qc-ink-1)",
-                    borderColor: filters.materials.length === 0 ? "var(--qc-ink-1)" : "var(--qc-line)",
                   }}
                 >
                   All
                 </button>
-                <div
-                  ref={materialRailRef}
-                  onScroll={(event) => {
-                    materialRailScrollRef.current = event.currentTarget.scrollLeft;
-                  }}
-                  className="flex flex-wrap items-center gap-2 text-[12px] text-[color:var(--qc-ink-1)]"
-                >
-                  {materialOptions.map((material) => {
-                    const checked = filters.materials.includes(material);
-                    return (
-                      <button
-                        key={material}
-                        type="button"
-                        aria-pressed={checked}
-                        onClick={() => toggleMaterialFilter(material)}
-                        className="font-inter inline-flex shrink-0 items-center px-3 py-1.5 text-[12px] font-medium transition-colors"
-                        style={{
-                          border: "1px solid",
-                          borderRadius: "var(--qc-radius-sharp)",
-                          backgroundColor: checked ? "var(--qc-ink-1)" : "transparent",
-                          color: checked ? "#fff" : "var(--qc-ink-1)",
-                          borderColor: checked ? "var(--qc-ink-1)" : "var(--qc-line)",
-                        }}
-                      >
-                        {material}
-                      </button>
-                    );
-                  })}
-                </div>
-                <span className="ml-auto text-[12px] text-[color:var(--qc-ink-3)]">
-                  {cards.length} {cards.length === 1 ? "result" : "results"}
+                {materialOptions.map((material) => {
+                  const checked = filters.materials.includes(material);
+                  return (
+                    <button
+                      key={material}
+                      type="button"
+                      aria-pressed={checked}
+                      onClick={() => toggleMaterialFilter(material)}
+                      className="font-inter inline-flex shrink-0 items-center px-4 py-2 text-[13px] font-medium transition-colors"
+                      style={{
+                        borderRadius: "var(--qc-radius-sharp)",
+                        backgroundColor: checked
+                          ? "var(--qc-ink-1)"
+                          : "rgba(0,0,0,0.04)",
+                        color: checked ? "#fff" : "var(--qc-ink-1)",
+                      }}
+                    >
+                      {material}
+                    </button>
+                  );
+                })}
+                {availableColors.length ? (
+                  <div className="ml-2 flex items-center gap-1.5">
+                    {availableColors.map((color) => {
+                      const checked = filters.colors.includes(color);
+                      return (
+                        <button
+                          key={color}
+                          type="button"
+                          aria-pressed={checked}
+                          aria-label={color}
+                          title={color}
+                          onClick={() => toggleColorFilter(color)}
+                          className="inline-flex h-6 w-6 items-center justify-center rounded-full transition-shadow"
+                          style={{
+                            ...colorSwatchStyle(color),
+                            boxShadow: checked
+                              ? "0 0 0 1px var(--qc-bg-page), 0 0 0 2px var(--qc-ink-1)"
+                              : "inset 0 0 0 1px rgba(0,0,0,0.10)",
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                ) : null}
+                <span className="font-inter ml-auto text-[13px] text-[color:var(--qc-ink-3)]">
+                  <span className="font-medium text-[color:var(--qc-ink-1)]">{cards.length}</span>{" "}
+                  {cards.length === 1 ? "result" : "results"}
                 </span>
               </div>
             ) : null}
@@ -1021,7 +1089,7 @@ export default function PublicInventoryClient() {
         </div>
       </div>
 
-      <PublicFooter slabCount={cards.length} />
+      <PublicFooter slabCount={allRemnants.length} />
 
       {selectedImageRemnant ? (
         <div
@@ -1456,29 +1524,33 @@ export default function PublicInventoryClient() {
         </div>
       ) : null}
 
-      {mobileFilterPinned && !isModalOpen ? (
-        <div className="fixed inset-x-4 bottom-4 z-[75] sm:hidden">
-          <button
-            type="button"
-            onClick={openFilterMenu}
-            className="font-inter flex h-11 w-full items-center justify-center gap-2 bg-white px-4 text-[13px] font-medium text-[color:var(--qc-ink-1)]"
-            style={{
-              border: "1px solid var(--qc-line-strong)",
-              borderRadius: "var(--qc-radius-sharp)",
-              boxShadow: "var(--qc-shadow-toast)",
-            }}
+      {showBackToTop && !isModalOpen ? (
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          aria-label="Scroll to top"
+          title="Scroll to top"
+          className="fixed bottom-6 right-6 z-[60] inline-flex h-11 w-11 items-center justify-center text-white transition-colors hover:bg-[#232323]"
+          style={{
+            backgroundColor: "var(--qc-ink-1)",
+            borderRadius: "var(--qc-radius-sharp)",
+            boxShadow: "var(--qc-shadow-toast)",
+          }}
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
           >
-            Filters
-            {activeFilterCount ? (
-              <span
-                className="px-1.5 py-0.5 text-[11px] font-medium text-white"
-                style={{ backgroundColor: "var(--qc-ink-1)", borderRadius: "var(--qc-radius-sharp)" }}
-              >
-                {activeFilterCount}
-              </span>
-            ) : null}
-          </button>
-        </div>
+            <path d="M12 19V5" />
+            <path d="m5 12 7-7 7 7" />
+          </svg>
+        </button>
       ) : null}
     </main>
   );
