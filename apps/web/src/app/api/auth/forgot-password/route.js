@@ -26,7 +26,7 @@ export async function POST(request) {
 
   try {
     const supabase = createSupabase();
-    const origin = new URL(request.url).origin;
+    const origin = (process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin).replace(/\/$/, "");
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${origin}/set-password`,
     });

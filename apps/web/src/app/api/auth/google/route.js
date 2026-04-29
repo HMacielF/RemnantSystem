@@ -5,11 +5,12 @@ export async function GET(request) {
   try {
     const url = new URL(request.url);
     const next = sanitizeNextPath(url.searchParams.get("next"), "/manage");
+    const origin = (process.env.NEXT_PUBLIC_SITE_URL || url.origin).replace(/\/$/, "");
     const supabase = createPublicAuthClient();
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${url.origin}/api/auth/callback?next=${encodeURIComponent(next)}`,
+        redirectTo: `${origin}/api/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
 

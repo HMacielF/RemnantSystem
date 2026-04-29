@@ -82,7 +82,7 @@ export default function PublicFooter({ slabCount }) {
               className="mt-5 space-y-1 text-[13px] text-[color:var(--qc-ink-2)]"
               style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
             >
-              <li>MON–FRI · 9–17</li>
+              <li>MON–FRI · 9am – 5pm</li>
               <li>SAT · By appointment</li>
               <li>SUN · Closed</li>
             </ul>
