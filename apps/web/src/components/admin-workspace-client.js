@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import PrivateHeader from "@/components/private/PrivateHeader";
+import PrivateFooter from "@/components/private/PrivateFooter";
 
 const ROWS_PAGE_SIZE = 150;
 
@@ -115,11 +117,11 @@ function AccessNotice({ title, body, ctaHref, ctaLabel }) {
  return (
  <main className="font-inter min-h-screen bg-[color:var(--qc-bg-page)] px-6 py-10 text-[color:var(--qc-ink-1)]">
  <div className="mx-auto max-w-3xl rounded-sm border border-[color:var(--qc-line)] bg-white/95 p-8 ">
- <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--brand-orange)]">Super Admin Only</p>
+ <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--qc-orange)]">Super Admin Only</p>
  <h1 className="font-inter mt-3 text-3xl font-semibold text-[color:var(--qc-ink-1)]">{title}</h1>
- <p className="mt-4 text-sm leading-7 text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)]">{body}</p>
+ <p className="mt-4 text-sm leading-7 text-[color:var(--qc-ink-2)]">{body}</p>
  <div className="mt-6 flex flex-wrap gap-3">
- <a href={ctaHref} className="inline-flex h-11 items-center justify-center rounded-sm bg-[var(--brand-ink)] px-5 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-orange)]">
+ <a href={ctaHref} className="inline-flex h-11 items-center justify-center rounded-sm bg-[var(--qc-ink-1)] px-5 text-sm font-semibold text-white transition-colors hover:bg-[var(--qc-orange)]">
  {ctaLabel}
  </a>
  </div>
@@ -547,79 +549,29 @@ export default function AdminWorkspaceClient() {
 
  return (
  <main className="font-inter min-h-screen bg-[color:var(--qc-bg-page)] text-[color:var(--qc-ink-1)]">
- <div className="mx-auto w-full max-w-[1800px] px-3 py-5 sm:px-4 md:px-6 2xl:px-8">
- <section className="mb-4 overflow-hidden rounded-sm border border-[color:var(--qc-line)] bg-white px-6 py-5 text-[color:var(--qc-ink-1)] ">
- <div className="grid gap-5 lg:items-start xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,520px)]">
- <div className="max-w-4xl">
- <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-orange)]">Super Admin Workspace</p>
- <h1 className="font-inter mt-3 max-w-3xl text-[1.9rem] font-semibold leading-tight text-[color:var(--qc-ink-1)] md:text-[2.35rem]">
- Direct database controls for live operations.
- </h1>
- <p className="mt-2 max-w-2xl text-sm leading-6 text-[rgba(35,35,35,0.72)]">
- Browse and update live app tables fast. Reserved for `super_admin`.
- </p>
- </div>
-
- <div className="ml-auto w-fit max-w-full rounded-sm border border-[color:var(--qc-line)] bg-white p-3.5 xl:min-w-[420px]">
- <div className="flex items-start justify-between gap-3">
- <div className="min-w-0 flex-1">
- <h2 className="truncate text-base font-semibold text-[color:var(--qc-ink-1)]">
- {profile?.full_name || profile?.email || "User"} · {profile?.system_role}
- </h2>
- </div>
- <form method="POST" action="/api/auth/logout" className="shrink-0">
- <button
- type="submit"
- className="inline-flex h-10 items-center justify-center rounded-sm border border-[color:var(--qc-line)] bg-white px-3.5 text-center text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:bg-[color:var(--qc-bg-page)]"
- >
- Log Out
- </button>
- </form>
- </div>
- <div className="mt-3.5 grid grid-cols-3 gap-2.5">
- <Link
- href="/manage"
- className="inline-flex h-10 w-full items-center justify-center rounded-sm border border-[color:var(--qc-line)] bg-white px-4 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:bg-[color:var(--qc-bg-page)]"
- >
- Remnants
- </Link>
- <Link
- href="/slabs"
- className="inline-flex h-10 w-full items-center justify-center rounded-sm border border-[color:var(--qc-line)] bg-white px-4 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:bg-[color:var(--qc-bg-page)]"
- >
- Slabs
- </Link>
- <Link
- href="/portal"
- className="inline-flex h-10 w-full items-center justify-center rounded-sm border border-[color:var(--qc-line)] bg-white px-4 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:bg-[color:var(--qc-bg-page)]"
- >
- Portal
- </Link>
- </div>
- </div>
- </div>
- </section>
+ <PrivateHeader profile={profile} />
+ <div className="mx-auto w-full max-w-[1680px] px-8 pb-16 pt-6">
 
  <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)]">
  <aside className="rounded-sm border border-[color:var(--qc-line)] bg-white/94 p-4 ">
  <div className="flex items-center justify-between gap-3">
  <div>
- <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Tables</p>
+ <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--qc-orange)]">Tables</p>
  <h2 className="font-inter mt-1 text-xl font-semibold text-[color:var(--qc-ink-1)]">Editable schema</h2>
  </div>
- <button type="button" onClick={() => reloadMeta()} className="inline-flex h-10 items-center justify-center rounded-sm border border-[color:var(--qc-line)] px-4 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[color:var(--qc-bg-page)]">
+ <button type="button" onClick={() => reloadMeta()} className="inline-flex h-10 items-center justify-center rounded-sm border border-[color:var(--qc-line)] px-4 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:border-[var(--qc-orange)] hover:bg-[color:var(--qc-bg-page)]">
  Refresh
  </button>
  </div>
  <div className="mt-4">
- <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
+ <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--qc-orange)]">
  Filter tables
  <input
  value={tableFilter}
  onChange={(event) => setTableFilter(event.target.value)}
  type="text"
  placeholder="Search table names"
- className="mt-2 h-11 w-full rounded-sm border border-[color:var(--qc-line)] bg-[color:var(--qc-bg-page)] px-4 text-sm text-[color:var(--qc-ink-1)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+ className="mt-2 h-11 w-full rounded-sm border border-[color:var(--qc-line)] bg-[color:var(--qc-bg-page)] px-4 text-sm text-[color:var(--qc-ink-1)] outline-none transition-colors focus:border-[var(--qc-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
  />
  </label>
  </div>
@@ -633,12 +585,12 @@ export default function AdminWorkspaceClient() {
  onClick={() => setActiveTable(table.name)}
  className={`w-full rounded-sm border px-4 py-3 text-left transition-colors ${
  isActive
- ? "border-[var(--brand-orange)] bg-[rgba(247,134,57,0.12)] "
+ ? "border-[var(--qc-orange)] bg-[rgba(247,134,57,0.12)] "
  : "border-[color:var(--qc-line)] bg-[color:var(--qc-bg-page)] hover:border-[rgba(247,134,57,0.32)] hover:bg-white"
  }`}
  >
  <p className="text-sm font-semibold text-[color:var(--qc-ink-1)]">{table.label}</p>
- <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[color:color-mix(in_srgb,var(--brand-ink)_58%,white)]">{table.name}</p>
+ <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">{table.name}</p>
  </button>
  );
  })}
@@ -648,47 +600,47 @@ export default function AdminWorkspaceClient() {
  <section className="rounded-sm border border-[color:var(--qc-line)] bg-white/95 p-4 ">
  <div className="flex flex-col gap-4 border-b border-[color:var(--qc-line)] pb-4 lg:flex-row lg:items-end lg:justify-between">
  <div>
- <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Rows</p>
+ <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--qc-orange)]">Rows</p>
  <h2 className="font-inter mt-1 text-2xl font-semibold text-[color:var(--qc-ink-1)]">{activeTableMeta?.label || "Choose a table"}</h2>
- <p className="mt-2 text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)]">
+ <p className="mt-2 text-sm text-[color:var(--qc-ink-2)]">
  {activeTableMeta
  ? `${activeTableMeta.primaryKey.join(" + ")} primary key • ${activeTableMeta.columns.length} columns`
  : "The newest rows will appear here once a table is selected."}
  </p>
  </div>
  <div className="flex flex-wrap items-center gap-2">
- <button type="button" onClick={() => reloadRows()} disabled={!activeTable} className="inline-flex h-11 items-center justify-center rounded-sm border border-[color:var(--qc-line)] px-5 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[color:var(--qc-bg-page)] disabled:cursor-not-allowed disabled:opacity-60">
+ <button type="button" onClick={() => reloadRows()} disabled={!activeTable} className="inline-flex h-11 items-center justify-center rounded-sm border border-[color:var(--qc-line)] px-5 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:border-[var(--qc-orange)] hover:bg-[color:var(--qc-bg-page)] disabled:cursor-not-allowed disabled:opacity-60">
  Reload Rows
  </button>
- <button type="button" onClick={duplicateSelectedRow} disabled={!resettableSelectedRow || !activeTableMeta} className="inline-flex h-11 items-center justify-center rounded-sm border border-[color:var(--qc-line)] px-5 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[color:var(--qc-bg-page)] disabled:cursor-not-allowed disabled:opacity-60">
+ <button type="button" onClick={duplicateSelectedRow} disabled={!resettableSelectedRow || !activeTableMeta} className="inline-flex h-11 items-center justify-center rounded-sm border border-[color:var(--qc-line)] px-5 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:border-[var(--qc-orange)] hover:bg-[color:var(--qc-bg-page)] disabled:cursor-not-allowed disabled:opacity-60">
  Duplicate Row
  </button>
- <button type="button" onClick={startCreateRow} disabled={!activeTableMeta} className="inline-flex h-11 items-center justify-center rounded-sm bg-[var(--brand-ink)] px-5 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-60">
+ <button type="button" onClick={startCreateRow} disabled={!activeTableMeta} className="inline-flex h-11 items-center justify-center rounded-sm bg-[var(--qc-ink-1)] px-5 text-sm font-semibold text-white transition-colors hover:bg-[var(--qc-orange)] disabled:cursor-not-allowed disabled:opacity-60">
  New Row
  </button>
  </div>
  </div>
 
  <div className="mt-4 flex flex-wrap items-center gap-3">
- <label className="min-w-[220px] flex-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
+ <label className="min-w-[220px] flex-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--qc-orange)]">
  Quick row filter
  <input
  value={rowFilter}
  onChange={(event) => setRowFilter(event.target.value)}
  type="text"
  placeholder="Filter loaded rows"
- className="mt-2 h-11 w-full rounded-sm border border-[color:var(--qc-line)] bg-[color:var(--qc-bg-page)] px-4 text-sm text-[color:var(--qc-ink-1)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+ className="mt-2 h-11 w-full rounded-sm border border-[color:var(--qc-line)] bg-[color:var(--qc-bg-page)] px-4 text-sm text-[color:var(--qc-ink-1)] outline-none transition-colors focus:border-[var(--qc-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
  />
  </label>
- <div className="rounded-sm border border-[color:var(--qc-line)] bg-[color:var(--qc-bg-page)] px-4 py-3 text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)]">
+ <div className="rounded-sm border border-[color:var(--qc-line)] bg-[color:var(--qc-bg-page)] px-4 py-3 text-sm text-[color:var(--qc-ink-2)]">
  {pageStart && pageEnd ? `${pageStart}-${pageEnd} of ${totalRows || sortedRows.length}` : `${sortedRows.length} rows loaded`}
  </div>
  <div className="flex items-center gap-2 rounded-sm border border-[color:var(--qc-line)] bg-[color:var(--qc-bg-page)] px-3 py-2.5">
- <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">Columns</span>
+ <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--qc-orange)]">Columns</span>
  <select
  value={Number.isFinite(visibleColumnCount) ? String(visibleColumnCount) : "all"}
  onChange={(event) => setVisibleColumnCount(event.target.value === "all" ? Number.POSITIVE_INFINITY : Number(event.target.value))}
- className="rounded-xl border border-[color:var(--qc-line)] bg-white px-3 py-1.5 text-sm text-[color:var(--qc-ink-1)] outline-none transition-colors focus:border-[var(--brand-orange)]"
+ className="rounded-xl border border-[color:var(--qc-line)] bg-white px-3 py-1.5 text-sm text-[color:var(--qc-ink-1)] outline-none transition-colors focus:border-[var(--qc-orange)]"
  >
  <option value="6">6</option>
  <option value="12">12</option>
@@ -701,7 +653,7 @@ export default function AdminWorkspaceClient() {
  type="button"
  onClick={() => setRowOffset((current) => Math.max(current - ROWS_PAGE_SIZE, 0))}
  disabled={!hasPreviousPage}
- className="inline-flex h-11 items-center justify-center rounded-sm border border-[color:var(--qc-line)] px-4 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[color:var(--qc-bg-page)] disabled:cursor-not-allowed disabled:opacity-60"
+ className="inline-flex h-11 items-center justify-center rounded-sm border border-[color:var(--qc-line)] px-4 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:border-[var(--qc-orange)] hover:bg-[color:var(--qc-bg-page)] disabled:cursor-not-allowed disabled:opacity-60"
  >
  Previous
  </button>
@@ -709,7 +661,7 @@ export default function AdminWorkspaceClient() {
  type="button"
  onClick={() => setRowOffset((current) => current + ROWS_PAGE_SIZE)}
  disabled={!hasNextPage}
- className="inline-flex h-11 items-center justify-center rounded-sm border border-[color:var(--qc-line)] px-4 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[color:var(--qc-bg-page)] disabled:cursor-not-allowed disabled:opacity-60"
+ className="inline-flex h-11 items-center justify-center rounded-sm border border-[color:var(--qc-line)] px-4 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:border-[var(--qc-orange)] hover:bg-[color:var(--qc-bg-page)] disabled:cursor-not-allowed disabled:opacity-60"
  >
  Next
  </button>
@@ -719,7 +671,7 @@ export default function AdminWorkspaceClient() {
  <div className="mt-4 overflow-hidden rounded-sm border border-[color:var(--qc-line)]">
  <div className="max-h-[70vh] overflow-auto">
  <table className="min-w-full border-collapse text-sm">
- <thead className="sticky top-0 bg-[color:var(--qc-bg-page)] text-left text-[color:color-mix(in_srgb,var(--brand-ink)_60%,white)]">
+ <thead className="sticky top-0 bg-[color:var(--qc-bg-page)] text-left text-[color:var(--qc-ink-2)]">
  <tr>
  {visibleColumns.map((column) => (
  <th key={column.name} className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em]">
@@ -729,7 +681,7 @@ export default function AdminWorkspaceClient() {
  className="inline-flex items-center gap-1 text-left transition-colors hover:text-[color:var(--qc-ink-1)]"
  >
  <span>{column.name}</span>
- <span className="text-[10px] text-[color:color-mix(in_srgb,var(--brand-ink)_45%,white)]">
+ <span className="text-[10px] text-[color:color-mix(in_srgb,var(--qc-ink-1)_45%,white)]">
  {sortConfig.column === column.name
  ? sortConfig.direction === "asc"
  ? "↑"
@@ -741,10 +693,10 @@ export default function AdminWorkspaceClient() {
  ))}
  </tr>
  </thead>
- <tbody className="divide-y divide-[var(--brand-line)] bg-white">
+ <tbody className="divide-y divide-[var(--qc-line)] bg-white">
  {sortedRows.length === 0 ? (
  <tr>
- <td colSpan={visibleColumns.length || 1} className="px-4 py-8 text-center text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)]">
+ <td colSpan={visibleColumns.length || 1} className="px-4 py-8 text-center text-sm text-[color:var(--qc-ink-2)]">
  No rows match the current filter.
  </td>
  </tr>
@@ -797,11 +749,11 @@ export default function AdminWorkspaceClient() {
  <div className="border-b border-[color:var(--qc-line)] pb-4">
  <div className="flex items-start justify-between gap-4">
  <div>
- <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Editor</p>
+ <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--qc-orange)]">Editor</p>
  <h2 className="font-inter mt-1 text-2xl font-semibold text-[color:var(--qc-ink-1)]">
  {isCreating ? `Create ${activeTableMeta.label} row` : `Edit ${activeTableMeta.label} row`}
  </h2>
- <p className="mt-2 text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)]">
+ <p className="mt-2 text-sm text-[color:var(--qc-ink-2)]">
  {isCreating
  ? activeTableName === "profiles"
  ? "Saving here sends an invite email and creates the matching auth user and profile."
@@ -818,11 +770,11 @@ export default function AdminWorkspaceClient() {
  </button>
  </div>
  <div className="mt-3 flex flex-wrap items-center gap-2">
- <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${isCreating ? "border-[rgba(247,134,57,0.28)] bg-[rgba(247,134,57,0.12)] text-[var(--brand-orange-deep)]" : "border-[color:var(--qc-line)] bg-[color:var(--qc-bg-page)] text-[color:var(--qc-ink-1)]"}`}>
+ <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${isCreating ? "border-[rgba(247,134,57,0.28)] bg-[rgba(247,134,57,0.12)] text-[var(--qc-orange)]" : "border-[color:var(--qc-line)] bg-[color:var(--qc-bg-page)] text-[color:var(--qc-ink-1)]"}`}>
  {isCreating ? "New Row" : "Editing Existing Row"}
  </span>
  {hasUnsavedChanges ? (
- <span className="rounded-full border border-[rgba(247,134,57,0.28)] bg-[rgba(247,134,57,0.12)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--brand-orange-deep)]">
+ <span className="rounded-full border border-[rgba(247,134,57,0.28)] bg-[rgba(247,134,57,0.12)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--qc-orange)]">
  Unsaved Changes
  </span>
  ) : (
@@ -844,7 +796,7 @@ export default function AdminWorkspaceClient() {
  <label key={column.name} className={`block text-sm font-semibold text-[color:var(--qc-ink-1)] ${isWideField ? "md:col-span-2" : ""}`}>
  <span className="flex items-center justify-between gap-3">
  <span>{column.name}</span>
- <span className="text-[11px] uppercase tracking-[0.16em] text-[color:color-mix(in_srgb,var(--brand-ink)_50%,white)]">{column.type}</span>
+ <span className="text-[11px] uppercase tracking-[0.16em] text-[color:color-mix(in_srgb,var(--qc-ink-1)_50%,white)]">{column.type}</span>
  </span>
  {column.type === "boolean" ? (
  <span className="mt-2 inline-flex items-center gap-3 rounded-sm border border-[color:var(--qc-line)] bg-[color:var(--qc-bg-page)] px-4 py-3 text-sm text-[color:var(--qc-ink-1)]">
@@ -861,7 +813,7 @@ export default function AdminWorkspaceClient() {
  value={value ?? ""}
  disabled={disabled}
  onChange={(event) => updateSelectedField(column, event.target.value)}
- className="mt-2 h-11 w-full rounded-sm border border-[color:var(--qc-line)] bg-[color:var(--qc-bg-page)] px-4 text-sm text-[color:var(--qc-ink-1)] outline-none focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+ className="mt-2 h-11 w-full rounded-sm border border-[color:var(--qc-line)] bg-[color:var(--qc-bg-page)] px-4 text-sm text-[color:var(--qc-ink-1)] outline-none focus:border-[var(--qc-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
  >
  <option value="">Select</option>
  {(column.options || []).map((option) => (
@@ -875,7 +827,7 @@ export default function AdminWorkspaceClient() {
  value={value ?? ""}
  disabled={disabled || selectOptions.length === 0}
  onChange={(event) => updateSelectedField(column, event.target.value)}
- className="mt-2 h-11 w-full rounded-sm border border-[color:var(--qc-line)] bg-[color:var(--qc-bg-page)] px-4 text-sm text-[color:var(--qc-ink-1)] outline-none focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] disabled:cursor-not-allowed disabled:opacity-60"
+ className="mt-2 h-11 w-full rounded-sm border border-[color:var(--qc-line)] bg-[color:var(--qc-bg-page)] px-4 text-sm text-[color:var(--qc-ink-1)] outline-none focus:border-[var(--qc-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] disabled:cursor-not-allowed disabled:opacity-60"
  >
  <option value="">
  {selectOptions.length === 0 ? relationEmptyMessage(column.name) : "Select"}
@@ -894,7 +846,7 @@ export default function AdminWorkspaceClient() {
  : String(value ?? "")}
  disabled={disabled}
  onChange={(event) => updateSelectedField(column, event.target.value)}
- className="mt-2 w-full rounded-sm border border-[color:var(--qc-line)] bg-[color:var(--qc-bg-page)] px-4 py-3 text-sm text-[color:var(--qc-ink-1)] outline-none focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+ className="mt-2 w-full rounded-sm border border-[color:var(--qc-line)] bg-[color:var(--qc-bg-page)] px-4 py-3 text-sm text-[color:var(--qc-ink-1)] outline-none focus:border-[var(--qc-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
  />
  ) : (
  <input
@@ -902,17 +854,17 @@ export default function AdminWorkspaceClient() {
  value={column.type === "timestamptz" ? timestampValueForInput(value) : String(value ?? "")}
  disabled={disabled}
  onChange={(event) => updateSelectedField(column, event.target.value)}
- className="mt-2 h-11 w-full rounded-sm border border-[color:var(--qc-line)] bg-[color:var(--qc-bg-page)] px-4 text-sm text-[color:var(--qc-ink-1)] outline-none focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+ className="mt-2 h-11 w-full rounded-sm border border-[color:var(--qc-line)] bg-[color:var(--qc-bg-page)] px-4 text-sm text-[color:var(--qc-ink-1)] outline-none focus:border-[var(--qc-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
  />
  )}
- {!column.editable ? <p className="mt-1 text-xs text-[color:color-mix(in_srgb,var(--brand-ink)_50%,white)]">Server-managed field</p> : null}
+ {!column.editable ? <p className="mt-1 text-xs text-[color:color-mix(in_srgb,var(--qc-ink-1)_50%,white)]">Server-managed field</p> : null}
  </label>
  );
  })}
  </div>
 
  <div className="flex flex-wrap gap-2 border-t border-[color:var(--qc-line)] pt-4">
- <button type="submit" disabled={!selectedRow} className="inline-flex h-11 items-center justify-center rounded-sm bg-[var(--brand-ink)] px-5 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-60">
+ <button type="submit" disabled={!selectedRow} className="inline-flex h-11 items-center justify-center rounded-sm bg-[var(--qc-ink-1)] px-5 text-sm font-semibold text-white transition-colors hover:bg-[var(--qc-orange)] disabled:cursor-not-allowed disabled:opacity-60">
  Save Changes
  </button>
  <button type="button" onClick={() => {
@@ -921,7 +873,7 @@ export default function AdminWorkspaceClient() {
  return;
  }
  setSelectedRow(resettableSelectedRow ? JSON.parse(JSON.stringify(resettableSelectedRow)) : null);
- }} className="inline-flex h-11 items-center justify-center rounded-sm border border-[color:var(--qc-line)] px-5 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[color:var(--qc-bg-page)]">
+ }} className="inline-flex h-11 items-center justify-center rounded-sm border border-[color:var(--qc-line)] px-5 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:border-[var(--qc-orange)] hover:bg-[color:var(--qc-bg-page)]">
  Reset
  </button>
  <button type="button" onClick={deleteRow} disabled={isCreating || !selectedIdentifier} className="inline-flex h-11 items-center justify-center rounded-sm border border-[#fecaca] px-5 text-sm font-semibold text-[#b42318] transition-colors hover:bg-[#fff1f1] disabled:cursor-not-allowed disabled:opacity-60">
@@ -932,6 +884,7 @@ export default function AdminWorkspaceClient() {
  </section>
  </div>
  ) : null}
+ <PrivateFooter />
  </main>
  );
 }

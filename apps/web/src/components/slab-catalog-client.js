@@ -4,13 +4,15 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import useBodyScrollLock from "@/components/use-body-scroll-lock";
+import PrivateHeader from "@/components/private/PrivateHeader";
+import PrivateFooter from "@/components/private/PrivateFooter";
 
 const FILTER_LABEL_CLASS =
-  "block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]";
+  "block text-[10.5px] font-semibold uppercase tracking-[0.24em] text-[color:var(--qc-ink-3)]";
 const FILTER_INPUT_CLASS =
-  "mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-medium normal-case tracking-normal text-[var(--brand-ink)] placeholder:text-[color:color-mix(in_srgb,var(--brand-ink)_44%,white)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]";
+  "mt-2 h-11 w-full border border-[color:var(--qc-line)] bg-white px-3 text-[14px] font-normal normal-case tracking-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors hover:border-[color:var(--qc-line-strong)] focus:border-[color:var(--qc-ink-1)]";
 const FILTER_SELECT_CLASS =
-  "mt-2 h-12 w-full rounded-2xl border border-[var(--brand-line)] bg-white px-3 text-sm font-medium text-[var(--brand-ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)] focus-visible:ring-4 focus-visible:ring-[rgba(247,134,57,0.14)]";
+  "mt-2 h-11 w-full border border-[color:var(--qc-line)] bg-white px-3 text-[14px] font-normal text-[color:var(--qc-ink-1)] outline-none transition-colors hover:border-[color:var(--qc-line-strong)] focus:border-[color:var(--qc-ink-1)]";
 
 function uniqueSorted(values) {
   return [...new Set((values || []).filter(Boolean))].sort((a, b) =>
@@ -225,8 +227,8 @@ function colorSwatchStyle(colorName) {
 
 function badgeClass(tone = "neutral") {
   const styles = {
-    neutral: "border-[var(--brand-line)] bg-[var(--brand-shell)] text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)]",
-    accent: "border-[rgba(247,134,57,0.22)] bg-[rgba(247,134,57,0.10)] text-[var(--brand-orange-deep)]",
+    neutral: "border-[var(--qc-line)] bg-[var(--qc-bg-page)] text-[color:var(--qc-ink-2)]",
+    accent: "border-[rgba(247,134,57,0.22)] bg-[rgba(247,134,57,0.10)] text-[var(--qc-orange)]",
     green: "border-[rgba(60,113,82,0.18)] bg-[#eef6f1] text-[#27543f]",
   };
 
@@ -246,15 +248,15 @@ function SlabBadge({ label, tone = "neutral" }) {
 
 function SlabCatalogSkeletonCard() {
   return (
-    <div className="overflow-hidden rounded-[28px] border border-[var(--brand-line)] bg-white/95 shadow-[0_18px_48px_rgba(25,27,28,0.08)]">
-      <div className="relative aspect-[16/10] overflow-hidden bg-[var(--brand-shell)]">
+    <div className="overflow-hidden border border-[var(--qc-line)] bg-[color:var(--qc-bg-surface)]">
+      <div className="relative aspect-[16/10] overflow-hidden bg-[var(--qc-bg-page)]">
         <div className="absolute inset-0 animate-pulse bg-[linear-gradient(90deg,#f7f2ec,#efe6dc,#f7f2ec)]" />
         <div className="absolute inset-x-0 bottom-0 h-16 bg-[linear-gradient(180deg,transparent,rgba(25,27,28,0.10))]" />
       </div>
       <div className="space-y-4 p-5">
         <div className="flex flex-wrap gap-2">
           <div className="h-7 w-20 animate-pulse rounded-full bg-[rgba(247,134,57,0.10)]" />
-          <div className="h-7 w-24 animate-pulse rounded-full bg-[var(--brand-shell)]" />
+          <div className="h-7 w-24 animate-pulse rounded-full bg-[var(--qc-bg-page)]" />
           <div className="h-7 w-18 animate-pulse rounded-full bg-[#eef6f1]" />
         </div>
         <div>
@@ -263,7 +265,7 @@ function SlabCatalogSkeletonCard() {
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           {Array.from({ length: 2 }).map((_, index) => (
-            <div key={index} className="rounded-2xl border border-[var(--brand-line)] bg-[var(--brand-shell)] px-4 py-3">
+            <div key={index} className="border border-[var(--qc-line)] bg-[var(--qc-bg-page)] px-4 py-3">
               <div className="h-3 w-16 animate-pulse rounded-full bg-[#eadccf]" />
               <div className="mt-2 h-4 w-12 animate-pulse rounded-full bg-[#e5d9cd]" />
             </div>
@@ -275,6 +277,7 @@ function SlabCatalogSkeletonCard() {
 }
 
 export default function SlabCatalogClient() {
+  const [profile, setProfile] = useState(null);
   const [rows, setRows] = useState([]);
   const [catalogOptions, setCatalogOptions] = useState({
     brands: [],
@@ -327,6 +330,24 @@ export default function SlabCatalogClient() {
   }
 
   useBodyScrollLock(Boolean(lightbox || groupViewer || editor));
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadProfile() {
+      try {
+        const res = await fetch("/api/me", { cache: "no-store", credentials: "include" });
+        if (!res.ok) return;
+        const payload = await res.json().catch(() => ({}));
+        if (!cancelled) setProfile(payload?.profile || null);
+      } catch (_err) {
+        /* harmless — header just renders without name */
+      }
+    }
+    loadProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -628,37 +649,20 @@ export default function SlabCatalogClient() {
 
   return (
     <>
-      <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,var(--brand-white)_52%,rgba(247,134,57,0.08)_100%)] text-[var(--brand-ink)]">
-        <div className="relative overflow-hidden">
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-[440px] bg-[radial-gradient(circle_at_top_left,rgba(247,134,57,0.18),transparent_36%),radial-gradient(circle_at_top_right,rgba(60,113,82,0.12),transparent_32%)]" />
-          <div className="pointer-events-none absolute left-[-120px] top-[120px] h-[260px] w-[260px] rounded-full bg-[rgba(247,134,57,0.10)] blur-3xl" />
-          <div className="pointer-events-none absolute right-[-60px] top-[40px] h-[220px] w-[220px] rounded-full bg-[rgba(60,113,82,0.10)] blur-3xl" />
+      <main className="font-inter min-h-screen bg-[color:var(--qc-bg-page)] text-[color:var(--qc-ink-1)]">
+        <PrivateHeader profile={profile} />
+        <div className="mx-auto w-full max-w-[1680px] px-8 pt-6 pb-16">
+          <section className="mb-6">
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.24em] text-[color:var(--qc-ink-3)]">
+              Internal Slab Catalog
+            </p>
+            <h1 className="mt-3 text-[clamp(2rem,4vw,2.6rem)] font-medium leading-[1.05] tracking-[-0.02em] text-[color:var(--qc-ink-1)]">
+              Review supplier slabs{" "}
+              <span className="text-[color:var(--qc-ink-3)]">in one place.</span>
+            </h1>
+          </section>
 
-          <div className="relative mx-auto max-w-[1680px] px-4 py-4 md:px-6 md:py-5">
-            <section className="mb-4 overflow-hidden rounded-[32px] border border-[var(--brand-line)] bg-[linear-gradient(135deg,rgba(255,255,255,0.99),rgba(242,242,242,0.96))] px-6 py-5 shadow-panel">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                <div className="max-w-3xl">
-                  <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-orange)]">
-                    Internal Slab Catalog
-                  </p>
-                  <h1 className="font-display mt-3 text-[1.95rem] font-semibold leading-tight text-[var(--brand-ink)] md:text-[2.45rem]">
-                    Review supplier slabs in one place.
-                  </h1>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)] md:text-base">
-                    Compare current slab options across suppliers without
-                    jumping between vendor sites.
-                  </p>
-                </div>
-                <Link
-                  href="/manage"
-                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-5 text-sm font-semibold text-[var(--brand-ink)] shadow-sm transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)] hover:text-[var(--brand-orange)]"
-                >
-                  Back to Manage
-                </Link>
-              </div>
-            </section>
-
-            <section className="mb-4 rounded-[32px] border border-[var(--brand-line)] bg-white/92 p-5 shadow-[0_24px_70px_rgba(25,27,28,0.08)]">
+            <section className="mb-4 border border-[var(--qc-line)] bg-[color:var(--qc-bg-surface)] p-5">
               <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[minmax(280px,1.3fr)_220px_220px_220px_220px_220px] xl:items-end">
                 <label className={FILTER_LABEL_CLASS}>
                   Search
@@ -773,10 +777,10 @@ export default function SlabCatalogClient() {
 
             <section className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--brand-orange)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--qc-orange)]">
                   Catalog
                 </p>
-                <h2 className="font-display mt-1 text-2xl font-semibold text-[var(--brand-ink)]">
+                <h2 className="font-inter mt-1 text-2xl font-semibold text-[var(--qc-ink-1)]">
                   Slabs
                 </h2>
               </div>
@@ -784,7 +788,7 @@ export default function SlabCatalogClient() {
                 <button
                   type="button"
                   onClick={cyclePriceSort}
-                  className={`whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition-colors ${priceSort !== "default" ? "border-[var(--brand-orange)] bg-[rgba(247,134,57,0.08)] text-[var(--brand-orange)]" : "border-[var(--brand-line)] bg-white text-[var(--brand-ink)] hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"}`}
+                  className={`whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${priceSort !== "default" ? "border-[var(--qc-orange)] bg-[rgba(247,134,57,0.08)] text-[var(--qc-orange)]" : "border-[var(--qc-line)] bg-white text-[var(--qc-ink-1)] hover:border-[var(--qc-orange)] hover:bg-[var(--qc-bg-page)]"}`}
                 >
                   {priceSortLabel}
                 </button>
@@ -792,19 +796,19 @@ export default function SlabCatalogClient() {
                   <button
                     type="button"
                     onClick={clearFilters}
-                    className="rounded-full border border-[var(--brand-line)] bg-white px-4 py-2 text-sm font-semibold text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)] shadow-sm transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
+                    className="rounded-full border border-[var(--qc-line)] bg-white px-4 py-2 text-sm font-semibold text-[color:var(--qc-ink-2)] transition-colors hover:border-[var(--qc-orange)] hover:bg-[var(--qc-bg-page)]"
                   >
                     Clear filters
                   </button>
                 ) : null}
-                <div className="rounded-full border border-[var(--brand-line)] bg-white px-4 py-2 text-sm font-semibold text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)] shadow-sm">
+                <div className="rounded-full border border-[var(--qc-line)] bg-white px-4 py-2 text-sm font-semibold text-[color:var(--qc-ink-2)] shadow-sm">
                   {loading ? "Loading..." : error ? "Unavailable" : `${totalCount} results`}
                 </div>
               </div>
             </section>
 
             {error ? (
-              <div className="rounded-[28px] border border-[#fecaca] bg-[#fff1f1] p-8 text-center text-[#b42318] shadow-sm">
+              <div className="border border-[#fecaca] bg-[#fff1f1] p-8 text-center text-[#b42318] shadow-sm">
                 {error}
               </div>
             ) : loading ? (
@@ -818,7 +822,7 @@ export default function SlabCatalogClient() {
                 ))}
               </div>
             ) : rows.length === 0 ? (
-              <div className="rounded-[28px] border border-[var(--brand-line)] bg-white/92 p-8 text-center text-[rgba(35,35,35,0.72)] shadow-sm">
+              <div className="border border-[var(--qc-line)] bg-[color:var(--qc-bg-surface)] p-8 text-center text-[rgba(35,35,35,0.72)] shadow-sm">
                 No slabs match the current filters.
               </div>
             ) : (
@@ -839,9 +843,9 @@ export default function SlabCatalogClient() {
                   return (
                     <article
                       key={row.id}
-                      className="group relative overflow-hidden rounded-[24px] border border-[var(--brand-line)] bg-[rgba(255,255,255,0.96)] shadow-[0_14px_30px_rgba(25,27,28,0.08)] transition-transform [contain-intrinsic-size:420px] [content-visibility:auto] hover:-translate-y-1 sm:rounded-[26px]"
+                      className="group relative overflow-hidden border border-[var(--qc-line)] bg-[color:var(--qc-bg-surface)] transition-transform [contain-intrinsic-size:420px] [content-visibility:auto] hover:-translate-y-1 sm:"
                     >
-                      <div className="relative aspect-[16/10] overflow-hidden bg-[linear-gradient(180deg,var(--brand-white)_0%,rgba(255,255,255,0.94)_100%)]">
+                      <div className="relative aspect-[16/10] overflow-hidden bg-[linear-gradient(180deg,var(--qc-bg-page)_0%,rgba(255,255,255,0.94)_100%)]">
                         {row.image_url ? (
                           <button
                             type="button"
@@ -884,7 +888,7 @@ export default function SlabCatalogClient() {
                             />
                           </button>
                         ) : (
-                          <div className="flex h-full items-center justify-center text-sm font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
+                          <div className="flex h-full items-center justify-center text-sm font-semibold uppercase tracking-[0.18em] text-[var(--qc-orange)]">
                             No Image
                           </div>
                         )}
@@ -896,7 +900,7 @@ export default function SlabCatalogClient() {
                                 event.stopPropagation();
                                 openGroupViewer(row);
                               }}
-                              className="inline-flex h-10 items-center justify-center rounded-2xl border border-white/80 bg-white/92 px-4 text-sm font-semibold text-[var(--brand-ink)] shadow-sm backdrop-blur transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
+                              className="inline-flex h-10 items-center justify-center border border-white/80 bg-[color:var(--qc-bg-surface)] px-4 text-sm font-semibold text-[var(--qc-ink-1)] backdrop-blur transition-colors hover:border-[var(--qc-orange)] hover:bg-[var(--qc-bg-page)]"
                               aria-label={`View slabs for ${row.name}`}
                               title="View slab group"
                             >
@@ -909,7 +913,7 @@ export default function SlabCatalogClient() {
                                 event.stopPropagation();
                                 void openEditor(row);
                               }}
-                              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/80 bg-white/92 text-[var(--brand-ink)] shadow-sm backdrop-blur transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
+                              className="inline-flex h-10 w-10 items-center justify-center border border-white/80 bg-[color:var(--qc-bg-surface)] text-[var(--qc-ink-1)] backdrop-blur transition-colors hover:border-[var(--qc-orange)] hover:bg-[var(--qc-bg-page)]"
                               aria-label={`Edit ${row.name}`}
                               title="Edit slab"
                             >
@@ -934,7 +938,7 @@ export default function SlabCatalogClient() {
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(event) => event.stopPropagation()}
-                              className="group/site inline-flex h-10 items-center justify-center gap-0 overflow-hidden rounded-2xl border border-white/80 bg-white/92 pl-3 pr-3 text-[var(--brand-ink)] shadow-sm backdrop-blur transition-all hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
+                              className="group/site inline-flex h-10 items-center justify-center gap-0 overflow-hidden border border-white/80 bg-[color:var(--qc-bg-surface)] pl-3 pr-3 text-[var(--qc-ink-1)] backdrop-blur transition-all hover:border-[var(--qc-orange)] hover:bg-[var(--qc-bg-page)]"
                               aria-label={`Open supplier page for ${row.name}`}
                               title="View supplier page"
                             >
@@ -960,11 +964,11 @@ export default function SlabCatalogClient() {
                         </div>
                       </div>
                       <div className="p-3 text-sm text-[#232323] sm:p-3.5">
-                        <div className="rounded-[22px] border border-[var(--brand-line)] bg-[linear-gradient(180deg,#ffffff_0%,rgba(242,242,242,0.92)_100%)] px-3.5 py-3 text-[var(--brand-ink)] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+                        <div className=" border border-[var(--qc-line)] bg-[color:var(--qc-bg-page)] px-3.5 py-3 text-[var(--qc-ink-1)]">
                           <div className="min-w-0">
                             <div className="min-w-0">
                               <div className="flex items-start gap-2">
-                                <h3 className="font-display min-w-0 flex-1 text-[16px] font-semibold leading-snug text-[var(--brand-ink)] sm:text-[17px]">
+                                <h3 className="font-inter min-w-0 flex-1 text-[16px] font-semibold leading-snug text-[var(--qc-ink-1)] sm:text-[17px]">
                                   {isGroupedNaturalStone
                                     ? row.name
                                     : [row.brand_name || row.supplier, row.name].filter(Boolean).join(" · ")}
@@ -1010,11 +1014,11 @@ export default function SlabCatalogClient() {
                           {dimensions.length || thicknesses.length || finishes.length ? (
                             <div className={`mt-3 grid items-stretch gap-2 ${metricLayout.grid}`}>
                               {dimensions.length ? (
-                                <div className={`flex min-w-0 flex-col rounded-[16px] border border-[var(--brand-line)] bg-white/88 px-3 py-2 ${metricLayout.sizeTile}`}>
-                                  <p className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)] sm:text-[11px]">
+                                <div className={`flex min-w-0 flex-col border border-[var(--qc-line)] bg-[color:var(--qc-bg-surface)] px-3 py-2 ${metricLayout.sizeTile}`}>
+                                  <p className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--qc-orange)] sm:text-[11px]">
                                     Size
                                   </p>
-                                  <p className="mt-1 text-[12px] font-semibold leading-tight text-[var(--brand-ink)] sm:text-[13px]">
+                                  <p className="mt-1 text-[12px] font-semibold leading-tight text-[var(--qc-ink-1)] sm:text-[13px]">
                                     {renderMetricValues(
                                       dimensions,
                                       "whitespace-nowrap",
@@ -1024,11 +1028,11 @@ export default function SlabCatalogClient() {
                                 </div>
                               ) : null}
                               {thicknesses.length ? (
-                                <div className="flex min-w-0 flex-col rounded-[16px] border border-[var(--brand-line)] bg-white/88 px-3 py-2">
-                                  <p className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)] sm:text-[11px]">
+                                <div className="flex min-w-0 flex-col border border-[var(--qc-line)] bg-[color:var(--qc-bg-surface)] px-3 py-2">
+                                  <p className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--qc-orange)] sm:text-[11px]">
                                     Thickness
                                   </p>
-                                  <p className="mt-1 break-words text-[13px] font-semibold leading-tight text-[var(--brand-ink)] sm:text-[14px]">
+                                  <p className="mt-1 break-words text-[13px] font-semibold leading-tight text-[var(--qc-ink-1)] sm:text-[14px]">
                                     {renderMetricValues(
                                       thicknesses,
                                       "whitespace-nowrap",
@@ -1038,11 +1042,11 @@ export default function SlabCatalogClient() {
                                 </div>
                               ) : null}
                               {finishes.length ? (
-                                <div className="flex min-w-0 flex-col rounded-[16px] border border-[var(--brand-line)] bg-white/88 px-3 py-2">
-                                  <p className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)] sm:text-[11px]">
+                                <div className="flex min-w-0 flex-col border border-[var(--qc-line)] bg-[color:var(--qc-bg-surface)] px-3 py-2">
+                                  <p className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--qc-orange)] sm:text-[11px]">
                                     Finish
                                   </p>
-                                  <p className="mt-1 break-words text-[13px] font-semibold leading-tight text-[var(--brand-ink)] sm:text-[14px]">
+                                  <p className="mt-1 break-words text-[13px] font-semibold leading-tight text-[var(--qc-ink-1)] sm:text-[14px]">
                                     {renderMetricValues(
                                       finishes,
                                       "whitespace-nowrap",
@@ -1059,7 +1063,7 @@ export default function SlabCatalogClient() {
                               {colors.map((color) => (
                                 <span
                                   key={`${row.id}-color-${color}`}
-                                  className="inline-flex items-center gap-2 rounded-full border border-[var(--brand-line)] bg-white/92 px-2.5 py-1 text-[11px] font-semibold text-[rgba(25,27,28,0.72)]"
+                                  className="inline-flex items-center gap-2 rounded-full border border-[var(--qc-line)] bg-[color:var(--qc-bg-surface)] px-2.5 py-1 text-[11px] font-semibold text-[rgba(25,27,28,0.72)]"
                                 >
                                   <span
                                     aria-hidden="true"
@@ -1084,7 +1088,7 @@ export default function SlabCatalogClient() {
                       type="button"
                       onClick={() => setPage((current) => current + 1)}
                       disabled={loadingMore}
-                      className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-6 text-sm font-semibold text-[var(--brand-ink)] shadow-sm transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)] disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex h-12 items-center justify-center border border-[var(--qc-line)] bg-white px-6 text-sm font-semibold text-[var(--qc-ink-1)] transition-colors hover:border-[var(--qc-orange)] hover:bg-[var(--qc-bg-page)] disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {loadingMore ? "Loading More…" : "Load More"}
                     </button>
@@ -1093,19 +1097,8 @@ export default function SlabCatalogClient() {
               </>
             )}
           </div>
-        </div>
 
-        <footer className="px-4 pb-10 pt-2 md:px-6">
-          <div className="mx-auto max-w-[1680px] rounded-[28px] border border-[var(--brand-line)] bg-white/70 px-6 py-5 text-center shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--brand-orange)]">
-              Built by EndoMF14
-            </p>
-            <p className="mt-2 text-sm text-[color:color-mix(in_srgb,var(--brand-ink)_68%,white)]">
-              Designed to make supplier slab browsing clear, fast, and easy to
-              compare.
-            </p>
-          </div>
-        </footer>
+        <PrivateFooter />
       </main>
 
       {lightbox ? (
@@ -1118,13 +1111,13 @@ export default function SlabCatalogClient() {
           }}
         >
           <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-7xl flex-col">
-            <div className="flex flex-1 flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[rgba(10,10,10,0.86)] shadow-[0_24px_70px_rgba(0,0,0,0.34)]">
+            <div className="flex flex-1 flex-col overflow-hidden border border-white/10 bg-[rgba(10,10,10,0.86)]">
               <div className="flex items-start justify-between gap-4 border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/50">
                     Slab Preview
                   </p>
-                  <h2 className="font-display mt-1 text-xl font-semibold text-white sm:text-2xl">
+                  <h2 className="font-inter mt-1 text-xl font-semibold text-white sm:text-2xl">
                     {lightbox.name || lightbox.alt}
                   </h2>
                   {(lightbox.supplier || lightbox.material) ? (
@@ -1188,7 +1181,7 @@ export default function SlabCatalogClient() {
                       href={lightbox.detail_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex h-10 items-center justify-center rounded-2xl border border-white/18 bg-white/10 px-4 text-sm font-semibold text-white transition-colors hover:border-white/28 hover:bg-white/16"
+                      className="inline-flex h-10 items-center justify-center border border-white/18 bg-white/10 px-4 text-sm font-semibold text-white transition-colors hover:border-white/28 hover:bg-white/16"
                     >
                       View Supplier
                     </a>
@@ -1196,7 +1189,7 @@ export default function SlabCatalogClient() {
                   <button
                     type="button"
                     onClick={() => setLightbox(null)}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/18 bg-white/10 text-2xl leading-none text-white transition-colors hover:border-white/28 hover:bg-white/16"
+                    className="inline-flex h-10 w-10 items-center justify-center border border-white/18 bg-white/10 text-2xl leading-none text-white transition-colors hover:border-white/28 hover:bg-white/16"
                     aria-label="Close slab image preview"
                   >
                     {"\u00D7"}
@@ -1204,7 +1197,7 @@ export default function SlabCatalogClient() {
                 </div>
               </div>
               <div className="flex min-h-0 flex-1 items-center justify-center p-3 sm:p-4">
-                <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[28px] border border-white/8 bg-[#111111] p-2 sm:p-3">
+                <div className="relative flex h-full w-full items-center justify-center overflow-hidden border border-white/8 bg-[#111111] p-2 sm:p-3">
                   {modalImageItems.length > 1 ? (
                     <>
                       <button
@@ -1229,7 +1222,7 @@ export default function SlabCatalogClient() {
                   <img
                     src={lightbox.src}
                     alt={lightbox.alt}
-                    className={`max-h-full max-w-full rounded-[24px] object-contain shadow-[0_24px_60px_rgba(0,0,0,0.3)] ${
+                    className={`max-h-full max-w-full object-contain ${
                       lightbox.rotateImage ? "rotate-90 scale-[1.08] sm:scale-[1.16]" : ""
                     }`}
                   />
@@ -1242,7 +1235,7 @@ export default function SlabCatalogClient() {
 
       {editorLoading && !editor ? (
         <div className="fixed inset-0 z-[71] flex items-center justify-center bg-black/50 px-4">
-          <div className="rounded-[28px] border border-[var(--brand-line)] bg-white px-6 py-5 text-sm font-semibold text-[var(--brand-ink)] shadow-[0_24px_70px_rgba(25,27,28,0.14)]">
+          <div className="border border-[var(--qc-line)] bg-white px-6 py-5 text-sm font-semibold text-[var(--qc-ink-1)]">
             Loading slab editor…
           </div>
         </div>
@@ -1258,13 +1251,13 @@ export default function SlabCatalogClient() {
           }}
         >
           <div className="mx-auto max-w-6xl">
-            <div className="overflow-hidden rounded-[32px] border border-white/10 bg-[rgba(10,10,10,0.88)] shadow-[0_24px_70px_rgba(0,0,0,0.34)]">
+            <div className="overflow-hidden border border-white/10 bg-[rgba(10,10,10,0.88)]">
               <div className="flex items-start justify-between gap-4 border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/50">
                     Natural Stone Group
                   </p>
-                  <h2 className="font-display mt-1 text-xl font-semibold text-white sm:text-2xl">
+                  <h2 className="font-inter mt-1 text-xl font-semibold text-white sm:text-2xl">
                     {groupViewer.name}
                   </h2>
                   <p className="mt-1 text-sm text-white/68">
@@ -1280,7 +1273,7 @@ export default function SlabCatalogClient() {
                 <button
                   type="button"
                   onClick={closeGroupViewer}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/18 bg-white/10 text-2xl leading-none text-white transition-colors hover:border-white/28 hover:bg-white/16"
+                  className="inline-flex h-10 w-10 items-center justify-center border border-white/18 bg-white/10 text-2xl leading-none text-white transition-colors hover:border-white/28 hover:bg-white/16"
                   aria-label="Close natural stone group"
                 >
                   {"\u00D7"}
@@ -1298,9 +1291,9 @@ export default function SlabCatalogClient() {
                     return (
                       <article
                         key={`group-member-${member.id}`}
-                        className="overflow-hidden rounded-[24px] border border-white/10 bg-white/95 shadow-[0_14px_30px_rgba(25,27,28,0.12)]"
+                        className="overflow-hidden border border-white/10 bg-[color:var(--qc-bg-surface)]"
                       >
-                        <div className="relative aspect-[16/10] overflow-hidden bg-[var(--brand-shell)]">
+                        <div className="relative aspect-[16/10] overflow-hidden bg-[var(--qc-bg-page)]">
                           {member.image_url ? (
                             <button
                               type="button"
@@ -1342,7 +1335,7 @@ export default function SlabCatalogClient() {
                                 event.stopPropagation();
                                 void openEditor(member);
                               }}
-                              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/80 bg-white/92 text-[var(--brand-ink)] shadow-sm backdrop-blur transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
+                              className="inline-flex h-10 w-10 items-center justify-center border border-white/80 bg-[color:var(--qc-bg-surface)] text-[var(--qc-ink-1)] backdrop-blur transition-colors hover:border-[var(--qc-orange)] hover:bg-[var(--qc-bg-page)]"
                               aria-label={`Edit ${member.name}`}
                               title="Edit slab"
                             >
@@ -1366,15 +1359,15 @@ export default function SlabCatalogClient() {
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(event) => event.stopPropagation()}
-                                className="inline-flex h-10 items-center justify-center rounded-2xl border border-white/80 bg-white/92 px-4 text-sm font-semibold text-[var(--brand-ink)] shadow-sm backdrop-blur transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-shell)]"
+                                className="inline-flex h-10 items-center justify-center border border-white/80 bg-[color:var(--qc-bg-surface)] px-4 text-sm font-semibold text-[var(--qc-ink-1)] backdrop-blur transition-colors hover:border-[var(--qc-orange)] hover:bg-[var(--qc-bg-page)]"
                               >
                                 Visit Site
                               </a>
                             ) : null}
                           </div>
                         </div>
-                        <div className="p-4 text-sm text-[var(--brand-ink)]">
-                          <h3 className="font-display text-[16px] font-semibold leading-snug">
+                        <div className="p-4 text-sm text-[var(--qc-ink-1)]">
+                          <h3 className="font-inter text-[16px] font-semibold leading-snug">
                             {[member.supplier, member.name].filter(Boolean).join(" · ")}
                           </h3>
                           <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgba(35,35,35,0.54)]">
@@ -1382,20 +1375,20 @@ export default function SlabCatalogClient() {
                           </p>
                           <div className={`mt-3 grid items-stretch gap-2 ${memberMetricLayout.grid}`}>
                             {memberDimensions.length ? (
-                              <div className={`rounded-[16px] border border-[var(--brand-line)] bg-[var(--brand-shell)] px-3 py-2 ${memberMetricLayout.sizeTile}`}>
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)]">Size</p>
+                              <div className={` border border-[var(--qc-line)] bg-[var(--qc-bg-page)] px-3 py-2 ${memberMetricLayout.sizeTile}`}>
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--qc-orange)]">Size</p>
                                 <p className="mt-1 text-[13px] font-semibold leading-tight">{memberDimensions.join(", ")}</p>
                               </div>
                             ) : null}
                             {memberThicknesses.length ? (
-                              <div className="rounded-[16px] border border-[var(--brand-line)] bg-[var(--brand-shell)] px-3 py-2">
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)]">Thickness</p>
+                              <div className=" border border-[var(--qc-line)] bg-[var(--qc-bg-page)] px-3 py-2">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--qc-orange)]">Thickness</p>
                                 <p className="mt-1 text-[13px] font-semibold leading-tight">{memberThicknesses.join(", ")}</p>
                               </div>
                             ) : null}
                             {memberFinishes.length ? (
-                              <div className="rounded-[16px] border border-[var(--brand-line)] bg-[var(--brand-shell)] px-3 py-2">
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)]">Finish</p>
+                              <div className=" border border-[var(--qc-line)] bg-[var(--qc-bg-page)] px-3 py-2">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--qc-orange)]">Finish</p>
                                 <p className="mt-1 text-[13px] font-semibold leading-tight">{memberFinishes.join(", ")}</p>
                               </div>
                             ) : null}
@@ -1405,7 +1398,7 @@ export default function SlabCatalogClient() {
                               {memberColors.map((value) => (
                                 <span
                                   key={`${member.id}-group-color-${value}`}
-                                  className="inline-flex items-center gap-2 rounded-full border border-[var(--brand-line)] bg-white px-2.5 py-1 text-[11px] font-semibold text-[rgba(25,27,28,0.72)]"
+                                  className="inline-flex items-center gap-2 rounded-full border border-[var(--qc-line)] bg-white px-2.5 py-1 text-[11px] font-semibold text-[rgba(25,27,28,0.72)]"
                                 >
                                   <span
                                     aria-hidden="true"
@@ -1435,20 +1428,20 @@ export default function SlabCatalogClient() {
             if (event.target === event.currentTarget) closeEditor();
           }}
         >
-          <div className="mx-auto max-w-5xl overflow-hidden rounded-[32px] border border-[var(--brand-line)] bg-white shadow-[0_24px_70px_rgba(25,27,28,0.14)]">
-            <div className="flex items-center justify-between border-b border-[var(--brand-line)] bg-[linear-gradient(135deg,#ffffff_0%,#f7f7f7_100%)] px-6 py-5">
+          <div className="mx-auto max-w-5xl overflow-hidden border border-[var(--qc-line)] bg-white">
+            <div className="flex items-center justify-between border-b border-[var(--qc-line)] bg-[linear-gradient(135deg,#ffffff_0%,#f7f7f7_100%)] px-6 py-5">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--qc-orange)]">
                   Slab Editor
                 </p>
-                <h2 className="font-display text-2xl font-semibold text-[var(--brand-ink)]">
+                <h2 className="font-inter text-2xl font-semibold text-[var(--qc-ink-1)]">
                   Edit Slab
                 </h2>
               </div>
               <button
                 type="button"
                 onClick={closeEditor}
-                className="h-10 w-10 rounded-full border border-[var(--brand-line)] bg-white text-xl text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+                className="h-10 w-10 rounded-full border border-[var(--qc-line)] bg-white text-xl text-[var(--qc-ink-1)] transition-colors hover:border-[var(--qc-orange)] hover:bg-[var(--qc-bg-page)]"
               >
                 {"\u00D7"}
               </button>
@@ -1462,23 +1455,23 @@ export default function SlabCatalogClient() {
                   </span>
                 ) : null}
                 {editor.brand_name ? (
-                  <span className="inline-flex items-center rounded-full border border-[var(--brand-line)] bg-[var(--brand-white)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[rgba(35,35,35,0.7)]">
+                  <span className="inline-flex items-center rounded-full border border-[var(--qc-line)] bg-[var(--qc-bg-page)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[rgba(35,35,35,0.7)]">
                     Brand · {editor.brand_name}
                   </span>
                 ) : null}
                 {editor.supplier ? (
-                  <span className="inline-flex items-center rounded-full border border-[var(--brand-line)] bg-[var(--brand-white)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[rgba(35,35,35,0.7)]">
+                  <span className="inline-flex items-center rounded-full border border-[var(--qc-line)] bg-[var(--qc-bg-page)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[rgba(35,35,35,0.7)]">
                     Supplier · {editor.supplier}
                   </span>
                 ) : null}
                 {editor.material ? (
-                  <span className="inline-flex items-center rounded-full border border-[var(--brand-line)] bg-[var(--brand-white)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[rgba(35,35,35,0.7)]">
+                  <span className="inline-flex items-center rounded-full border border-[var(--qc-line)] bg-[var(--qc-bg-page)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[rgba(35,35,35,0.7)]">
                     Material · {editor.material}
                   </span>
                 ) : null}
               </div>
 
-              <section className="rounded-[26px] border border-[var(--brand-line)] bg-white p-5 shadow-[0_12px_28px_rgba(25,27,28,0.05)]">
+              <section className=" border border-[var(--qc-line)] bg-white p-5">
                 <div className="grid gap-4 xl:grid-cols-12">
                   <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-3">
                     Brand
@@ -1570,8 +1563,8 @@ export default function SlabCatalogClient() {
               </section>
 
               <div className="grid gap-4 lg:grid-cols-3">
-                <section className="rounded-[22px] border border-[var(--brand-line)] bg-[var(--brand-white)] p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Colors</p>
+                <section className=" border border-[var(--qc-line)] bg-[var(--qc-bg-page)] p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--qc-orange)]">Colors</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {editorLookups.colors.map((row) => {
                       const value = row.name;
@@ -1582,8 +1575,8 @@ export default function SlabCatalogClient() {
                           onClick={() => toggleEditorListValue("colors", value)}
                           className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[rgba(247,134,57,0.14)] ${
                             listIncludes(editor.colors, value)
-                              ? "border-[var(--brand-orange)] bg-white text-[rgba(25,27,28,0.82)] ring-4 ring-[rgba(247,134,57,0.14)]"
-                              : "border-[var(--brand-line)] bg-white/92 text-[rgba(25,27,28,0.72)]"
+                              ? "border-[var(--qc-orange)] bg-white text-[rgba(25,27,28,0.82)] ring-4 ring-[rgba(247,134,57,0.14)]"
+                              : "border-[var(--qc-line)] bg-[color:var(--qc-bg-surface)] text-[rgba(25,27,28,0.72)]"
                           }`}
                         >
                           <span
@@ -1598,8 +1591,8 @@ export default function SlabCatalogClient() {
                   </div>
                 </section>
 
-                <section className="rounded-[22px] border border-[var(--brand-line)] bg-[var(--brand-white)] p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Finishes</p>
+                <section className=" border border-[var(--qc-line)] bg-[var(--qc-bg-page)] p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--qc-orange)]">Finishes</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {editorLookups.finishes.map((row) => (
                       <button
@@ -1608,8 +1601,8 @@ export default function SlabCatalogClient() {
                         onClick={() => toggleEditorListValue("finishes", row.name)}
                         className={`inline-flex h-10 items-center justify-center rounded-full border px-3.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[rgba(247,134,57,0.14)] ${
                           listIncludes(editor.finishes, row.name)
-                            ? "border-[var(--brand-orange)] bg-white text-[var(--brand-orange)] ring-4 ring-[rgba(247,134,57,0.14)]"
-                            : "border-[var(--brand-line)] bg-white text-[var(--brand-ink)] hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+                            ? "border-[var(--qc-orange)] bg-white text-[var(--qc-orange)] ring-4 ring-[rgba(247,134,57,0.14)]"
+                            : "border-[var(--qc-line)] bg-white text-[var(--qc-ink-1)] hover:border-[var(--qc-orange)] hover:bg-[var(--qc-bg-page)]"
                         }`}
                       >
                         {row.name}
@@ -1618,8 +1611,8 @@ export default function SlabCatalogClient() {
                   </div>
                 </section>
 
-                <section className="rounded-[22px] border border-[var(--brand-line)] bg-[var(--brand-white)] p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-orange)]">Thicknesses</p>
+                <section className=" border border-[var(--qc-line)] bg-[var(--qc-bg-page)] p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--qc-orange)]">Thicknesses</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {catalogOptions.thicknesses.map((value) => (
                       <button
@@ -1628,8 +1621,8 @@ export default function SlabCatalogClient() {
                         onClick={() => toggleEditorListValue("thicknesses", value)}
                         className={`inline-flex h-10 items-center justify-center rounded-full border px-3.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[rgba(247,134,57,0.14)] ${
                           listIncludes(editor.thicknesses, value)
-                            ? "border-[var(--brand-orange)] bg-white text-[var(--brand-orange)] ring-4 ring-[rgba(247,134,57,0.14)]"
-                            : "border-[var(--brand-line)] bg-white text-[var(--brand-ink)] hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+                            ? "border-[var(--qc-orange)] bg-white text-[var(--qc-orange)] ring-4 ring-[rgba(247,134,57,0.14)]"
+                            : "border-[var(--qc-line)] bg-white text-[var(--qc-ink-1)] hover:border-[var(--qc-orange)] hover:bg-[var(--qc-bg-page)]"
                         }`}
                       >
                         {value}
@@ -1640,7 +1633,7 @@ export default function SlabCatalogClient() {
               </div>
 
               {editorError ? (
-                <div className="rounded-[20px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                <div className=" border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
                   {editorError}
                 </div>
               ) : null}
@@ -1653,14 +1646,14 @@ export default function SlabCatalogClient() {
                       type="button"
                       onClick={archiveEditor}
                       disabled={editorSaving}
-                      className="inline-flex h-10 items-center justify-center rounded-2xl bg-rose-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex h-10 items-center justify-center bg-rose-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Confirm
                     </button>
                     <button
                       type="button"
                       onClick={() => setArchiveConfirm(false)}
-                      className="inline-flex h-10 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-4 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:bg-[var(--brand-white)]"
+                      className="inline-flex h-10 items-center justify-center border border-[var(--qc-line)] bg-white px-4 text-sm font-semibold text-[var(--qc-ink-1)] transition-colors hover:bg-[var(--qc-bg-page)]"
                     >
                       Cancel
                     </button>
@@ -1670,7 +1663,7 @@ export default function SlabCatalogClient() {
                     type="button"
                     onClick={archiveEditor}
                     disabled={editorSaving}
-                    className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-200 bg-rose-50 px-6 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex h-12 items-center justify-center border border-rose-200 bg-rose-50 px-6 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Archive Slab
                   </button>
@@ -1678,7 +1671,7 @@ export default function SlabCatalogClient() {
                 <button
                   type="button"
                   onClick={closeEditor}
-                  className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--brand-line)] bg-white px-6 text-sm font-semibold text-[var(--brand-ink)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[var(--brand-white)]"
+                  className="inline-flex h-12 items-center justify-center border border-[var(--qc-line)] bg-white px-6 text-sm font-semibold text-[var(--qc-ink-1)] transition-colors hover:border-[var(--qc-orange)] hover:bg-[var(--qc-bg-page)]"
                 >
                   Cancel
                 </button>
@@ -1686,7 +1679,7 @@ export default function SlabCatalogClient() {
                   type="button"
                   onClick={saveEditor}
                   disabled={editorSaving}
-                  className="inline-flex h-12 items-center justify-center rounded-2xl bg-[var(--brand-ink)] px-6 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex h-12 items-center justify-center bg-[var(--qc-ink-1)] px-6 text-sm font-semibold text-white transition-colors hover:bg-[var(--qc-orange)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {editorSaving ? "Saving Slab…" : "Save Slab"}
                 </button>
