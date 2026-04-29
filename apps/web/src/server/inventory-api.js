@@ -158,26 +158,17 @@ export async function recordInventoryCheck(client, authed, body) {
     throw nextError;
   }
 
-  if (outcome === "seen") {
-    const seenUpdate = {
-      last_seen_at: new Date().toISOString(),
-      location,
-      inventory_hold: false,
-    };
-    const { error: updateError } = await writeClient
-      .from("remnants")
-      .update(seenUpdate)
-      .eq("id", remnant.id)
-      .is("deleted_at", null);
-    if (updateError) throw updateError;
-  } else {
-    const { error: updateError } = await writeClient
-      .from("remnants")
-      .update({ location })
-      .eq("id", remnant.id)
-      .is("deleted_at", null);
-    if (updateError) throw updateError;
-  }
+  const remnantUpdate = {
+    location,
+    inventory_hold: false,
+    ...(outcome === "seen" ? { last_seen_at: new Date().toISOString() } : {}),
+  };
+  const { error: updateError } = await writeClient
+    .from("remnants")
+    .update(remnantUpdate)
+    .eq("id", remnant.id)
+    .is("deleted_at", null);
+  if (updateError) throw updateError;
 
   const remnantLabel = `#${remnant.moraware_remnant_id || remnant.id}`;
   const message = outcome === "seen"
@@ -218,7 +209,7 @@ export async function recordInventoryCheck(client, authed, body) {
       ...formatRemnant({
         ...remnant,
         location,
-        ...(outcome === "seen" ? { inventory_hold: false } : {}),
+        inventory_hold: false,
       }),
       current_hold: null,
     },
