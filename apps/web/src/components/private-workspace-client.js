@@ -1143,7 +1143,7 @@ export default function PrivateWorkspaceClient() {
  border: "1px solid var(--qc-line)",
  borderRadius: "var(--qc-radius-sharp)",
  }}
- title="Toggle archived remnants"
+ title="Show only archived remnants"
  >
  <svg
  className="h-3.5 w-3.5"
@@ -1159,7 +1159,7 @@ export default function PrivateWorkspaceClient() {
  <path d="M3 6v6.5a1.5 1.5 0 001.5 1.5h7A1.5 1.5 0 0013 12.5V6" />
  <path d="M6.5 9h3" />
  </svg>
- Show archived
+ {filters.archived === "1" ? "Archived only" : "Archived"}
  </button>
  ) : null}
 

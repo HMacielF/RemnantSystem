@@ -94,7 +94,9 @@ export async function fetchPrivateRemnants(request, authContext = null) {
     .order("moraware_remnant_id", { ascending: true, nullsFirst: false })
     .order("id", { ascending: true });
 
-  if (!includeArchived) {
+  if (includeArchived) {
+    query = query.not("deleted_at", "is", null);
+  } else {
     query = query.is("deleted_at", null);
   }
 
