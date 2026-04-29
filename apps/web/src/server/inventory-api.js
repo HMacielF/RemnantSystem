@@ -365,6 +365,23 @@ export async function endInventoryPass(client, authed, sessionId) {
   return { ok: true, count: sweepIds.length, duplicate_skipped: duplicateSkipped };
 }
 
+export async function fetchActiveInventorySession(client) {
+  const writeClient = getWriteClient(client);
+  const { data, error } = await writeClient
+    .from("audit_logs")
+    .select("meta, created_at")
+    .eq("event_type", "inventory_double_check_started")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  const audit = data?.[0];
+  if (!audit) return { session_id: null, started_at: null };
+  return {
+    session_id: audit?.meta?.session_id || null,
+    started_at: audit.created_at,
+  };
+}
+
 export async function fetchInventoryHoldCount(client) {
   const writeClient = getWriteClient(client);
   const { count, error } = await writeClient

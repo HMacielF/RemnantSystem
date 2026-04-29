@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   bulkInventoryHold,
   endInventoryPass,
+  fetchActiveInventorySession,
   fetchInventoryCheckSession,
   fetchInventoryHoldCount,
   lookupInventoryCheckRemnant,
@@ -23,6 +24,10 @@ export const GET = withAuth(SUPER_ADMIN, async (request, authed) => {
 
   if (searchParams.get("hold_count") === "1") {
     return NextResponse.json(await fetchInventoryHoldCount(authed.client));
+  }
+
+  if (searchParams.get("active") === "1") {
+    return NextResponse.json(await fetchActiveInventorySession(authed.client));
   }
 
   return NextResponse.json(

@@ -188,10 +188,33 @@ export default function RemnantConfirmClient({ profile = null }) {
   }
 
   useEffect(() => {
-    const stored = String(window.localStorage.getItem(STORAGE_KEY) || "").trim();
-    const nextSessionId = stored || createSessionId();
-    persistSession(nextSessionId);
-    inputRef.current?.focus();
+    let cancelled = false;
+
+    async function bootstrapSession() {
+      let nextSessionId = null;
+      try {
+        const payload = await apiFetch("/api/remnant-checks?active=1", { cache: "no-store" });
+        if (payload?.session_id) {
+          nextSessionId = payload.session_id;
+        }
+      } catch (_err) {
+        /* fall through to localStorage */
+      }
+      if (cancelled) return;
+
+      if (!nextSessionId) {
+        const stored = String(window.localStorage.getItem(STORAGE_KEY) || "").trim();
+        nextSessionId = stored || createSessionId();
+      }
+
+      persistSession(nextSessionId);
+      inputRef.current?.focus();
+    }
+
+    bootstrapSession();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => () => {
