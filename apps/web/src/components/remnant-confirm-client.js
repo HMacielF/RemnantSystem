@@ -273,7 +273,7 @@ export default function RemnantConfirmClient({ profile = null }) {
       showTransientMessage(`${payload?.count ?? 0} remnants flagged — scan each to confirm`, "warn");
       refreshSessionSummary(newSessionId);
     } catch (nextError) {
-      setError(friendlyErrorMessage(nextError, "Failed to start inventory double check."));
+      setError(friendlyErrorMessage(nextError, "Failed to start the pass."));
     } finally {
       setHoldStarting(false);
     }
@@ -567,7 +567,7 @@ export default function RemnantConfirmClient({ profile = null }) {
               Inventory pass
             </p>
             <h2 className="mt-2 text-[20px] font-medium leading-tight tracking-[-0.015em] text-[color:var(--qc-ink-1)]">
-              Start inventory double check?
+              Start a new pass?
             </h2>
             <p className="mt-3 text-[13px] leading-[1.6] text-[color:var(--qc-ink-2)]">
               Every non-sold remnant will be flagged for verification. As you scan each one and confirm it as <span className="font-semibold text-[color:var(--qc-ink-1)]">Seen</span>, the flag clears. Anything still flagged at the end of the pass didn&apos;t show up — that&apos;s your missing list. Customer holds and statuses are not affected.
