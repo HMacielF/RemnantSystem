@@ -328,6 +328,13 @@ export async function fetchInventoryCheckSession(client, authed, sessionId) {
     message: row.message,
   }));
 
+  const notInDbEntries = notInDbRows.slice(0, 200).map((row) => ({
+    id: row.id,
+    entered_number: row?.meta?.entered_number || null,
+    created_at: row.created_at,
+    message: row.message,
+  }));
+
   return {
     session_id: normalizedSessionId,
     summary: {
@@ -346,5 +353,6 @@ export async function fetchInventoryCheckSession(client, authed, sessionId) {
       status: row.status,
     })),
     recent,
+    not_in_db_entries: notInDbEntries,
   };
 }

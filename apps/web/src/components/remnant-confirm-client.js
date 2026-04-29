@@ -76,6 +76,13 @@ function friendlyErrorMessage(error, fallback) {
   return raw;
 }
 
+function formatScanTime(iso) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 function statusPillStyle(status) {
   const lc = String(status || "").toLowerCase();
   if (lc === "sold") {
@@ -115,6 +122,7 @@ export default function RemnantConfirmClient({ profile = null }) {
   const [holdCount, setHoldCount] = useState(null);
   const [holdConfirmOpen, setHoldConfirmOpen] = useState(false);
   const [holdStarting, setHoldStarting] = useState(false);
+  const [sessionSummary, setSessionSummary] = useState(null);
   const inputRef = useRef(null);
   const locationRef = useRef(null);
   const lookupRequestIdRef = useRef(0);
@@ -190,14 +198,41 @@ export default function RemnantConfirmClient({ profile = null }) {
     }
   }
 
+  async function refreshSessionSummary(targetSessionId) {
+    const id = targetSessionId || sessionId;
+    if (!id) return;
+    try {
+      const payload = await apiFetch(
+        `/api/remnant-checks?session_id=${encodeURIComponent(id)}`,
+        { cache: "no-store" },
+      );
+      setSessionSummary(payload || null);
+    } catch (_err) {
+      /* best effort */
+    }
+  }
+
   useEffect(() => {
     refreshHoldCount();
   }, []);
+
+  useEffect(() => {
+    if (sessionId) refreshSessionSummary(sessionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
   async function startInventoryDoubleCheck() {
     setHoldStarting(true);
     setError("");
     try {
+      const newSessionId = createSessionId();
+      persistSession(newSessionId);
+      setLocalCheckedCount(0);
+      setLookupValue("");
+      setLookupResult(null);
+      setLastResolvedLookup(null);
+      setSessionSummary(null);
+
       const payload = await apiFetch("/api/remnant-checks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -206,6 +241,7 @@ export default function RemnantConfirmClient({ profile = null }) {
       setHoldCount(payload?.count ?? 0);
       setHoldConfirmOpen(false);
       showTransientMessage(`${payload?.count ?? 0} remnants flagged — scan each to confirm`, "warn");
+      refreshSessionSummary(newSessionId);
     } catch (nextError) {
       setError(friendlyErrorMessage(nextError, "Failed to start inventory double check."));
     } finally {
@@ -318,6 +354,7 @@ export default function RemnantConfirmClient({ profile = null }) {
       pulseInputReadyState();
       inputRef.current?.focus();
       refreshHoldCount();
+      refreshSessionSummary();
     } catch (nextError) {
       setError(friendlyErrorMessage(nextError, "Failed to save confirmation."));
     } finally {
@@ -346,6 +383,7 @@ export default function RemnantConfirmClient({ profile = null }) {
       showTransientMessage(payload?.message || `#${lookupValue.trim()} → not in DB`, "warn");
       setLocalCheckedCount((count) => count + 1);
       setLookupValue("");
+      refreshSessionSummary();
       pulseInputReadyState();
       inputRef.current?.focus();
     } catch (nextError) {
@@ -1092,6 +1130,126 @@ export default function RemnantConfirmClient({ profile = null }) {
                 </button>
               </div>
             </div>
+          </section>
+        ) : null}
+
+        {sessionSummary?.summary &&
+        (sessionSummary.summary.checked_count > 0 ||
+          sessionSummary.summary.not_in_db_count > 0) ? (
+          <section
+            className="mt-5 overflow-hidden bg-[color:var(--qc-bg-surface)]"
+            style={{
+              border: "1px solid var(--qc-line)",
+              borderRadius: "var(--qc-radius-sharp)",
+            }}
+          >
+            <div
+              className="flex items-center justify-between gap-4 bg-white px-5 py-3"
+              style={{ borderBottom: "1px solid var(--qc-line)" }}
+            >
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
+                  Pass summary
+                </p>
+                <p className="mt-1 text-[13px] text-[color:var(--qc-ink-2)]">
+                  <span className="font-semibold text-[color:var(--qc-ink-1)]">
+                    {sessionSummary.summary.checked_count + sessionSummary.summary.not_in_db_count}
+                  </span>
+                  {" "}entr{(sessionSummary.summary.checked_count + sessionSummary.summary.not_in_db_count) === 1 ? "y" : "ies"} this pass
+                </p>
+              </div>
+            </div>
+
+            <div
+              className="grid grid-cols-2 gap-px bg-[color:var(--qc-line)] sm:grid-cols-4"
+              style={{ borderBottom: "1px solid var(--qc-line)" }}
+            >
+              {[
+                {
+                  label: "Seen",
+                  value: sessionSummary.summary.seen_count,
+                  bg: "var(--qc-status-available-bg)",
+                  fg: "var(--qc-status-available-fg)",
+                  dot: "var(--qc-status-available-dot)",
+                },
+                {
+                  label: "Missing",
+                  value: sessionSummary.summary.missing_count,
+                  bg: "var(--qc-status-sold-bg)",
+                  fg: "var(--qc-status-sold-fg)",
+                  dot: "var(--qc-status-sold-dot)",
+                },
+                {
+                  label: "Review",
+                  value: sessionSummary.summary.issue_count,
+                  bg: "var(--qc-status-hold-bg)",
+                  fg: "var(--qc-status-hold-fg)",
+                  dot: "var(--qc-status-hold-dot)",
+                },
+                {
+                  label: "Not in DB",
+                  value: sessionSummary.summary.not_in_db_count,
+                  bg: "var(--qc-status-pending-bg)",
+                  fg: "var(--qc-status-pending-fg)",
+                  dot: "var(--qc-status-pending-dot)",
+                },
+              ].map((tile) => (
+                <div
+                  key={tile.label}
+                  className="bg-[color:var(--qc-bg-surface)] px-4 py-4"
+                >
+                  <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+                    <span
+                      aria-hidden="true"
+                      className="inline-block h-1.5 w-1.5 rounded-full"
+                      style={{ backgroundColor: tile.dot }}
+                    />
+                    {tile.label}
+                  </p>
+                  <p
+                    className="mt-1 text-[24px] font-medium leading-none tracking-[-0.01em]"
+                    style={{ color: tile.value > 0 ? tile.fg : "var(--qc-ink-3)" }}
+                  >
+                    {tile.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {sessionSummary.not_in_db_entries?.length ? (
+              <div className="px-5 py-4">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10.5px] font-medium uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
+                    Not in DB
+                  </p>
+                  <span className="text-[10.5px] uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+                    Add manually
+                  </span>
+                </div>
+                <ul className="mt-3 divide-y" style={{ borderColor: "var(--qc-line)" }}>
+                  {sessionSummary.not_in_db_entries.map((entry) => (
+                    <li
+                      key={entry.id}
+                      className="flex items-center justify-between gap-3 py-2.5"
+                      style={{ borderTop: "1px solid var(--qc-line)" }}
+                    >
+                      <span
+                        className="text-[14px] font-medium text-[color:var(--qc-ink-1)]"
+                        style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                      >
+                        #{entry.entered_number || "—"}
+                      </span>
+                      <span
+                        className="text-[11px] text-[color:var(--qc-ink-3)]"
+                        style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                      >
+                        {formatScanTime(entry.created_at)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </section>
         ) : null}
       </div>
