@@ -55,6 +55,7 @@ function compactSuccessMessage(text) {
   const value = String(text || "").trim();
   if (!value) return "";
   return value
+    .replace(/^Duplicate ID — remnant (#\S+) also seen at (.+)$/, "$1 → duplicate (also at $2)")
     .replace(" in inventory", " → seen")
     .replace(" as physically present but missing from the database", " → not in DB")
     .replace(" as not seen in inventory", " → missing")
@@ -370,13 +371,18 @@ export default function RemnantConfirmClient({ profile = null }) {
         }),
       });
       triggerSuccessFeedback();
-      showTransientMessage(payload?.message || (
-        outcome === "seen"
+      const effectiveOutcome = payload?.outcome || outcome;
+      const fallbackMessage = effectiveOutcome === "duplicate"
+        ? `#${displayRemnantId(currentRemnant)} duplicate ID — also seen elsewhere`
+        : effectiveOutcome === "seen"
           ? `#${displayRemnantId(currentRemnant)} confirmed`
-          : outcome === "issue"
+          : effectiveOutcome === "issue"
             ? `#${displayRemnantId(currentRemnant)} flagged for review`
-            : `#${displayRemnantId(currentRemnant)} marked missing`
-      ), outcome === "missing" ? "warn" : "success");
+            : `#${displayRemnantId(currentRemnant)} marked missing`;
+      const toneForOutcome = effectiveOutcome === "missing" || effectiveOutcome === "duplicate"
+        ? "warn"
+        : "success";
+      showTransientMessage(payload?.message || fallbackMessage, toneForOutcome);
       setLocalCheckedCount((count) => count + 1);
       setLookupValue("");
       setLookupResult(null);
@@ -1270,7 +1276,11 @@ export default function RemnantConfirmClient({ profile = null }) {
             </div>
 
             <div
-              className="grid grid-cols-2 gap-px bg-[color:var(--qc-line)] sm:grid-cols-4"
+              className={`grid gap-px bg-[color:var(--qc-line)] ${
+                (sessionSummary.summary.duplicate_count || 0) > 0
+                  ? "grid-cols-2 sm:grid-cols-5"
+                  : "grid-cols-2 sm:grid-cols-4"
+              }`}
               style={{ borderBottom: "1px solid var(--qc-line)" }}
             >
               {[
@@ -1302,6 +1312,17 @@ export default function RemnantConfirmClient({ profile = null }) {
                   fg: "var(--qc-status-pending-fg)",
                   dot: "var(--qc-status-pending-dot)",
                 },
+                ...((sessionSummary.summary.duplicate_count || 0) > 0
+                  ? [
+                      {
+                        label: "Duplicate",
+                        value: sessionSummary.summary.duplicate_count,
+                        bg: "var(--qc-orange-wash)",
+                        fg: "var(--qc-orange)",
+                        dot: "var(--qc-orange)",
+                      },
+                    ]
+                  : []),
               ].map((tile) => (
                 <div
                   key={tile.label}
@@ -1324,6 +1345,68 @@ export default function RemnantConfirmClient({ profile = null }) {
                 </div>
               ))}
             </div>
+
+            {sessionSummary.duplicate_entries?.length ? (
+              <div
+                className="px-5 py-4"
+                style={{ borderTop: "1px solid var(--qc-line)" }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p
+                    className="text-[10.5px] font-medium uppercase tracking-[0.20em]"
+                    style={{ color: "var(--qc-orange)" }}
+                  >
+                    Duplicate IDs
+                  </p>
+                  <span className="text-[10.5px] uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+                    Resolve physically
+                  </span>
+                </div>
+                <ul className="mt-3">
+                  {sessionSummary.duplicate_entries.map((entry) => (
+                    <li
+                      key={entry.id}
+                      className="flex items-start justify-between gap-3 py-2.5"
+                      style={{ borderTop: "1px solid var(--qc-line)" }}
+                    >
+                      <div className="min-w-0">
+                        <p className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className="text-[14px] font-medium text-[color:var(--qc-ink-1)]"
+                            style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                          >
+                            #{entry.moraware_remnant_id || entry.remnant_id}
+                          </span>
+                          {(entry.locations || []).map((loc) => (
+                            <span
+                              key={`${entry.id}-${loc}`}
+                              className="px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-white"
+                              style={{
+                                backgroundColor: "var(--qc-orange)",
+                                borderRadius: "var(--qc-radius-sharp)",
+                              }}
+                            >
+                              {loc}
+                            </span>
+                          ))}
+                        </p>
+                        {entry.name ? (
+                          <p className="mt-0.5 truncate text-[12px] text-[color:var(--qc-ink-2)]">
+                            {entry.name}
+                          </p>
+                        ) : null}
+                      </div>
+                      <span
+                        className="shrink-0 text-[11px] text-[color:var(--qc-ink-3)]"
+                        style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                      >
+                        {formatScanTime(entry.created_at)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
 
             {sessionSummary.missing_entries?.length ? (
               <div

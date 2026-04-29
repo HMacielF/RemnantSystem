@@ -20,6 +20,9 @@ export function normalizeInventoryCheckOutcome(value) {
   if (normalized === "not_in_db" || normalized === "not-in-db" || normalized === "unuploaded" || normalized === "unknown") {
     return "not_in_db";
   }
+  if (normalized === "duplicate" || normalized === "duplicate_id" || normalized === "duplicate-id") {
+    return "duplicate";
+  }
   const error = new Error("Invalid inventory check outcome");
   error.statusCode = 400;
   throw error;
@@ -158,10 +161,34 @@ export async function recordInventoryCheck(client, authed, body) {
     throw nextError;
   }
 
+  let effectiveOutcome = outcome;
+  let duplicateLocations = null;
+  let priorLocation = null;
+
+  if (outcome === "seen") {
+    const sessionAudits = await fetchInventoryCheckAuditRows(client, authed, sessionId);
+    const priorAuditsForRemnant = sessionAudits.filter(
+      (row) => Number(row.remnant_id) === Number(remnant.id),
+    );
+    const priorLocationsSet = new Set(
+      priorAuditsForRemnant
+        .map((row) => String(row?.meta?.location || "").trim())
+        .filter(Boolean),
+    );
+    const currentLocation = String(location || "").trim();
+
+    if (priorLocationsSet.size > 0 && currentLocation && !priorLocationsSet.has(currentLocation)) {
+      effectiveOutcome = "duplicate";
+      const allLocations = [...new Set([...priorLocationsSet, currentLocation])];
+      duplicateLocations = allLocations;
+      priorLocation = [...priorLocationsSet][0] || null;
+    }
+  }
+
   const remnantUpdate = {
     location,
-    inventory_hold: false,
-    ...(outcome === "seen" ? { last_seen_at: new Date().toISOString() } : {}),
+    inventory_hold: effectiveOutcome === "duplicate",
+    ...(effectiveOutcome === "seen" ? { last_seen_at: new Date().toISOString() } : {}),
   };
   const { error: updateError } = await writeClient
     .from("remnants")
@@ -171,11 +198,13 @@ export async function recordInventoryCheck(client, authed, body) {
   if (updateError) throw updateError;
 
   const remnantLabel = `#${remnant.moraware_remnant_id || remnant.id}`;
-  const message = outcome === "seen"
-    ? `Confirmed remnant ${remnantLabel} in inventory`
-    : outcome === "issue"
-      ? `Flagged remnant ${remnantLabel} for review`
-      : `Marked remnant ${remnantLabel} as not seen in inventory`;
+  const message = effectiveOutcome === "duplicate"
+    ? `Duplicate ID — remnant ${remnantLabel} also seen at ${priorLocation || "another zone"}`
+    : effectiveOutcome === "seen"
+      ? `Confirmed remnant ${remnantLabel} in inventory`
+      : effectiveOutcome === "issue"
+        ? `Flagged remnant ${remnantLabel} for review`
+        : `Marked remnant ${remnantLabel} as not seen in inventory`;
 
   await writeAuditLog(writeClient, authed, {
     event_type: REMNANT_INVENTORY_CHECK_EVENT,
@@ -187,29 +216,32 @@ export async function recordInventoryCheck(client, authed, body) {
     new_data: {
       remnant_id: remnant.id,
       moraware_remnant_id: remnant.moraware_remnant_id,
-      outcome,
+      outcome: effectiveOutcome,
       session_id: sessionId,
       entered_number: enteredNumber,
       location,
+      ...(duplicateLocations ? { duplicate_locations: duplicateLocations } : {}),
     },
     meta: {
       source: "manage_confirm",
       session_id: sessionId,
-      outcome,
+      outcome: effectiveOutcome,
       entered_number: enteredNumber,
       location,
+      ...(duplicateLocations ? { duplicate_locations: duplicateLocations } : {}),
     },
   });
 
   return {
     ok: true,
-    outcome,
+    outcome: effectiveOutcome,
     message,
+    duplicate_locations: duplicateLocations,
     remnant: {
       ...formatRemnant({
         ...remnant,
         location,
-        inventory_hold: false,
+        inventory_hold: effectiveOutcome === "duplicate",
       }),
       current_hold: null,
     },
@@ -264,15 +296,31 @@ export async function endInventoryPass(client, authed, sessionId) {
     .is("deleted_at", null);
   if (fetchError) throw fetchError;
 
-  const ids = (flagged || []).map((row) => row.id);
-  if (!ids.length) return { ok: true, count: 0 };
+  if (!flagged?.length) return { ok: true, count: 0, duplicate_skipped: 0 };
+
+  const sessionAudits = await fetchInventoryCheckAuditRows(client, authed, normalizedSessionId);
+  const latestOutcomeByRemnantId = new Map();
+  for (const row of sessionAudits) {
+    const id = Number(row.remnant_id);
+    if (!id || latestOutcomeByRemnantId.has(id)) continue;
+    latestOutcomeByRemnantId.set(id, row?.meta?.outcome || null);
+  }
+
+  const sweepable = flagged.filter(
+    (row) => latestOutcomeByRemnantId.get(Number(row.id)) !== "duplicate",
+  );
+  const duplicateSkipped = flagged.length - sweepable.length;
+
+  if (!sweepable.length) {
+    return { ok: true, count: 0, duplicate_skipped: duplicateSkipped };
+  }
 
   const actorUserId = authed?.user?.id || authed?.profile?.id || null;
   const actorEmail = authed?.profile?.email || authed?.user?.email || null;
   const actorRole = authed?.profile?.system_role || null;
   const actorCompanyId = authed?.profile?.company_id || null;
 
-  const auditRows = flagged.map((row) => {
+  const auditRows = sweepable.map((row) => {
     const enteredNumber = row.moraware_remnant_id || row.id;
     return {
       actor_user_id: actorUserId,
@@ -306,14 +354,15 @@ export async function endInventoryPass(client, authed, sessionId) {
   const { error: auditError } = await writeClient.from("audit_logs").insert(auditRows);
   if (auditError) throw auditError;
 
+  const sweepIds = sweepable.map((row) => row.id);
   const { error: updateError } = await writeClient
     .from("remnants")
     .update({ inventory_hold: false })
-    .in("id", ids)
+    .in("id", sweepIds)
     .is("deleted_at", null);
   if (updateError) throw updateError;
 
-  return { ok: true, count: ids.length };
+  return { ok: true, count: sweepIds.length, duplicate_skipped: duplicateSkipped };
 }
 
 export async function fetchInventoryHoldCount(client) {
@@ -349,6 +398,7 @@ export async function fetchInventoryCheckSession(client, authed, sessionId) {
   const seenCount = [...latestByRemnantId.values()].filter((row) => row?.meta?.outcome === "seen").length;
   const missingCount = [...latestByRemnantId.values()].filter((row) => row?.meta?.outcome === "missing").length;
   const issueCount = [...latestByRemnantId.values()].filter((row) => row?.meta?.outcome === "issue").length;
+  const duplicateCount = [...latestByRemnantId.values()].filter((row) => row?.meta?.outcome === "duplicate").length;
   const notInDbCount = notInDbRows.length;
 
   const { count: totalCount, error: totalError } = await writeClient
@@ -422,10 +472,17 @@ export async function fetchInventoryCheckSession(client, authed, sessionId) {
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   }
 
-  const [missingEntries, reviewEntries] = await Promise.all([
+  const [missingEntries, reviewEntries, duplicateEntries] = await Promise.all([
     fetchOutcomeEntries("missing"),
     fetchOutcomeEntries("issue"),
+    fetchOutcomeEntries("duplicate"),
   ]);
+
+  const duplicateEntriesWithLocations = duplicateEntries.map((entry) => {
+    const audit = latestByRemnantId.get(Number(entry.remnant_id));
+    const locs = audit?.meta?.duplicate_locations || audit?.new_data?.duplicate_locations || [];
+    return { ...entry, locations: Array.isArray(locs) ? locs : [] };
+  });
 
   return {
     session_id: normalizedSessionId,
@@ -435,6 +492,7 @@ export async function fetchInventoryCheckSession(client, authed, sessionId) {
       seen_count: seenCount,
       missing_count: missingCount,
       issue_count: issueCount,
+      duplicate_count: duplicateCount,
       not_in_db_count: notInDbCount,
       unchecked_count: Math.max((totalCount || 0) - checkedCount, 0),
     },
@@ -448,5 +506,6 @@ export async function fetchInventoryCheckSession(client, authed, sessionId) {
     not_in_db_entries: notInDbEntries,
     missing_entries: missingEntries,
     review_entries: reviewEntries,
+    duplicate_entries: duplicateEntriesWithLocations,
   };
 }
