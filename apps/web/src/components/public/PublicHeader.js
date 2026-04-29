@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import NavBoldLink, { isNavLinkActive } from "@/components/workspace-nav-link";
 
 function deriveInitials(profile) {
   const name = String(profile?.full_name || "").trim();
@@ -66,6 +68,8 @@ export default function PublicHeader({ initialProfile = null } = {}) {
   }, []);
 
   const isAuthed = Boolean(profile);
+  const isSuperAdmin = profile?.system_role === "super_admin";
+  const pathname = usePathname() || "/";
 
   return (
     <header
@@ -94,27 +98,35 @@ export default function PublicHeader({ initialProfile = null } = {}) {
         </Link>
 
         <nav className="flex items-center gap-7 text-[14px]">
-          <Link
-            href="/"
-            className="group inline-grid"
-            aria-current="page"
-          >
-            <span aria-hidden="true" className="col-start-1 row-start-1 invisible font-semibold">
-              Inventory
-            </span>
-            <span className="col-start-1 row-start-1 font-semibold text-[color:var(--qc-ink-1)] transition-colors group-hover:text-[color:var(--qc-orange)]">
-              Inventory
-            </span>
-          </Link>
+          <NavBoldLink href="/" label="Inventory" active={isNavLinkActive(pathname, "/")} />
           {isAuthed ? (
-            <Link href="/manage" className="group inline-grid">
-              <span aria-hidden="true" className="col-start-1 row-start-1 invisible font-semibold">
-                Manage
-              </span>
-              <span className="col-start-1 row-start-1 font-normal text-[color:var(--qc-ink-2)] transition-colors group-hover:font-semibold group-hover:text-[color:var(--qc-ink-1)]">
-                Manage
-              </span>
-            </Link>
+            <NavBoldLink
+              href="/manage"
+              label="Manage"
+              active={isNavLinkActive(pathname, "/manage")}
+            />
+          ) : null}
+          {isAuthed && isSuperAdmin ? (
+            <>
+              <NavBoldLink
+                href="/slabs"
+                label="Slabs"
+                active={isNavLinkActive(pathname, "/slabs")}
+                hideBelow="md"
+              />
+              <NavBoldLink
+                href="/admin"
+                label="Admin"
+                active={isNavLinkActive(pathname, "/admin")}
+                hideBelow="md"
+              />
+              <NavBoldLink
+                href="/manage/confirm"
+                label="Inventory Check"
+                active={isNavLinkActive(pathname, "/manage/confirm")}
+                hideBelow="lg"
+              />
+            </>
           ) : null}
           {isAuthed ? (
             <span className="flex items-center gap-3">

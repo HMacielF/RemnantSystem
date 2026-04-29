@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import NavBoldLink, { isNavLinkActive } from "@/components/workspace-nav-link";
 
 function deriveInitials(profile) {
   const name = String(profile?.full_name || "").trim();
@@ -22,6 +24,7 @@ function deriveDisplayName(profile) {
 
 export default function PrivateHeader({ profile }) {
   const isSuperAdmin = profile?.system_role === "super_admin";
+  const pathname = usePathname() || "/";
 
   return (
     <header
@@ -50,48 +53,28 @@ export default function PrivateHeader({ profile }) {
         </Link>
 
         <nav className="flex items-center gap-7 text-[14px]">
-          <Link href="/" className="group inline-grid">
-            <span aria-hidden="true" className="col-start-1 row-start-1 invisible font-semibold">
-              Inventory
-            </span>
-            <span className="col-start-1 row-start-1 font-normal text-[color:var(--qc-ink-2)] transition-colors group-hover:font-semibold group-hover:text-[color:var(--qc-ink-1)]">
-              Inventory
-            </span>
-          </Link>
-          <Link href="/manage" className="group inline-grid" aria-current="page">
-            <span aria-hidden="true" className="col-start-1 row-start-1 invisible font-semibold">
-              Manage
-            </span>
-            <span className="col-start-1 row-start-1 font-semibold text-[color:var(--qc-ink-1)] transition-colors group-hover:text-[color:var(--qc-orange)]">
-              Manage
-            </span>
-          </Link>
+          <NavBoldLink href="/" label="Inventory" active={isNavLinkActive(pathname, "/")} />
+          <NavBoldLink href="/manage" label="Manage" active={isNavLinkActive(pathname, "/manage")} />
           {isSuperAdmin ? (
             <>
-              <Link href="/slabs" className="group hidden md:inline-grid">
-                <span aria-hidden="true" className="col-start-1 row-start-1 invisible font-semibold">
-                  Slabs
-                </span>
-                <span className="col-start-1 row-start-1 font-normal text-[color:var(--qc-ink-2)] transition-colors group-hover:font-semibold group-hover:text-[color:var(--qc-ink-1)]">
-                  Slabs
-                </span>
-              </Link>
-              <Link href="/admin" className="group hidden md:inline-grid">
-                <span aria-hidden="true" className="col-start-1 row-start-1 invisible font-semibold">
-                  Admin
-                </span>
-                <span className="col-start-1 row-start-1 font-normal text-[color:var(--qc-ink-2)] transition-colors group-hover:font-semibold group-hover:text-[color:var(--qc-ink-1)]">
-                  Admin
-                </span>
-              </Link>
-              <Link href="/manage/confirm" className="group hidden lg:inline-grid">
-                <span aria-hidden="true" className="col-start-1 row-start-1 invisible font-semibold">
-                  Inventory Check
-                </span>
-                <span className="col-start-1 row-start-1 font-normal text-[color:var(--qc-ink-2)] transition-colors group-hover:font-semibold group-hover:text-[color:var(--qc-ink-1)]">
-                  Inventory Check
-                </span>
-              </Link>
+              <NavBoldLink
+                href="/slabs"
+                label="Slabs"
+                active={isNavLinkActive(pathname, "/slabs")}
+                hideBelow="md"
+              />
+              <NavBoldLink
+                href="/admin"
+                label="Admin"
+                active={isNavLinkActive(pathname, "/admin")}
+                hideBelow="md"
+              />
+              <NavBoldLink
+                href="/manage/confirm"
+                label="Inventory Check"
+                active={isNavLinkActive(pathname, "/manage/confirm")}
+                hideBelow="lg"
+              />
             </>
           ) : null}
 
