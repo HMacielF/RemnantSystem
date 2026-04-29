@@ -1,15 +1,9 @@
 import {
   getWriteClient,
   formatRemnant,
-  formatHold,
   REMNANT_WITH_STONE_SELECT,
-  HOLD_SELECT,
-  extractStoneProductColors,
-  fetchRelevantHoldForRemnant,
   writeAuditLog,
   runBestEffort,
-  cancelPendingHoldNotifications,
-  isPrivilegedProfile,
   extractRemnantIdSearch,
   asNumber,
 } from "./api-utils.js";
@@ -164,59 +158,12 @@ export async function recordInventoryCheck(client, authed, body) {
     throw nextError;
   }
 
-  let updatedHold = null;
   if (outcome === "seen") {
-    const currentHold = await fetchRelevantHoldForRemnant(writeClient, remnant.id);
-    if (currentHold?.status === "active") {
-      const { data: releasedHold, error: holdError } = await writeClient
-        .from("holds")
-        .update({
-          status: "released",
-          released_at: new Date().toISOString(),
-          released_by_user_id: authed.profile.id,
-        })
-        .eq("id", currentHold.id)
-        .select(HOLD_SELECT)
-        .single();
-
-      if (holdError) throw holdError;
-      updatedHold = formatHold(releasedHold);
-
-      runBestEffort(async () => {
-        await cancelPendingHoldNotifications(writeClient, currentHold.id);
-        await writeAuditLog(writeClient, authed, {
-          event_type: "hold_released",
-          entity_type: "hold",
-          entity_id: currentHold.id,
-          remnant_id: remnant.id,
-          company_id: remnant.company_id,
-          message: `Released hold for remnant #${remnant.moraware_remnant_id || remnant.id}`,
-          old_data: currentHold,
-          new_data: updatedHold,
-          meta: {
-            source: "manage_confirm",
-            action: "inventory_check_release",
-            override: isPrivilegedProfile(authed.profile)
-              && String(currentHold.hold_owner_user_id) !== String(authed.profile.id),
-          },
-        });
-      }, "Release hold from inventory check");
-    }
-  }
-
-  if (outcome === "seen") {
-    const currentStatus = String(remnant.status || "").trim().toLowerCase();
-    const nextRemnantStatus = currentStatus === "sold"
-      ? remnant.status
-      : (currentStatus === "hold" && !remnant.inventory_hold)
-        ? remnant.status
-        : "available";
     const seenUpdate = {
       last_seen_at: new Date().toISOString(),
-      status: nextRemnantStatus,
       location,
+      inventory_hold: false,
     };
-    if (remnant.inventory_hold) seenUpdate.inventory_hold = false;
     const { error: updateError } = await writeClient
       .from("remnants")
       .update(seenUpdate)
@@ -232,13 +179,12 @@ export async function recordInventoryCheck(client, authed, body) {
     if (updateError) throw updateError;
   }
 
+  const remnantLabel = `#${remnant.moraware_remnant_id || remnant.id}`;
   const message = outcome === "seen"
-    ? String(remnant.status || "").trim().toLowerCase() === "sold"
-      ? `Confirmed remnant #${remnant.moraware_remnant_id || remnant.id} in inventory and kept it marked sold`
-      : `Confirmed remnant #${remnant.moraware_remnant_id || remnant.id} in inventory and marked it available`
+    ? `Confirmed remnant ${remnantLabel} in inventory`
     : outcome === "issue"
-      ? `Flagged remnant #${remnant.moraware_remnant_id || remnant.id} for review`
-      : `Marked remnant #${remnant.moraware_remnant_id || remnant.id} as not seen in inventory`;
+      ? `Flagged remnant ${remnantLabel} for review`
+      : `Marked remnant ${remnantLabel} as not seen in inventory`;
 
   await writeAuditLog(writeClient, authed, {
     event_type: REMNANT_INVENTORY_CHECK_EVENT,
@@ -272,8 +218,9 @@ export async function recordInventoryCheck(client, authed, body) {
       ...formatRemnant({
         ...remnant,
         location,
+        ...(outcome === "seen" ? { inventory_hold: false } : {}),
       }),
-      current_hold: updatedHold,
+      current_hold: null,
     },
   };
 }
@@ -281,36 +228,19 @@ export async function recordInventoryCheck(client, authed, body) {
 export async function bulkInventoryHold(client, authed) {
   const writeClient = getWriteClient(client);
 
-  const { data: availableRemnants, error: fetchError } = await writeClient
+  const { data: targetRemnants, error: fetchError } = await writeClient
     .from("remnants")
-    .select("id, company_id")
-    .eq("status", "available")
+    .select("id")
+    .neq("status", "sold")
     .is("deleted_at", null);
   if (fetchError) throw fetchError;
 
-  if (!availableRemnants?.length) return { ok: true, count: 0 };
+  if (!targetRemnants?.length) return { ok: true, count: 0 };
 
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
-  const holdRows = availableRemnants.map((r) => ({
-    remnant_id: r.id,
-    company_id: r.company_id,
-    hold_owner_user_id: authed.profile.id,
-    hold_started_at: now.toISOString(),
-    expires_at: expiresAt,
-    status: "active",
-    customer_name: "Inventory Double Check",
-    notes: "Bulk hold for inventory re-verification",
-    job_number: null,
-  }));
-
-  const { error: holdError } = await writeClient.from("holds").insert(holdRows);
-  if (holdError) throw holdError;
-
-  const ids = availableRemnants.map((r) => r.id);
+  const ids = targetRemnants.map((r) => r.id);
   const { error: updateError } = await writeClient
     .from("remnants")
-    .update({ status: "hold", inventory_hold: true })
+    .update({ inventory_hold: true })
     .in("id", ids)
     .is("deleted_at", null);
   if (updateError) throw updateError;
@@ -323,7 +253,7 @@ export async function bulkInventoryHold(client, authed) {
       entity_id: null,
       remnant_id: null,
       company_id: null,
-      message: `Started inventory double check — placed ${count} available remnants on hold`,
+      message: `Started inventory double check — flagged ${count} remnants for verification`,
       new_data: { count, affected_ids: ids },
       meta: { source: "manage_confirm", action: "bulk_inventory_hold" },
     });

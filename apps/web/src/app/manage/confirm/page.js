@@ -7,7 +7,7 @@ export const metadata = {
   title: "Inventory Confirm | Remnant System",
 };
 
-async function requireSuperAdminAccess() {
+async function loadSuperAdminProfile() {
   const cookieStore = await cookies();
   const authContext = await createRequiredAuthedContext({
     cookies: {
@@ -24,9 +24,11 @@ async function requireSuperAdminAccess() {
   if (authContext.profile.system_role !== "super_admin") {
     redirect("/manage");
   }
+
+  return authContext.profile;
 }
 
 export default async function ManageConfirmPage() {
-  await requireSuperAdminAccess();
-  return <RemnantConfirmClient />;
+  const profile = await loadSuperAdminProfile();
+  return <RemnantConfirmClient profile={profile} />;
 }
