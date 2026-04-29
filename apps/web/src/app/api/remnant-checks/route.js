@@ -7,6 +7,7 @@ import {
   fetchInventoryHoldCount,
   lookupInventoryCheckRemnant,
   recordInventoryCheck,
+  resolveNotInDbEntry,
 } from "@/server/private-api";
 import { withAuth } from "@/server/withApiHandler";
 import { SUPER_ADMIN } from "@/server/roles";
@@ -45,6 +46,11 @@ export const POST = withAuth(SUPER_ADMIN, async (request, authed) => {
   if (body?.action === "end_pass") {
     return NextResponse.json(
       await endInventoryPass(authed.client, authed, body?.session_id),
+    );
+  }
+  if (body?.action === "resolve_not_in_db") {
+    return NextResponse.json(
+      await resolveNotInDbEntry(authed.client, authed, body),
     );
   }
   return NextResponse.json(

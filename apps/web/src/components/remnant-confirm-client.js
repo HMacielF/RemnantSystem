@@ -4,6 +4,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import PrivateHeader from "@/components/private/PrivateHeader";
+import { RemnantEditor } from "@/components/workspace/RemnantEditor";
+import { buildRemnantRequestInit } from "@/components/workspace/workspace-utils";
 
 const STORAGE_KEY = "remnant-confirm-session-id";
 
@@ -134,6 +136,27 @@ export default function RemnantConfirmClient({ profile = null }) {
   const [editForm, setEditForm] = useState(null);
   const [editRunning, setEditRunning] = useState(false);
   const [selectedSummaryTab, setSelectedSummaryTab] = useState(null);
+  const [notInDbNote, setNotInDbNote] = useState("");
+  const [notInDbWidth, setNotInDbWidth] = useState("");
+  const [notInDbHeight, setNotInDbHeight] = useState("");
+  const [replacePriorMode, setReplacePriorMode] = useState(false);
+  const [reviewForm, setReviewForm] = useState(null);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [editorMode, setEditorMode] = useState("");
+  const [editorForm, setEditorForm] = useState(null);
+  const [editorError, setEditorError] = useState("");
+  const [editorSourceEntry, setEditorSourceEntry] = useState(null);
+  const [lookups, setLookups] = useState({
+    companies: [],
+    materials: [],
+    thicknesses: [],
+    finishes: [],
+    colors: [],
+    stone_products: [],
+  });
+  const [salesReps, setSalesReps] = useState([]);
+  const [nextStoneId, setNextStoneId] = useState(null);
+  const [resolvedNotInDbIds, setResolvedNotInDbIds] = useState(() => new Map());
   const inputRef = useRef(null);
   const locationRef = useRef(null);
   const lookupRequestIdRef = useRef(0);
@@ -248,6 +271,36 @@ export default function RemnantConfirmClient({ profile = null }) {
 
   useEffect(() => {
     refreshHoldCount();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadEditorPrereqs() {
+      try {
+        const [lookupPayload, salesRepPayload, stonePayload] = await Promise.all([
+          apiFetch("/api/lookups", { cache: "no-store" }),
+          apiFetch("/api/sales-reps", { cache: "no-store" }).catch(() => []),
+          apiFetch("/api/next-stone-id", { cache: "no-store" }).catch(() => ({ nextStoneId: null })),
+        ]);
+        if (cancelled) return;
+        setLookups({
+          companies: Array.isArray(lookupPayload?.companies) ? lookupPayload.companies : [],
+          materials: Array.isArray(lookupPayload?.materials) ? lookupPayload.materials : [],
+          thicknesses: Array.isArray(lookupPayload?.thicknesses) ? lookupPayload.thicknesses : [],
+          finishes: Array.isArray(lookupPayload?.finishes) ? lookupPayload.finishes : [],
+          colors: Array.isArray(lookupPayload?.colors) ? lookupPayload.colors : [],
+          stone_products: Array.isArray(lookupPayload?.stone_products) ? lookupPayload.stone_products : [],
+        });
+        setSalesReps(Array.isArray(salesRepPayload) ? salesRepPayload : []);
+        setNextStoneId(stonePayload?.nextStoneId ?? null);
+      } catch (_err) {
+        /* best effort — editor still works with empty lookups */
+      }
+    }
+    loadEditorPrereqs();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -403,8 +456,19 @@ export default function RemnantConfirmClient({ profile = null }) {
     };
   }, [lookupValue, sessionId]);
 
-  async function handleConfirm(outcome) {
+  async function handleConfirm(outcome, extra = {}) {
     if (!currentRemnant?.id || !sessionId) return;
+    if (outcome === "issue" && !extra.skipReviewForm) {
+      setReviewForm({
+        remnant: currentRemnant,
+        enteredNumber: lookupResult?.entered_number || lookupValue.trim(),
+        location: locationValue,
+        replacePrior: replacePriorMode,
+        reason: "",
+        actualStone: "",
+      });
+      return;
+    }
     setSavingOutcome(outcome);
     setError("");
     clearPendingMessageTimeout();
@@ -419,6 +483,9 @@ export default function RemnantConfirmClient({ profile = null }) {
           entered_number: lookupResult?.entered_number || lookupValue.trim(),
           location: locationValue,
           outcome,
+          replace_prior: replacePriorMode,
+          ...(extra.review_reason ? { review_reason: extra.review_reason } : {}),
+          ...(extra.actual_stone_name ? { actual_stone_name: extra.actual_stone_name } : {}),
         }),
       });
       triggerSuccessFeedback();
@@ -437,6 +504,7 @@ export default function RemnantConfirmClient({ profile = null }) {
       setLocalCheckedCount((count) => count + 1);
       setLookupValue("");
       setLookupResult(null);
+      setReplacePriorMode(false);
       pulseInputReadyState();
       inputRef.current?.focus();
       refreshHoldCount();
@@ -448,6 +516,26 @@ export default function RemnantConfirmClient({ profile = null }) {
     }
   }
 
+  async function submitReviewFromForm() {
+    if (!reviewForm) return;
+    const reason = String(reviewForm.reason || "").trim();
+    if (!reason) {
+      setError("Tell us what's wrong before flagging.");
+      return;
+    }
+    setReviewSubmitting(true);
+    try {
+      await handleConfirm("issue", {
+        skipReviewForm: true,
+        review_reason: reason,
+        actual_stone_name: String(reviewForm.actualStone || "").trim() || undefined,
+      });
+      setReviewForm(null);
+    } finally {
+      setReviewSubmitting(false);
+    }
+  }
+
   async function handleNotInDb() {
     if (!lookupValue.trim() || !sessionId) return;
     setSavingOutcome("not_in_db");
@@ -455,6 +543,8 @@ export default function RemnantConfirmClient({ profile = null }) {
     clearPendingMessageTimeout();
     setMessage("");
     try {
+      const widthValue = notInDbWidth.trim() ? Number(notInDbWidth.trim()) : null;
+      const heightValue = notInDbHeight.trim() ? Number(notInDbHeight.trim()) : null;
       const payload = await apiFetch("/api/remnant-checks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -463,6 +553,10 @@ export default function RemnantConfirmClient({ profile = null }) {
           entered_number: lookupValue.trim(),
           location: locationValue,
           stone_name: notInDbStoneName.trim(),
+          note: notInDbNote.trim() || undefined,
+          width: Number.isFinite(widthValue) ? widthValue : undefined,
+          height: Number.isFinite(heightValue) ? heightValue : undefined,
+          replace_prior: replacePriorMode,
           outcome: "not_in_db",
         }),
       });
@@ -472,6 +566,10 @@ export default function RemnantConfirmClient({ profile = null }) {
       setLocalCheckedCount((count) => count + 1);
       setLookupValue("");
       setNotInDbStoneName("");
+      setNotInDbNote("");
+      setNotInDbWidth("");
+      setNotInDbHeight("");
+      setReplacePriorMode(false);
       refreshSessionSummary();
       pulseInputReadyState();
       inputRef.current?.focus();
@@ -479,6 +577,136 @@ export default function RemnantConfirmClient({ profile = null }) {
       setError(friendlyErrorMessage(nextError, "Failed to save missing-DB record."));
     } finally {
       setSavingOutcome("");
+    }
+  }
+
+  function markRescanAsDuplicate() {
+    if (!currentRemnant?.id) return;
+    setReplacePriorMode(false);
+    handleConfirm("duplicate");
+  }
+
+  function enterReplacePriorMode() {
+    setReplacePriorMode(true);
+  }
+
+  function cancelRescan() {
+    setLookupValue("");
+    setLookupResult(null);
+    setReplacePriorMode(false);
+    setNotInDbStoneName("");
+    setNotInDbNote("");
+    setNotInDbWidth("");
+    setNotInDbHeight("");
+    inputRef.current?.focus();
+  }
+
+  const activeLookupColors = Array.isArray(lookups.colors)
+    ? lookups.colors.filter((row) => row?.active !== false && row?.name)
+    : [];
+
+  function openCreateFromScan(entry) {
+    if (!entry?.id) return;
+    setEditorError("");
+    setEditorSourceEntry(entry);
+    const widthValue = entry.width != null ? String(entry.width) : "";
+    const heightValue = entry.height != null ? String(entry.height) : "";
+    const trimmedNote = String(entry.note || "").trim();
+    const trimmedStone = String(entry.stone_name || "").trim();
+    const composedName = trimmedNote
+      ? trimmedStone
+        ? `${trimmedStone} (${trimmedNote})`
+        : trimmedNote
+      : trimmedStone;
+    setEditorForm({
+      id: null,
+      moraware_remnant_id: entry.entered_number ? String(entry.entered_number) : "",
+      parent_slab_id: "",
+      name: composedName,
+      brand_name: "",
+      company_id: profile?.company_id || "",
+      material_id: "",
+      thickness_id: "",
+      finish_id: "",
+      colors: [],
+      price_per_sqft: "",
+      width: widthValue,
+      height: heightValue,
+      l_shape: false,
+      l_width: "",
+      l_height: "",
+      image_file: null,
+      image_url: null,
+    });
+    setEditorMode("create");
+  }
+
+  function closeScanEditor() {
+    setEditorMode("");
+    setEditorForm(null);
+    setEditorError("");
+    setEditorSourceEntry(null);
+  }
+
+  async function saveScanEditor(event) {
+    if (event?.preventDefault) event.preventDefault();
+    if (!editorForm) return;
+    setEditorError("");
+    try {
+      const payload = {
+        moraware_remnant_id: editorForm.moraware_remnant_id,
+        name: editorForm.name,
+        brand_name: editorForm.brand_name,
+        company_id: editorForm.company_id,
+        material_id: editorForm.material_id,
+        thickness_id: editorForm.thickness_id,
+        finish_id: editorForm.finish_id,
+        colors: editorForm.colors,
+        price_per_sqft: editorForm.price_per_sqft,
+        width: editorForm.width,
+        height: editorForm.height,
+        l_shape: Boolean(editorForm.l_shape),
+        l_width: editorForm.l_shape ? editorForm.l_width : "",
+        l_height: editorForm.l_shape ? editorForm.l_height : "",
+        image_file: editorForm.image_file || undefined,
+      };
+      const created = await apiFetch("/api/remnants", await buildRemnantRequestInit("POST", payload));
+      const newRemnantId = created?.id || created?.remnant?.id || null;
+      const newDisplayId =
+        created?.moraware_remnant_id ||
+        created?.remnant?.moraware_remnant_id ||
+        editorForm.moraware_remnant_id ||
+        "";
+      if (editorSourceEntry?.id) {
+        try {
+          await apiFetch("/api/remnant-checks", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "resolve_not_in_db",
+              audit_id: editorSourceEntry.id,
+              remnant_id: newRemnantId,
+            }),
+          });
+        } catch (_resolveError) {
+          /* non-fatal — the remnant was created; the row will refresh on next session reload */
+        }
+        setResolvedNotInDbIds((current) => {
+          const next = new Map(current);
+          next.set(editorSourceEntry.id, { remnant_id: newRemnantId, display_id: newDisplayId });
+          return next;
+        });
+      }
+      showTransientMessage(
+        profile?.system_role === "super_admin"
+          ? `Created remnant #${newDisplayId || newRemnantId}`
+          : "Submitted for approval",
+        "success",
+      );
+      closeScanEditor();
+      refreshSessionSummary();
+    } catch (saveError) {
+      setEditorError(String(saveError?.message || "Failed to save remnant."));
     }
   }
 
@@ -1147,6 +1375,102 @@ export default function RemnantConfirmClient({ profile = null }) {
         </div>
       ) : null}
 
+      {reviewForm ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+          <div
+            className="w-full max-w-sm bg-[color:var(--qc-bg-surface)] p-6"
+            style={{
+              border: "1px solid var(--qc-line)",
+              borderRadius: "var(--qc-radius-sharp)",
+              boxShadow: "var(--qc-shadow-toast)",
+            }}
+          >
+            <p className="text-[10.5px] uppercase tracking-[0.24em] text-[color:var(--qc-ink-3)]">
+              Flag for review
+            </p>
+            <h2 className="mt-2 text-[20px] font-medium leading-tight tracking-[-0.015em] text-[color:var(--qc-ink-1)]">
+              #{displayRemnantId(reviewForm.remnant)} — what&apos;s wrong?
+            </h2>
+            {reviewForm.remnant?.name ? (
+              <p className="mt-1 text-[13px] text-[color:var(--qc-ink-2)]">
+                {reviewForm.remnant.name}
+              </p>
+            ) : null}
+            <textarea
+              value={reviewForm.reason}
+              onChange={(event) =>
+                setReviewForm((current) => current && { ...current, reason: event.target.value })
+              }
+              rows={3}
+              maxLength={500}
+              autoFocus
+              placeholder="Wrong photo, chip on edge, mismatched stone, etc."
+              className="mt-3 w-full bg-white px-3 py-2 text-[13px] font-normal normal-case tracking-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+              style={{
+                border: "1px solid var(--qc-line)",
+                borderRadius: "var(--qc-radius-sharp)",
+              }}
+            />
+            <input
+              type="text"
+              value={reviewForm.actualStone}
+              onChange={(event) =>
+                setReviewForm((current) => current && { ...current, actualStone: event.target.value })
+              }
+              maxLength={200}
+              placeholder="Actual stone seen (optional)"
+              className="mt-2 w-full bg-white px-3 py-2 text-[13px] font-normal normal-case tracking-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+              style={{
+                border: "1px solid var(--qc-line)",
+                borderRadius: "var(--qc-radius-sharp)",
+              }}
+            />
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setReviewForm(null)}
+                disabled={reviewSubmitting}
+                className="flex-1 bg-white py-3 text-[13px] font-medium text-[color:var(--qc-ink-1)] transition-colors hover:bg-[rgba(0,0,0,0.04)] disabled:opacity-60"
+                style={{
+                  border: "1px solid var(--qc-line)",
+                  borderRadius: "var(--qc-radius-sharp)",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitReviewFromForm}
+                disabled={reviewSubmitting || !String(reviewForm.reason || "").trim()}
+                className="flex-1 py-3 text-[13px] font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                style={{
+                  backgroundColor: "var(--qc-status-hold-dot)",
+                  borderRadius: "var(--qc-radius-sharp)",
+                }}
+              >
+                {reviewSubmitting ? "Saving…" : "Flag for review"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <RemnantEditor
+        editorMode={editorMode}
+        editorForm={editorForm}
+        setEditorForm={setEditorForm}
+        onClose={closeScanEditor}
+        onSave={saveScanEditor}
+        onArchive={() => {}}
+        profile={profile}
+        lookups={lookups}
+        activeLookupColors={activeLookupColors}
+        canEditLinkedSlab={false}
+        saveError={editorError}
+        showSuccessMessage={(text) => showTransientMessage(text, "success")}
+        showErrorMessage={(text) => setError(String(text || ""))}
+      />
+
       <div className="mx-auto w-full max-w-[760px] px-4 py-6 sm:px-5 sm:py-8">
         {holdCount !== null && holdCount > 0 ? (
           <div
@@ -1403,6 +1727,34 @@ export default function RemnantConfirmClient({ profile = null }) {
                     borderRadius: "var(--qc-radius-sharp)",
                   }}
                 />
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.1"
+                  min="0"
+                  value={notInDbWidth}
+                  onChange={(event) => setNotInDbWidth(event.target.value)}
+                  placeholder="W (in)"
+                  className="h-9 w-[88px] shrink-0 bg-white px-2 text-[13px] font-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                  style={{
+                    border: "1px solid var(--qc-line)",
+                    borderRadius: "var(--qc-radius-sharp)",
+                  }}
+                />
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.1"
+                  min="0"
+                  value={notInDbHeight}
+                  onChange={(event) => setNotInDbHeight(event.target.value)}
+                  placeholder="H (in)"
+                  className="h-9 w-[88px] shrink-0 bg-white px-2 text-[13px] font-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                  style={{
+                    border: "1px solid var(--qc-line)",
+                    borderRadius: "var(--qc-radius-sharp)",
+                  }}
+                />
                 <button
                   type="button"
                   onClick={handleNotInDb}
@@ -1416,6 +1768,18 @@ export default function RemnantConfirmClient({ profile = null }) {
                   {savingOutcome === "not_in_db" ? "Saving…" : "Not in DB"}
                 </button>
               </div>
+              <textarea
+                value={notInDbNote}
+                onChange={(event) => setNotInDbNote(event.target.value)}
+                placeholder="Note (chip, edge, finish, anything to remember)"
+                rows={2}
+                maxLength={500}
+                className="mt-2 w-full bg-white px-3 py-2 text-[13px] font-normal normal-case tracking-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                style={{
+                  border: "1px solid var(--qc-line)",
+                  borderRadius: "var(--qc-radius-sharp)",
+                }}
+              />
               {locationValue ? (
                 <p
                   className="mt-2 text-[11px]"
@@ -1659,7 +2023,109 @@ export default function RemnantConfirmClient({ profile = null }) {
                 ) : null}
               </div>
 
-              <div className="mt-4 grid grid-cols-3 gap-3">
+              {existingCheck && !replacePriorMode ? (
+                <div
+                  className="mt-4 px-4 py-3"
+                  style={{
+                    backgroundColor: "var(--qc-status-pending-bg)",
+                    color: "var(--qc-status-pending-fg)",
+                    border: "1px solid var(--qc-line)",
+                    borderLeft: "2px solid var(--qc-status-pending-dot)",
+                    borderRadius: "var(--qc-radius-sharp)",
+                  }}
+                >
+                  <p className="text-[12.5px] font-semibold">
+                    Already scanned this session
+                  </p>
+                  <p className="mt-1 text-[12px] leading-relaxed text-[color:color-mix(in_srgb,var(--qc-status-pending-fg)_85%,transparent)]">
+                    {(() => {
+                      const parts = [];
+                      const out = String(existingCheck.outcome || "").toLowerCase();
+                      if (out === "seen") parts.push("Confirmed seen");
+                      else if (out === "issue") parts.push("Flagged for review");
+                      else if (out === "missing") parts.push("Marked missing");
+                      else if (out === "duplicate") parts.push("Already a duplicate");
+                      else if (out === "not_in_db") parts.push("Logged as not-in-DB");
+                      if (existingCheck.location) parts.push(`at zone ${existingCheck.location}`);
+                      if (existingCheck.stone_name) parts.push(`as ${existingCheck.stone_name}`);
+                      const time = formatScanTime(existingCheck.created_at);
+                      if (time) parts.push(time);
+                      return parts.join(" · ");
+                    })()}
+                  </p>
+                  {existingCheck.review_reason ? (
+                    <p className="mt-1 text-[12px] italic text-[color:color-mix(in_srgb,var(--qc-status-pending-fg)_75%,transparent)]">
+                      Reason: {existingCheck.review_reason}
+                    </p>
+                  ) : null}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {currentRemnant?.id ? (
+                      <button
+                        type="button"
+                        onClick={markRescanAsDuplicate}
+                        disabled={savingOutcome === "duplicate"}
+                        className="inline-flex h-9 items-center px-3 text-[12px] font-medium text-white transition-colors disabled:opacity-60"
+                        style={{
+                          backgroundColor: "var(--qc-orange)",
+                          borderRadius: "var(--qc-radius-sharp)",
+                        }}
+                      >
+                        Different physical stone (mark duplicate)
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={enterReplacePriorMode}
+                      className="inline-flex h-9 items-center px-3 text-[12px] font-medium text-white transition-colors"
+                      style={{
+                        backgroundColor: "var(--qc-ink-1)",
+                        borderRadius: "var(--qc-radius-sharp)",
+                      }}
+                    >
+                      Replace previous (correction)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelRescan}
+                      className="inline-flex h-9 items-center px-3 text-[12px] font-medium transition-colors"
+                      style={{
+                        color: "var(--qc-ink-1)",
+                        backgroundColor: "transparent",
+                        border: "1px solid var(--qc-line)",
+                        borderRadius: "var(--qc-radius-sharp)",
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {replacePriorMode ? (
+                <div
+                  className="mt-4 flex items-center justify-between gap-3 px-3 py-2 text-[11.5px]"
+                  style={{
+                    backgroundColor: "var(--qc-status-hold-bg)",
+                    color: "var(--qc-status-hold-fg)",
+                    border: "1px solid var(--qc-line)",
+                    borderLeft: "2px solid var(--qc-status-hold-dot)",
+                    borderRadius: "var(--qc-radius-sharp)",
+                  }}
+                >
+                  <span>
+                    Replacing previous scan — your next action will supersede it.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setReplacePriorMode(false)}
+                    className="shrink-0 underline decoration-[color:var(--qc-line-strong)] underline-offset-2"
+                  >
+                    Undo
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="mt-4 grid grid-cols-3 gap-3" style={{ display: existingCheck && !replacePriorMode ? "none" : undefined }}>
                 <button
                   type="button"
                   disabled={!canConfirm}
@@ -2016,6 +2482,19 @@ export default function RemnantConfirmClient({ profile = null }) {
                                 {entry.name}
                               </p>
                             ) : null}
+                            {entry.prior_stone_name || entry.prior_location ? (
+                              <p
+                                className="mt-1 text-[11.5px] italic leading-snug"
+                                style={{ color: "var(--qc-status-pending-fg)" }}
+                              >
+                                Earlier scan
+                                {entry.prior_location ? ` at zone ${entry.prior_location}` : ""}
+                                {entry.prior_stone_name ? `: ${entry.prior_stone_name}` : ""}
+                                {entry.prior_width != null && entry.prior_height != null
+                                  ? ` · ${entry.prior_width}" × ${entry.prior_height}"`
+                                  : ""}
+                              </p>
+                            ) : null}
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
                             <span
@@ -2192,6 +2671,16 @@ export default function RemnantConfirmClient({ profile = null }) {
                                 {entry.name}
                               </p>
                             ) : null}
+                            {entry.review_reason ? (
+                              <p className="mt-1 text-[11.5px] italic leading-snug text-[color:var(--qc-status-hold-fg)]">
+                                {entry.review_reason}
+                              </p>
+                            ) : null}
+                            {entry.actual_stone_name ? (
+                              <p className="mt-0.5 text-[11.5px] text-[color:var(--qc-ink-3)]">
+                                Actual: <span className="text-[color:var(--qc-ink-1)]">{entry.actual_stone_name}</span>
+                              </p>
+                            ) : null}
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
                             <span
@@ -2242,47 +2731,99 @@ export default function RemnantConfirmClient({ profile = null }) {
                   </p>
                 ) : null}
                 <ul className="mt-3">
-                  {(sessionSummary.not_in_db_entries || []).map((entry) => (
-                    <li
-                      key={entry.id}
-                      className="flex items-start justify-between gap-3 py-2.5"
-                      style={{ borderTop: "1px solid var(--qc-line)" }}
-                    >
-                      <div className="min-w-0">
-                        <p className="flex flex-wrap items-center gap-1.5">
+                  {(sessionSummary.not_in_db_entries || []).map((entry) => {
+                    const localResolution = resolvedNotInDbIds.get(entry.id);
+                    const resolvedRemnantId = entry.resolved_remnant_id || localResolution?.remnant_id || null;
+                    const resolvedDisplayId = localResolution?.display_id || resolvedRemnantId;
+                    const sizeLabel =
+                      entry.width != null && entry.height != null
+                        ? `${entry.width}" × ${entry.height}"`
+                        : "";
+                    return (
+                      <li
+                        key={entry.id}
+                        className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3"
+                        style={{ borderTop: "1px solid var(--qc-line)" }}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="flex flex-wrap items-center gap-1.5">
+                            <span
+                              className="text-[14px] font-medium text-[color:var(--qc-ink-1)]"
+                              style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                            >
+                              #{entry.entered_number || "—"}
+                            </span>
+                            {entry.location ? (
+                              <span
+                                className="px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em]"
+                                style={{
+                                  backgroundColor: "var(--qc-status-pending-bg)",
+                                  color: "var(--qc-status-pending-fg)",
+                                  borderRadius: "var(--qc-radius-sharp)",
+                                }}
+                              >
+                                Loc {entry.location}
+                              </span>
+                            ) : null}
+                            {sizeLabel ? (
+                              <span
+                                className="px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em]"
+                                style={{
+                                  backgroundColor: "var(--qc-status-available-bg)",
+                                  color: "var(--qc-status-available-fg)",
+                                  borderRadius: "var(--qc-radius-sharp)",
+                                }}
+                              >
+                                {sizeLabel}
+                              </span>
+                            ) : null}
+                          </p>
+                          {entry.stone_name ? (
+                            <p className="mt-0.5 truncate text-[12px] text-[color:var(--qc-ink-2)]">
+                              {entry.stone_name}
+                            </p>
+                          ) : null}
+                          {entry.note ? (
+                            <p className="mt-1 text-[12px] italic leading-snug text-[color:var(--qc-ink-2)]">
+                              {entry.note}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2 sm:flex-col sm:items-end">
                           <span
-                            className="text-[14px] font-medium text-[color:var(--qc-ink-1)]"
+                            className="text-[11px] text-[color:var(--qc-ink-3)]"
                             style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
                           >
-                            #{entry.entered_number || "—"}
+                            {formatScanTime(entry.created_at)}
                           </span>
-                          {entry.location ? (
+                          {resolvedRemnantId ? (
                             <span
-                              className="px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em]"
+                              className="inline-flex items-center px-2 py-1 text-[11px] font-medium"
                               style={{
-                                backgroundColor: "var(--qc-status-pending-bg)",
-                                color: "var(--qc-status-pending-fg)",
+                                backgroundColor: "var(--qc-status-available-bg)",
+                                color: "var(--qc-status-available-fg)",
                                 borderRadius: "var(--qc-radius-sharp)",
                               }}
                             >
-                              Loc {entry.location}
+                              ✓ Created as #{resolvedDisplayId}
                             </span>
-                          ) : null}
-                        </p>
-                        {entry.stone_name ? (
-                          <p className="mt-0.5 truncate text-[12px] text-[color:var(--qc-ink-2)]">
-                            {entry.stone_name}
-                          </p>
-                        ) : null}
-                      </div>
-                      <span
-                        className="shrink-0 text-[11px] text-[color:var(--qc-ink-3)]"
-                        style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
-                      >
-                        {formatScanTime(entry.created_at)}
-                      </span>
-                    </li>
-                  ))}
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openCreateFromScan(entry)}
+                              className="inline-flex items-center px-3 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-[color:var(--qc-orange)]"
+                              style={{
+                                backgroundColor: "var(--qc-ink-1)",
+                                borderRadius: "var(--qc-radius-sharp)",
+                              }}
+                            >
+                              Create remnant
+                            </button>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ) : null}

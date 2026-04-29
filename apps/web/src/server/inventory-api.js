@@ -49,7 +49,82 @@ export async function fetchInventoryCheckAuditRows(client, authed, sessionId) {
 
   const { data, error } = await query;
   if (error) throw error;
-  return data || [];
+  return (data || []).filter((row) => !row?.meta?.superseded_at);
+}
+
+export async function resolveNotInDbEntry(client, authed, body) {
+  const auditId = asNumber(body?.audit_id);
+  const newRemnantId = asNumber(body?.remnant_id);
+  if (!auditId) {
+    const error = new Error("audit_id is required");
+    error.statusCode = 400;
+    throw error;
+  }
+  const writeClient = getWriteClient(client);
+  const { data, error } = await writeClient
+    .from("audit_logs")
+    .select("meta, new_data")
+    .eq("id", auditId)
+    .maybeSingle();
+  if (error || !data) {
+    const nextError = new Error("Audit row not found");
+    nextError.statusCode = 404;
+    throw nextError;
+  }
+  const resolvedAt = new Date().toISOString();
+  const nextMeta = {
+    ...(data.meta || {}),
+    resolved_remnant_id: newRemnantId,
+    resolved_at: resolvedAt,
+  };
+  const nextNewData = {
+    ...(data.new_data || {}),
+    resolved_remnant_id: newRemnantId,
+    resolved_at: resolvedAt,
+  };
+  const { error: updateError } = await writeClient
+    .from("audit_logs")
+    .update({ meta: nextMeta, new_data: nextNewData })
+    .eq("id", auditId);
+  if (updateError) throw updateError;
+  return { ok: true, resolved_remnant_id: newRemnantId, resolved_at: resolvedAt };
+}
+
+async function supersedePriorAudit(client, priorAuditId) {
+  if (!priorAuditId) return;
+  const writeClient = getWriteClient(client);
+  const { data, error } = await writeClient
+    .from("audit_logs")
+    .select("meta, new_data")
+    .eq("id", priorAuditId)
+    .maybeSingle();
+  if (error || !data) return;
+  const supersededAt = new Date().toISOString();
+  const nextMeta = { ...(data.meta || {}), superseded_at: supersededAt };
+  const nextNewData = { ...(data.new_data || {}), superseded_at: supersededAt };
+  await writeClient
+    .from("audit_logs")
+    .update({ meta: nextMeta, new_data: nextNewData })
+    .eq("id", priorAuditId);
+}
+
+function buildExistingCheckPayload(priorRow) {
+  if (!priorRow) return null;
+  const meta = priorRow.meta || {};
+  const newData = priorRow.new_data || {};
+  return {
+    id: priorRow.id,
+    outcome: meta.outcome || null,
+    created_at: priorRow.created_at,
+    location: meta.location || newData.location || null,
+    stone_name: meta.stone_name || newData.stone_name || null,
+    note: meta.note || newData.note || null,
+    width: meta.width ?? newData.width ?? null,
+    height: meta.height ?? newData.height ?? null,
+    review_reason: meta.review_reason || newData.review_reason || null,
+    actual_stone_name: meta.actual_stone_name || newData.actual_stone_name || null,
+    message: priorRow.message || null,
+  };
 }
 
 export async function lookupInventoryCheckRemnant(client, number, authed, sessionId) {
@@ -73,26 +148,29 @@ export async function lookupInventoryCheckRemnant(client, number, authed, sessio
   const priorRows = sessionId
     ? await fetchInventoryCheckAuditRows(client, authed, sanitizeInventorySessionId(sessionId))
     : [];
-  const priorMatch = priorRows.find((row) => Number(row.remnant_id) === Number(data?.id));
+  let priorMatch = data
+    ? priorRows.find((row) => Number(row.remnant_id) === Number(data.id))
+    : null;
+  if (!priorMatch) {
+    priorMatch = priorRows.find(
+      (row) =>
+        (row?.meta?.outcome || null) === "not_in_db" &&
+        Number(row?.meta?.entered_number) === Number(numeric),
+    ) || null;
+  }
 
   if (!data) {
     return {
       entered_number: numeric,
       remnant: null,
-      existing_check: null,
+      existing_check: buildExistingCheckPayload(priorMatch),
     };
   }
 
   return {
     entered_number: numeric,
     remnant: formatRemnant(data),
-    existing_check: priorMatch
-      ? {
-          outcome: priorMatch?.meta?.outcome || null,
-          created_at: priorMatch.created_at,
-          note: priorMatch.message || null,
-        }
-      : null,
+    existing_check: buildExistingCheckPayload(priorMatch),
   };
 }
 
@@ -107,11 +185,48 @@ export async function recordInventoryCheck(client, authed, body) {
     throw error;
   }
 
+  const trimmedString = (value, max = 500) => {
+    const text = String(value ?? "").trim();
+    if (!text) return null;
+    return text.slice(0, max);
+  };
+  const numericOrNull = (value) => {
+    const n = asNumber(value);
+    return n === null || Number.isNaN(n) ? null : n;
+  };
+
+  const note = trimmedString(body?.note, 500);
+  const width = numericOrNull(body?.width);
+  const height = numericOrNull(body?.height);
+  const reviewReason = trimmedString(body?.review_reason, 500);
+  const actualStoneName = trimmedString(body?.actual_stone_name, 200);
+  const replacePrior = body?.replace_prior === true;
+
   const writeClient = getWriteClient(client);
   const remnantId = asNumber(body?.remnant_id);
 
+  async function findPriorAuditId(targetRemnantId) {
+    const sessionAudits = await fetchInventoryCheckAuditRows(client, authed, sessionId);
+    if (targetRemnantId) {
+      const byRemnant = sessionAudits.find(
+        (row) => Number(row.remnant_id) === Number(targetRemnantId),
+      );
+      if (byRemnant) return { id: byRemnant.id, row: byRemnant };
+    }
+    const byEntered = sessionAudits.find(
+      (row) =>
+        (row?.meta?.outcome || null) === "not_in_db" &&
+        Number(row?.meta?.entered_number) === Number(enteredNumber),
+    );
+    return byEntered ? { id: byEntered.id, row: byEntered } : null;
+  }
+
   if (outcome === "not_in_db") {
-    const stoneName = String(body?.stone_name || "").trim() || null;
+    const stoneName = trimmedString(body?.stone_name, 200);
+    if (replacePrior) {
+      const prior = await findPriorAuditId(remnantId);
+      if (prior?.id) await supersedePriorAudit(client, prior.id);
+    }
     await writeAuditLog(writeClient, authed, {
       event_type: REMNANT_INVENTORY_CHECK_EVENT,
       entity_type: "remnant_inventory_unknown",
@@ -127,6 +242,9 @@ export async function recordInventoryCheck(client, authed, body) {
         entered_number: enteredNumber,
         location,
         stone_name: stoneName,
+        note,
+        width,
+        height,
       },
       meta: {
         source: "manage_confirm",
@@ -135,6 +253,9 @@ export async function recordInventoryCheck(client, authed, body) {
         entered_number: enteredNumber,
         location,
         stone_name: stoneName,
+        note,
+        width,
+        height,
       },
     });
 
@@ -169,12 +290,18 @@ export async function recordInventoryCheck(client, authed, body) {
   let effectiveOutcome = outcome;
   let duplicateLocations = null;
   let priorLocation = null;
+  let priorStoneName = null;
+  let priorWidth = null;
+  let priorHeight = null;
+  let priorRemnantLabel = null;
+
+  const sessionAudits = await fetchInventoryCheckAuditRows(client, authed, sessionId);
+  const priorAuditsForRemnant = sessionAudits.filter(
+    (row) => Number(row.remnant_id) === Number(remnant.id),
+  );
+  const latestPriorForRemnant = priorAuditsForRemnant[0] || null;
 
   if (outcome === "seen") {
-    const sessionAudits = await fetchInventoryCheckAuditRows(client, authed, sessionId);
-    const priorAuditsForRemnant = sessionAudits.filter(
-      (row) => Number(row.remnant_id) === Number(remnant.id),
-    );
     const priorLocationsSet = new Set(
       priorAuditsForRemnant
         .map((row) => String(row?.meta?.location || "").trim())
@@ -182,12 +309,47 @@ export async function recordInventoryCheck(client, authed, body) {
     );
     const currentLocation = String(location || "").trim();
 
-    if (priorLocationsSet.size > 0 && currentLocation && !priorLocationsSet.has(currentLocation)) {
+    if (
+      !replacePrior &&
+      priorLocationsSet.size > 0 &&
+      currentLocation &&
+      !priorLocationsSet.has(currentLocation)
+    ) {
       effectiveOutcome = "duplicate";
       const allLocations = [...new Set([...priorLocationsSet, currentLocation])];
       duplicateLocations = allLocations;
       priorLocation = [...priorLocationsSet][0] || null;
     }
+  } else if (outcome === "duplicate") {
+    const priorLocationsSet = new Set(
+      priorAuditsForRemnant
+        .map((row) => String(row?.meta?.location || "").trim())
+        .filter(Boolean),
+    );
+    const currentLocation = String(location || "").trim();
+    const allLocations = [
+      ...new Set(
+        [...priorLocationsSet, currentLocation].filter(Boolean),
+      ),
+    ];
+    duplicateLocations = allLocations.length ? allLocations : null;
+    priorLocation = [...priorLocationsSet][0] || null;
+  }
+
+  if (effectiveOutcome === "duplicate" && latestPriorForRemnant) {
+    const meta = latestPriorForRemnant.meta || {};
+    const newData = latestPriorForRemnant.new_data || {};
+    priorStoneName = meta.stone_name || newData.stone_name || remnant.name || null;
+    priorWidth = meta.width ?? newData.width ?? remnant.width ?? null;
+    priorHeight = meta.height ?? newData.height ?? remnant.height ?? null;
+    priorRemnantLabel = `#${
+      newData.moraware_remnant_id || meta.entered_number || remnant.moraware_remnant_id || remnant.id
+    }`;
+  }
+
+  if (replacePrior) {
+    const prior = await findPriorAuditId(remnant.id);
+    if (prior?.id) await supersedePriorAudit(client, prior.id);
   }
 
   const remnantUpdate = {
@@ -211,6 +373,23 @@ export async function recordInventoryCheck(client, authed, body) {
         ? `Flagged remnant ${remnantLabel} for review`
         : `Marked remnant ${remnantLabel} as not seen in inventory`;
 
+  const extraIssueFields = effectiveOutcome === "issue"
+    ? {
+        ...(reviewReason ? { review_reason: reviewReason } : {}),
+        ...(actualStoneName ? { actual_stone_name: actualStoneName } : {}),
+      }
+    : {};
+  const extraDuplicateFields = effectiveOutcome === "duplicate"
+    ? {
+        ...(duplicateLocations ? { duplicate_locations: duplicateLocations } : {}),
+        ...(priorStoneName ? { prior_stone_name: priorStoneName } : {}),
+        ...(priorWidth != null ? { prior_width: priorWidth } : {}),
+        ...(priorHeight != null ? { prior_height: priorHeight } : {}),
+        ...(priorRemnantLabel ? { prior_remnant_label: priorRemnantLabel } : {}),
+        ...(priorLocation ? { prior_location: priorLocation } : {}),
+      }
+    : {};
+
   await writeAuditLog(writeClient, authed, {
     event_type: REMNANT_INVENTORY_CHECK_EVENT,
     entity_type: "remnant_inventory_check",
@@ -225,7 +404,8 @@ export async function recordInventoryCheck(client, authed, body) {
       session_id: sessionId,
       entered_number: enteredNumber,
       location,
-      ...(duplicateLocations ? { duplicate_locations: duplicateLocations } : {}),
+      ...extraDuplicateFields,
+      ...extraIssueFields,
     },
     meta: {
       source: "manage_confirm",
@@ -233,7 +413,8 @@ export async function recordInventoryCheck(client, authed, body) {
       outcome: effectiveOutcome,
       entered_number: enteredNumber,
       location,
-      ...(duplicateLocations ? { duplicate_locations: duplicateLocations } : {}),
+      ...extraDuplicateFields,
+      ...extraIssueFields,
     },
   });
 
@@ -471,6 +652,10 @@ export async function fetchInventoryCheckSession(client, authed, sessionId) {
     entered_number: row?.meta?.entered_number || null,
     location: row?.meta?.location || row?.new_data?.location || null,
     stone_name: row?.meta?.stone_name || row?.new_data?.stone_name || null,
+    note: row?.meta?.note || row?.new_data?.note || null,
+    width: row?.meta?.width ?? row?.new_data?.width ?? null,
+    height: row?.meta?.height ?? row?.new_data?.height ?? null,
+    resolved_remnant_id: row?.meta?.resolved_remnant_id || null,
     created_at: row.created_at,
     message: row.message,
   }));
@@ -522,6 +707,8 @@ export async function fetchInventoryCheckSession(client, authed, sessionId) {
           colors: Array.isArray(remnant.colors) ? remnant.colors : [],
           created_at: audit.created_at,
           end_of_pass: Boolean(audit?.meta?.end_of_pass),
+          review_reason: audit?.meta?.review_reason || audit?.new_data?.review_reason || null,
+          actual_stone_name: audit?.meta?.actual_stone_name || audit?.new_data?.actual_stone_name || null,
         };
       })
       .filter(Boolean)
@@ -537,8 +724,18 @@ export async function fetchInventoryCheckSession(client, authed, sessionId) {
 
   const duplicateEntriesWithLocations = duplicateEntries.map((entry) => {
     const audit = latestByRemnantId.get(Number(entry.remnant_id));
-    const locs = audit?.meta?.duplicate_locations || audit?.new_data?.duplicate_locations || [];
-    return { ...entry, locations: Array.isArray(locs) ? locs : [] };
+    const meta = audit?.meta || {};
+    const newData = audit?.new_data || {};
+    const locs = meta.duplicate_locations || newData.duplicate_locations || [];
+    return {
+      ...entry,
+      locations: Array.isArray(locs) ? locs : [],
+      prior_stone_name: meta.prior_stone_name || newData.prior_stone_name || null,
+      prior_width: meta.prior_width ?? newData.prior_width ?? null,
+      prior_height: meta.prior_height ?? newData.prior_height ?? null,
+      prior_remnant_label: meta.prior_remnant_label || newData.prior_remnant_label || null,
+      prior_location: meta.prior_location || newData.prior_location || null,
+    };
   });
 
   return {
