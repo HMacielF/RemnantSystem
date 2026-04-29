@@ -248,8 +248,11 @@ export async function recordInventoryCheck(client, authed, body) {
   };
 }
 
-export async function bulkInventoryHold(client, authed) {
+export async function bulkInventoryHold(client, authed, sessionId = null) {
   const writeClient = getWriteClient(client);
+  const normalizedSessionId = sessionId
+    ? sanitizeInventorySessionId(sessionId)
+    : null;
 
   const { data: targetRemnants, error: fetchError } = await writeClient
     .from("remnants")
@@ -277,8 +280,16 @@ export async function bulkInventoryHold(client, authed) {
       remnant_id: null,
       company_id: null,
       message: `Started inventory double check — flagged ${count} remnants for verification`,
-      new_data: { count, affected_ids: ids },
-      meta: { source: "manage_confirm", action: "bulk_inventory_hold" },
+      new_data: {
+        count,
+        affected_ids: ids,
+        ...(normalizedSessionId ? { session_id: normalizedSessionId } : {}),
+      },
+      meta: {
+        source: "manage_confirm",
+        action: "bulk_inventory_hold",
+        ...(normalizedSessionId ? { session_id: normalizedSessionId } : {}),
+      },
     });
   }, "Audit bulk inventory hold");
 
@@ -369,15 +380,16 @@ export async function fetchActiveInventorySession(client) {
   const writeClient = getWriteClient(client);
   const { data, error } = await writeClient
     .from("audit_logs")
-    .select("meta, created_at")
-    .eq("event_type", "inventory_double_check_started")
+    .select("event_type, meta, created_at")
+    .in("event_type", ["inventory_double_check_started", REMNANT_INVENTORY_CHECK_EVENT])
     .order("created_at", { ascending: false })
-    .limit(1);
+    .limit(50);
   if (error) throw error;
-  const audit = data?.[0];
+
+  const audit = (data || []).find((row) => row?.meta?.session_id);
   if (!audit) return { session_id: null, started_at: null };
   return {
-    session_id: audit?.meta?.session_id || null,
+    session_id: audit.meta.session_id,
     started_at: audit.created_at,
   };
 }

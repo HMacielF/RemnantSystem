@@ -312,7 +312,10 @@ export default function RemnantConfirmClient({ profile = null }) {
       const payload = await apiFetch("/api/remnant-checks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "bulk_inventory_hold" }),
+        body: JSON.stringify({
+          action: "bulk_inventory_hold",
+          session_id: newSessionId,
+        }),
       });
       setHoldCount(payload?.count ?? 0);
       setHoldConfirmOpen(false);

@@ -38,7 +38,9 @@ export const GET = withAuth(SUPER_ADMIN, async (request, authed) => {
 export const POST = withAuth(SUPER_ADMIN, async (request, authed) => {
   const body = await request.json();
   if (body?.action === "bulk_inventory_hold") {
-    return NextResponse.json(await bulkInventoryHold(authed.client, authed));
+    return NextResponse.json(
+      await bulkInventoryHold(authed.client, authed, body?.session_id),
+    );
   }
   if (body?.action === "end_pass") {
     return NextResponse.json(
