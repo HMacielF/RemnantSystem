@@ -306,7 +306,7 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchKey = searchParams.toString();
-  const [filters, setFilters] = useState(() => emptyFilters());
+  const [filters, setFilters] = useState(() => currentFiltersFromSearch(searchParams));
   const debouncedFilters = useDebouncedValue(filters, 250);
   const [remnants, setRemnants] = useState([]);
   const [allRemnants, setAllRemnants] = useState([]);
