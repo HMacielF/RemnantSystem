@@ -1052,21 +1052,11 @@ export default function PrivateWorkspaceClient() {
  type="text"
  value={filters.stone}
  onChange={(event) => setFilters((current) => ({ ...current, stone: event.target.value }))}
- placeholder="Search stone, brand, finish, or ID #741"
+ placeholder="Search stone, brand, company, finish, or ID #741"
  className="font-inter h-11 w-full border border-[color:var(--qc-line)] bg-white pl-11 pr-4 text-[14px] font-normal normal-case tracking-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors hover:border-[color:var(--qc-line-strong)] focus:border-[color:var(--qc-ink-1)]"
  style={{ borderRadius: "var(--qc-radius-sharp)" }}
  />
  </div>
-
- <input
- type="text"
- value={filters.company}
- onChange={(event) => setFilters((current) => ({ ...current, company: event.target.value }))}
- placeholder="Company"
- aria-label="Company"
- className="font-inter h-11 w-[140px] border border-[color:var(--qc-line)] bg-white px-3 text-[14px] font-normal normal-case tracking-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors hover:border-[color:var(--qc-line-strong)] focus:border-[color:var(--qc-ink-1)]"
- style={{ borderRadius: "var(--qc-radius-sharp)" }}
- />
 
  <input
  type="text"

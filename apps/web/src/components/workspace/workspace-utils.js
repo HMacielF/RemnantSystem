@@ -516,7 +516,6 @@ export function currentFiltersFromSearch(searchParams) {
  materials: searchParams.getAll("material"),
  colors: searchParams.getAll("color"),
  stone: searchParams.get("stone") || "",
- company: searchParams.get("company") || "",
  minWidth: searchParams.get("min-width") || "",
  minHeight: searchParams.get("min-height") || "",
  status: searchParams.get("status") || "",
@@ -529,7 +528,6 @@ export function emptyFilters() {
  materials: [],
  colors: [],
  stone: "",
- company: "",
  minWidth: "",
  minHeight: "",
  status: "",
@@ -546,7 +544,6 @@ export function buildSearchQuery(filters) {
  if (color) params.append("color", color);
  });
  if (filters.stone.trim()) params.set("stone", filters.stone.trim());
- if ((filters.company || "").trim()) params.set("company", filters.company.trim());
  if (filters.minWidth.trim()) params.set("min-width", filters.minWidth.trim());
  if (filters.minHeight.trim()) params.set("min-height", filters.minHeight.trim());
  if (filters.status.trim()) params.set("status", filters.status.trim());

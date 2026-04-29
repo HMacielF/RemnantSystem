@@ -58,7 +58,6 @@ export async function fetchPrivateRemnants(request, authContext = null) {
   const stone = String(searchParams.get("stone") || "").trim();
   const stoneLike = escapeLikeValue(stone);
   const searchedRemnantId = extractRemnantIdSearch(stone);
-  const companySearch = String(searchParams.get("company") || "").trim();
   const status = normalizeStatus(searchParams.get("status"), "");
   const minWidth = parseMeasurement(searchParams.get("min-width") ?? searchParams.get("minWidth"));
   const minHeight = parseMeasurement(searchParams.get("min-height") ?? searchParams.get("minHeight"));
@@ -117,13 +116,21 @@ export async function fetchPrivateRemnants(request, authContext = null) {
     resolvedMaterialIds = materialNameIds;
     query = query.in("material_id", materialNameIds);
   }
-  const [brandMatchedStoneProductIds, colorMatchedStoneProductIds, finishMatchedRemnantIds] = stone
+  const [brandMatchedStoneProductIds, colorMatchedStoneProductIds, finishMatchedRemnantIds, companyMatchedIds] = stone
     ? await Promise.all([
         fetchStoneProductIdsByBrandSearch(getWriteClient(requiredAuthed.client), stone),
         fetchStoneProductIdsByColorSearch(getWriteClient(requiredAuthed.client), stone),
         fetchRemnantIdsByFinishSearch(getWriteClient(requiredAuthed.client), stone),
+        (async () => {
+          const { data: companyRows, error: companyError } = await getWriteClient(requiredAuthed.client)
+            .from("companies")
+            .select("id")
+            .ilike("name", `%${stoneLike}%`);
+          if (companyError) throw companyError;
+          return (companyRows || []).map((row) => row.id).filter(Boolean);
+        })(),
       ])
-    : [[], [], []];
+    : [[], [], [], []];
   const matchedStoneProductIds = [...new Set([...brandMatchedStoneProductIds, ...colorMatchedStoneProductIds])];
   if (stone && searchedRemnantId !== null) {
     const orFilters = [`name.ilike.%${stoneLike}%`, `moraware_remnant_id.eq.${searchedRemnantId}`];
@@ -133,9 +140,12 @@ export async function fetchPrivateRemnants(request, authContext = null) {
     if (finishMatchedRemnantIds.length) {
       orFilters.push(`id.in.(${finishMatchedRemnantIds.join(",")})`);
     }
+    if (companyMatchedIds.length) {
+      orFilters.push(`company_id.in.(${companyMatchedIds.join(",")})`);
+    }
     query = query.or(orFilters.join(","));
   } else if (stone) {
-    if (matchedStoneProductIds.length || finishMatchedRemnantIds.length) {
+    if (matchedStoneProductIds.length || finishMatchedRemnantIds.length || companyMatchedIds.length) {
       const orFilters = [`name.ilike.%${stoneLike}%`];
       if (matchedStoneProductIds.length) {
         orFilters.push(`stone_product_id.in.(${matchedStoneProductIds.join(",")})`);
@@ -143,21 +153,13 @@ export async function fetchPrivateRemnants(request, authContext = null) {
       if (finishMatchedRemnantIds.length) {
         orFilters.push(`id.in.(${finishMatchedRemnantIds.join(",")})`);
       }
+      if (companyMatchedIds.length) {
+        orFilters.push(`company_id.in.(${companyMatchedIds.join(",")})`);
+      }
       query = query.or(orFilters.join(","));
     } else {
       query = query.ilike("name", `%${stoneLike}%`);
     }
-  }
-  if (companySearch) {
-    const escapedCompany = escapeLikeValue(companySearch);
-    const { data: matchedCompanies, error: companyError } = await getWriteClient(requiredAuthed.client)
-      .from("companies")
-      .select("id")
-      .ilike("name", `%${escapedCompany}%`);
-    if (companyError) throw companyError;
-    const matchedCompanyIds = (matchedCompanies || []).map((row) => row.id).filter(Boolean);
-    if (!matchedCompanyIds.length) return [];
-    query = query.in("company_id", matchedCompanyIds);
   }
   if (status) query = query.eq("status", status);
   if (minWidth !== null) query = query.gte("width", minWidth);

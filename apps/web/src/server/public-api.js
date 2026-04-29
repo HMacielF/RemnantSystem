@@ -505,7 +505,6 @@ export function getPublicRemnantFilters(searchParams) {
   return {
     materialNames: material.map((value) => String(value || "").trim()).filter(Boolean),
     stone: String(searchParams.get("stone") || "").trim(),
-    company: String(searchParams.get("company") || "").trim(),
     status: normalizeStatus(searchParams.get("status"), ""),
     minWidth: parseMeasurement(searchParams.get("min-width") ?? searchParams.get("minWidth")),
     minHeight: parseMeasurement(searchParams.get("min-height") ?? searchParams.get("minHeight")),
@@ -561,11 +560,13 @@ export async function fetchPublicRemnants(filters, options = {}) {
   }
   if (companyName) {
     query = query.eq("company", companyName);
-  } else if (filters.company) {
-    query = query.ilike("company", `%${escapeLikeValue(filters.company)}%`);
   }
   if (filters.stone && searchedRemnantId !== null) {
-    const orFilters = [`name.ilike.%${stoneLike}%`, `id.eq.${searchedRemnantId}`];
+    const orFilters = [
+      `name.ilike.%${stoneLike}%`,
+      `company.ilike.%${stoneLike}%`,
+      `id.eq.${searchedRemnantId}`,
+    ];
     if (matchedStoneProductIds.length) {
       orFilters.push(`stone_product_id.in.(${matchedStoneProductIds.join(",")})`);
     }
@@ -574,18 +575,17 @@ export async function fetchPublicRemnants(filters, options = {}) {
     }
     query = query.or(orFilters.join(","));
   } else if (filters.stone) {
-    if (matchedStoneProductIds.length || finishMatchedRemnantIds.length) {
-      const orFilters = [`name.ilike.%${stoneLike}%`];
-      if (matchedStoneProductIds.length) {
-        orFilters.push(`stone_product_id.in.(${matchedStoneProductIds.join(",")})`);
-      }
-      if (finishMatchedRemnantIds.length) {
-        orFilters.push(`internal_remnant_id.in.(${finishMatchedRemnantIds.join(",")})`);
-      }
-      query = query.or(orFilters.join(","));
-    } else {
-      query = query.ilike("name", `%${stoneLike}%`);
+    const orFilters = [
+      `name.ilike.%${stoneLike}%`,
+      `company.ilike.%${stoneLike}%`,
+    ];
+    if (matchedStoneProductIds.length) {
+      orFilters.push(`stone_product_id.in.(${matchedStoneProductIds.join(",")})`);
     }
+    if (finishMatchedRemnantIds.length) {
+      orFilters.push(`internal_remnant_id.in.(${finishMatchedRemnantIds.join(",")})`);
+    }
+    query = query.or(orFilters.join(","));
   }
   if (filters.status) query = query.eq("status", filters.status);
   if (filters.minWidth !== null) query = query.gte("width", filters.minWidth);
