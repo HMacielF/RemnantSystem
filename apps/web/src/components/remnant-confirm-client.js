@@ -595,7 +595,7 @@ export default function RemnantConfirmClient({ profile = null }) {
                   borderRadius: "var(--qc-radius-sharp)",
                 }}
               >
-                {holdStarting ? "Starting…" : "Yes, hold all"}
+                {holdStarting ? "Starting…" : "Yes, start pass"}
               </button>
             </div>
           </div>
