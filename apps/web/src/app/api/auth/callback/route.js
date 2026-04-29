@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { createPublicAuthClient, errorRedirect, isInactiveProfile, sanitizeNextPath } from "@/server/auth-utils";
+import {
+  createCookieAuthClient,
+  errorRedirect,
+  isInactiveProfile,
+  sanitizeNextPath,
+} from "@/server/auth-utils";
 import { clearAuthCookies, setSessionCookies } from "@/server/private-api";
 
 export async function GET(request) {
@@ -12,7 +17,7 @@ export async function GET(request) {
   }
 
   try {
-    const supabase = createPublicAuthClient();
+    const { supabase, applyCookies } = createCookieAuthClient(request);
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error || !data?.session?.access_token || !data?.user?.id) {
@@ -21,10 +26,12 @@ export async function GET(request) {
 
     if (await isInactiveProfile(data.user.id)) {
       const response = errorRedirect(request, "account_inactive");
+      applyCookies(response);
       return clearAuthCookies(response);
     }
 
     const response = NextResponse.redirect(new URL(next, request.url), { status: 303 });
+    applyCookies(response);
     return setSessionCookies(response, data.session);
   } catch (error) {
     console.error("Google sign-in callback failed:", error);

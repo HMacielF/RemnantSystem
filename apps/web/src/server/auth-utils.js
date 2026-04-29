@@ -31,6 +31,69 @@ export function createPublicAuthClient() {
   });
 }
 
+/**
+ * Variant of the public auth client that persists PKCE state in cookies on
+ * the request/response — required for the Google OAuth flow because the
+ * code_verifier needs to round-trip between /api/auth/google (start) and
+ * /api/auth/callback (exchange) across separate serverless invocations.
+ *
+ * Returns the client plus an `applyCookies(response)` function that flushes
+ * any cookie writes the SDK queued onto the outgoing NextResponse.
+ */
+export function createCookieAuthClient(request) {
+  const { url, anonKey } = envConfig();
+  const writes = [];
+  const storage = {
+    getItem(key) {
+      return request.cookies.get(key)?.value || null;
+    },
+    setItem(key, value) {
+      writes.push({ key, value });
+    },
+    removeItem(key) {
+      writes.push({ key, value: null });
+    },
+  };
+
+  const supabase = createClient(url, anonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      flowType: "pkce",
+      storage,
+      storageKey: "sb-pkce",
+    },
+  });
+
+  function applyCookies(response) {
+    if (!response) return response;
+    const secure = process.env.NODE_ENV === "production";
+    for (const { key, value } of writes) {
+      if (value === null || value === undefined) {
+        response.cookies.set(key, "", {
+          httpOnly: true,
+          sameSite: "lax",
+          secure,
+          path: "/",
+          maxAge: 0,
+        });
+      } else {
+        response.cookies.set(key, value, {
+          httpOnly: true,
+          sameSite: "lax",
+          secure,
+          path: "/",
+          maxAge: 600,
+        });
+      }
+    }
+    return response;
+  }
+
+  return { supabase, applyCookies };
+}
+
 export function createServiceAuthClient() {
   const { url, serviceRoleKey } = envConfig();
   if (!serviceRoleKey) return null;
