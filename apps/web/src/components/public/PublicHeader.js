@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import NavBoldLink, { isNavLinkActive } from "@/components/workspace-nav-link";
 
@@ -79,22 +80,17 @@ export default function PublicHeader({ initialProfile = null } = {}) {
       <div className="mx-auto flex w-full max-w-[1680px] items-center justify-between px-8 py-5">
         <Link
           href="/"
-          className="inline-flex items-center gap-2 text-[color:var(--qc-ink-1)]"
+          className="inline-flex items-center"
           aria-label="Quick Countertop home"
         >
-          <span
-            aria-hidden="true"
-            className="inline-flex h-7 w-7 items-center justify-center text-[15px] font-semibold text-white"
-            style={{ backgroundColor: "var(--qc-orange)", borderRadius: "var(--qc-radius-sharp)" }}
-          >
-            Q
-          </span>
-          <span className="flex flex-col leading-tight">
-            <span className="text-[15px] font-semibold tracking-[-0.01em]">Quick Countertop</span>
-            <span className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
-              & Cabinets
-            </span>
-          </span>
+          <Image
+            src="/assets/Quick_Logo.png"
+            alt="Quick Countertop"
+            width={194}
+            height={36}
+            priority
+            className="h-9 w-auto"
+          />
         </Link>
 
         <nav className="flex items-center gap-7 text-[14px]">
