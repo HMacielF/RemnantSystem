@@ -283,6 +283,38 @@ function buildSearchQuery(filters) {
   return params;
 }
 
+function arraysShallowEqual(a, b) {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+function filtersEqual(a, b) {
+  if (a === b) return true;
+  if (
+    a.stone !== b.stone ||
+    a.minWidth !== b.minWidth ||
+    a.minHeight !== b.minHeight ||
+    a.status !== b.status
+  ) {
+    return false;
+  }
+  return arraysShallowEqual(a.materials, b.materials) && arraysShallowEqual(a.colors, b.colors);
+}
+
+function serverFilterSignature(filters) {
+  return JSON.stringify([
+    filters.materials,
+    filters.stone,
+    filters.minWidth,
+    filters.minHeight,
+    filters.status,
+  ]);
+}
+
 function PublicInventorySkeletonCard() {
   return (
     <div
@@ -330,12 +362,14 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
   const abortRef = useRef(null);
   const enrichmentRef = useRef(null);
   const lastPathnameRef = useRef(pathname);
+  const lastServerSigRef = useRef(null);
   const materialRailRef = useRef(null);
   const materialRailScrollRef = useRef(0);
   const imageSwipeStartRef = useRef(null);
 
   useEffect(() => {
-    setFilters(currentFiltersFromSearch(new URLSearchParams(searchKey)));
+    const next = currentFiltersFromSearch(new URLSearchParams(searchKey));
+    setFilters((prev) => (filtersEqual(prev, next) ? prev : next));
   }, [searchKey]);
 
   useEffect(() => {
@@ -394,6 +428,11 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
   useEffect(() => {
     if (!lookupsLoaded) return;
 
+    const sig = serverFilterSignature(debouncedFilters);
+    const hadRows = remnants.length > 0;
+    if (lastServerSigRef.current === sig && hadRows) return;
+    lastServerSigRef.current = sig;
+
     if (abortRef.current) abortRef.current.abort();
     if (enrichmentRef.current) enrichmentRef.current.abort();
 
@@ -402,7 +441,7 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
 
     async function loadRows() {
       try {
-        setLoading(true);
+        if (!hadRows) setLoading(true);
         setError("");
         const params = buildSearchQuery(debouncedFilters);
         params.set("enrich", "0");
@@ -412,34 +451,33 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
         if (!Array.isArray(rows)) {
           throw new Error("Unexpected remnant payload");
         }
-        setRemnants(rows.map((row) => ({ ...row, __detailsPending: rows.length > 0 })));
-        setLoading(false);
 
         const ids = [...new Set(rows.map((row) => Number(internalRemnantId(row))).filter(Boolean))];
-        if (!ids.length) return;
+        let merged = rows;
 
-        const enrichmentController = new AbortController();
-        enrichmentRef.current = enrichmentController;
-        const enrichmentRows = await apiFetch("/api/public/remnants/enrichment", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ids }),
-          signal: enrichmentController.signal,
-        });
+        if (ids.length) {
+          const enrichmentController = new AbortController();
+          enrichmentRef.current = enrichmentController;
+          const enrichmentRows = await apiFetch("/api/public/remnants/enrichment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids }),
+            signal: enrichmentController.signal,
+          });
 
-        if (!Array.isArray(enrichmentRows)) return;
-        const enrichmentMap = new Map(
-          enrichmentRows.map((row) => [Number(row.remnant_id), row]),
-        );
+          if (Array.isArray(enrichmentRows)) {
+            const enrichmentMap = new Map(
+              enrichmentRows.map((row) => [Number(row.remnant_id), row]),
+            );
+            merged = rows.map((row) => {
+              const enrichment = enrichmentMap.get(Number(internalRemnantId(row)));
+              return enrichment ? { ...row, ...enrichment } : row;
+            });
+          }
+        }
 
-        setRemnants((currentRows) =>
-          currentRows.map((row) => {
-            const enrichment = enrichmentMap.get(Number(internalRemnantId(row)));
-            return enrichment
-              ? { ...row, ...enrichment, __detailsPending: false }
-              : { ...row, __detailsPending: false };
-          }),
-        );
+        setRemnants(merged);
+        setLoading(false);
       } catch (loadError) {
         if (loadError.name === "AbortError") return;
         setLoading(false);
@@ -452,6 +490,8 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
     return () => {
       controller.abort();
     };
+    // remnants is intentionally read from closure: adding it to deps would loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedFilters, lookupsLoaded]);
 
   function toggleMaterialFilter(material) {
