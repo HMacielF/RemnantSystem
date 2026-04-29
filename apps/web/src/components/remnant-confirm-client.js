@@ -1325,8 +1325,115 @@ export default function RemnantConfirmClient({ profile = null }) {
               ))}
             </div>
 
+            {sessionSummary.missing_entries?.length ? (
+              <div
+                className="px-5 py-4"
+                style={{ borderTop: "1px solid var(--qc-line)" }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10.5px] font-medium uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
+                    Missing
+                  </p>
+                  <span className="text-[10.5px] uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+                    Investigate
+                  </span>
+                </div>
+                <ul className="mt-3">
+                  {sessionSummary.missing_entries.map((entry) => (
+                    <li
+                      key={entry.id}
+                      className="flex items-start justify-between gap-3 py-2.5"
+                      style={{ borderTop: "1px solid var(--qc-line)" }}
+                    >
+                      <div className="min-w-0">
+                        <p className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className="text-[14px] font-medium text-[color:var(--qc-ink-1)]"
+                            style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                          >
+                            #{entry.moraware_remnant_id || entry.remnant_id}
+                          </span>
+                          {entry.end_of_pass ? (
+                            <span
+                              className="px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.14em]"
+                              style={{
+                                backgroundColor: "var(--qc-status-sold-bg)",
+                                color: "var(--qc-status-sold-fg)",
+                                borderRadius: "var(--qc-radius-sharp)",
+                              }}
+                            >
+                              End of pass
+                            </span>
+                          ) : null}
+                        </p>
+                        {entry.name ? (
+                          <p className="mt-0.5 truncate text-[12px] text-[color:var(--qc-ink-2)]">
+                            {entry.name}
+                          </p>
+                        ) : null}
+                      </div>
+                      <span
+                        className="shrink-0 text-[11px] text-[color:var(--qc-ink-3)]"
+                        style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                      >
+                        {formatScanTime(entry.created_at)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {sessionSummary.review_entries?.length ? (
+              <div
+                className="px-5 py-4"
+                style={{ borderTop: "1px solid var(--qc-line)" }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10.5px] font-medium uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
+                    Needs review
+                  </p>
+                  <span className="text-[10.5px] uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+                    Follow up
+                  </span>
+                </div>
+                <ul className="mt-3">
+                  {sessionSummary.review_entries.map((entry) => (
+                    <li
+                      key={entry.id}
+                      className="flex items-start justify-between gap-3 py-2.5"
+                      style={{ borderTop: "1px solid var(--qc-line)" }}
+                    >
+                      <div className="min-w-0">
+                        <span
+                          className="text-[14px] font-medium text-[color:var(--qc-ink-1)]"
+                          style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                        >
+                          #{entry.moraware_remnant_id || entry.remnant_id}
+                        </span>
+                        {entry.name ? (
+                          <p className="mt-0.5 truncate text-[12px] text-[color:var(--qc-ink-2)]">
+                            {entry.name}
+                          </p>
+                        ) : null}
+                      </div>
+                      <span
+                        className="shrink-0 text-[11px] text-[color:var(--qc-ink-3)]"
+                        style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                      >
+                        {formatScanTime(entry.created_at)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
             {sessionSummary.not_in_db_entries?.length ? (
-              <div className="px-5 py-4">
+              <div
+                className="px-5 py-4"
+                style={{ borderTop: "1px solid var(--qc-line)" }}
+              >
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[10.5px] font-medium uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
                     Not in DB
@@ -1335,7 +1442,7 @@ export default function RemnantConfirmClient({ profile = null }) {
                     Add manually
                   </span>
                 </div>
-                <ul className="mt-3 divide-y" style={{ borderColor: "var(--qc-line)" }}>
+                <ul className="mt-3">
                   {sessionSummary.not_in_db_entries.map((entry) => (
                     <li
                       key={entry.id}

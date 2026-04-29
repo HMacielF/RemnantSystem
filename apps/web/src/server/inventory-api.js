@@ -389,6 +389,44 @@ export async function fetchInventoryCheckSession(client, authed, sessionId) {
     message: row.message,
   }));
 
+  async function fetchOutcomeEntries(targetOutcome) {
+    const audits = [...latestByRemnantId.values()].filter(
+      (row) => (row?.meta?.outcome || null) === targetOutcome,
+    );
+    const ids = audits.map((row) => Number(row.remnant_id)).filter(Boolean);
+    if (!ids.length) return [];
+
+    const { data, error: queryError } = await writeClient
+      .from("remnants")
+      .select("id, moraware_remnant_id, name, status, location")
+      .in("id", ids)
+      .is("deleted_at", null);
+    if (queryError) throw queryError;
+
+    const byId = new Map((data || []).map((row) => [Number(row.id), row]));
+    return audits
+      .map((audit) => {
+        const remnant = byId.get(Number(audit.remnant_id)) || {};
+        return {
+          id: audit.id,
+          remnant_id: audit.remnant_id,
+          moraware_remnant_id:
+            remnant.moraware_remnant_id ?? audit?.new_data?.moraware_remnant_id ?? null,
+          name: remnant.name ?? null,
+          status: remnant.status ?? null,
+          location: remnant.location ?? null,
+          created_at: audit.created_at,
+          end_of_pass: Boolean(audit?.meta?.end_of_pass),
+        };
+      })
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  }
+
+  const [missingEntries, reviewEntries] = await Promise.all([
+    fetchOutcomeEntries("missing"),
+    fetchOutcomeEntries("issue"),
+  ]);
+
   return {
     session_id: normalizedSessionId,
     summary: {
@@ -408,5 +446,7 @@ export async function fetchInventoryCheckSession(client, authed, sessionId) {
     })),
     recent,
     not_in_db_entries: notInDbEntries,
+    missing_entries: missingEntries,
+    review_entries: reviewEntries,
   };
 }
