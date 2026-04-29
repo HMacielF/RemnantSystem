@@ -25,6 +25,7 @@ export const REMNANT_SELECT = `
   source_image_url,
   updated_at,
   created_at,
+  deleted_at,
   stone_product_id,
   company:companies(id,name),
   material:materials(id,name),

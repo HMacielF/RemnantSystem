@@ -519,6 +519,7 @@ export function currentFiltersFromSearch(searchParams) {
  minWidth: searchParams.get("min-width") || "",
  minHeight: searchParams.get("min-height") || "",
  status: searchParams.get("status") || "",
+ archived: searchParams.get("archived") || "",
  };
 }
 
@@ -530,6 +531,7 @@ export function emptyFilters() {
  minWidth: "",
  minHeight: "",
  status: "",
+ archived: "",
  };
 }
 
@@ -545,6 +547,7 @@ export function buildSearchQuery(filters) {
  if (filters.minWidth.trim()) params.set("min-width", filters.minWidth.trim());
  if (filters.minHeight.trim()) params.set("min-height", filters.minHeight.trim());
  if (filters.status.trim()) params.set("status", filters.status.trim());
+ if ((filters.archived || "").trim()) params.set("archived", filters.archived.trim());
  return params;
 }
 

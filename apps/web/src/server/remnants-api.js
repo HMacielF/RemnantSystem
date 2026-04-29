@@ -62,6 +62,7 @@ export async function fetchPrivateRemnants(request, authContext = null) {
   const minWidth = parseMeasurement(searchParams.get("min-width") ?? searchParams.get("minWidth"));
   const minHeight = parseMeasurement(searchParams.get("min-height") ?? searchParams.get("minHeight"));
   const shouldEnrich = String(searchParams.get("enrich") || "1") !== "0";
+  const archivedRequest = String(searchParams.get("archived") || "").trim().toLowerCase();
 
   const requiredAuthed =
     authContext ||
@@ -71,6 +72,10 @@ export async function fetchPrivateRemnants(request, authContext = null) {
     error.statusCode = 401;
     throw error;
   }
+
+  const includeArchived =
+    requiredAuthed?.profile?.system_role === "super_admin"
+    && (archivedRequest === "1" || archivedRequest === "true" || archivedRequest === "all" || archivedRequest === "include");
 
   let resolvedMaterialIds = [...materialIds];
   let query = requiredAuthed.client
@@ -86,9 +91,12 @@ export async function fetchPrivateRemnants(request, authContext = null) {
         )
       )
     `)
-    .is("deleted_at", null)
     .order("moraware_remnant_id", { ascending: true, nullsFirst: false })
     .order("id", { ascending: true });
+
+  if (!includeArchived) {
+    query = query.is("deleted_at", null);
+  }
 
   if (materialIds.length > 0) {
     query = query.in("material_id", materialIds);

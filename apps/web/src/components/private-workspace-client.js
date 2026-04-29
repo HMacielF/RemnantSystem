@@ -1124,6 +1124,45 @@ export default function PrivateWorkspaceClient() {
  })}
  </div>
 
+ {profile?.system_role === "super_admin" ? (
+ <button
+ type="button"
+ aria-pressed={filters.archived === "1"}
+ onClick={() =>
+ setFilters((current) => ({
+ ...current,
+ archived: current.archived === "1" ? "" : "1",
+ }))
+ }
+ className={`font-inter inline-flex h-11 items-center gap-1.5 px-4 text-[13px] font-medium transition-colors ${
+ filters.archived === "1"
+ ? "bg-[color:var(--qc-ink-1)] text-white hover:bg-[#232323]"
+ : "bg-white text-[color:var(--qc-ink-2)] hover:bg-[rgba(0,0,0,0.04)] hover:text-[color:var(--qc-ink-1)]"
+ }`}
+ style={{
+ border: "1px solid var(--qc-line)",
+ borderRadius: "var(--qc-radius-sharp)",
+ }}
+ title="Toggle archived remnants"
+ >
+ <svg
+ className="h-3.5 w-3.5"
+ viewBox="0 0 16 16"
+ fill="none"
+ stroke="currentColor"
+ strokeWidth="1.6"
+ strokeLinecap="round"
+ strokeLinejoin="round"
+ aria-hidden="true"
+ >
+ <rect x="2" y="3" width="12" height="3" rx="0.5" />
+ <path d="M3 6v6.5a1.5 1.5 0 001.5 1.5h7A1.5 1.5 0 0013 12.5V6" />
+ <path d="M6.5 9h3" />
+ </svg>
+ Show archived
+ </button>
+ ) : null}
+
  {canStructure ? (
  <button
  type="button"
@@ -1363,19 +1402,21 @@ export default function PrivateWorkspaceClient() {
  const finishEntry = metrics.find((m) => m.label === "Finish");
  const priceEntry = metrics.find((m) => m.label === "Price");
  const statusDescriptor = statusBadge && statusBadge !== "Available" ? statusBadge : "";
+ const isArchived = Boolean(remnant.deleted_at);
  return (
  <article
  key={String(remnant.id)}
  className="group relative flex flex-col overflow-hidden bg-[color:var(--qc-bg-surface)] transition-all duration-200 hover:-translate-y-1"
  style={{
- border: "1px solid var(--qc-line)",
+ border: isArchived ? "1px dashed var(--qc-line-strong)" : "1px solid var(--qc-line)",
  borderRadius: "var(--qc-radius-sharp)",
+ opacity: isArchived ? 0.7 : 1,
  }}
  onMouseEnter={(event) => {
  event.currentTarget.style.borderColor = "var(--qc-ink-1)";
  }}
  onMouseLeave={(event) => {
- event.currentTarget.style.borderColor = "var(--qc-line)";
+ event.currentTarget.style.borderColor = isArchived ? "var(--qc-line-strong)" : "var(--qc-line)";
  }}
  >
  <div className="relative aspect-[4/3] overflow-hidden bg-[#f3f1ee]">
@@ -1456,6 +1497,21 @@ export default function PrivateWorkspaceClient() {
  </div>
  );
  })()}
+
+ {isArchived ? (
+ <div className="pointer-events-none absolute right-3 top-3 z-[2]">
+ <span
+ className="font-inter inline-flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.16em]"
+ style={{
+ backgroundColor: "var(--qc-ink-1)",
+ color: "white",
+ borderRadius: "var(--qc-radius-sharp)",
+ }}
+ >
+ Archived
+ </span>
+ </div>
+ ) : null}
 
  {leftAction ? (() => {
  const tokens = STATUS_ACTION_TOKENS[leftAction.key] || {
