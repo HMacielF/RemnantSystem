@@ -604,36 +604,31 @@ export async function ensureSlabStoneProduct(writeClient, payload) {
 
   const { data: created, error: createError } = await writeClient
     .from("stone_products")
-    .insert({
-      material_id: materialId,
-      display_name: displayName,
-      stone_name: stoneName,
-      brand_name: brandName,
-      active: true,
-    })
+    .upsert(
+      {
+        material_id: materialId,
+        display_name: displayName,
+        stone_name: stoneName,
+        brand_name: brandName,
+        active: true,
+      },
+      { onConflict: "material_id,normalized_name", ignoreDuplicates: true },
+    )
     .select("id")
-    .single();
-
-  if (createError?.code === "23505") {
-    const { data: retryRows, error: retryError } = await writeClient
-      .from("stone_products")
-      .select("id,brand_name,stone_name,display_name,normalized_name")
-      .eq("material_id", materialId)
-      .limit(100);
-    if (retryError) throw retryError;
-
-    const retryMatch = (retryRows || []).find((row) =>
-      normalizeStoneLookupKeyPart(row?.display_name) === normalizedDisplayName ||
-      (
-        normalizeStoneLookupKeyPart(row?.stone_name) === normalizedStoneName &&
-        normalizeStoneLookupKeyPart(row?.brand_name) === normalizedBrandName
-      ),
-    );
-    if (retryMatch?.id) return retryMatch.id;
-  }
+    .maybeSingle();
 
   if (createError) throw createError;
-  return created?.id || null;
+  if (created?.id) return created.id;
+
+  const { data: existing, error: existingError } = await writeClient
+    .from("stone_products")
+    .select("id")
+    .eq("material_id", materialId)
+    .eq("normalized_name", normalizedDisplayName)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+  return existing?.id || null;
 }
 
 export function normalizeSlabPayload(body) {
