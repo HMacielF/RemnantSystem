@@ -448,27 +448,41 @@ export async function fetchInventoryCheckSession(client, authed, sessionId) {
 
     const { data, error: queryError } = await writeClient
       .from("remnants")
-      .select("id, moraware_remnant_id, name, status, location")
+      .select(REMNANT_WITH_STONE_SELECT)
       .in("id", ids)
       .is("deleted_at", null);
     if (queryError) throw queryError;
 
-    const byId = new Map((data || []).map((row) => [Number(row.id), row]));
+    const byId = new Map(
+      (data || []).map((row) => [Number(row.id), formatRemnant(row)]),
+    );
     return audits
       .map((audit) => {
-        const remnant = byId.get(Number(audit.remnant_id)) || {};
+        const remnant = byId.get(Number(audit.remnant_id));
+        if (!remnant) return null;
         return {
           id: audit.id,
           remnant_id: audit.remnant_id,
-          moraware_remnant_id:
-            remnant.moraware_remnant_id ?? audit?.new_data?.moraware_remnant_id ?? null,
-          name: remnant.name ?? null,
-          status: remnant.status ?? null,
-          location: remnant.location ?? null,
+          moraware_remnant_id: remnant.moraware_remnant_id,
+          name: remnant.name,
+          status: remnant.status,
+          location: remnant.location,
+          image: remnant.image,
+          width: remnant.width,
+          height: remnant.height,
+          l_shape: remnant.l_shape,
+          l_width: remnant.l_width,
+          l_height: remnant.l_height,
+          thickness_name: remnant.thickness_name,
+          finish_name: remnant.finish_name,
+          company_name: remnant.company_name,
+          material_name: remnant.material_name,
+          brand_name: remnant.brand_name,
           created_at: audit.created_at,
           end_of_pass: Boolean(audit?.meta?.end_of_pass),
         };
       })
+      .filter(Boolean)
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   }
 

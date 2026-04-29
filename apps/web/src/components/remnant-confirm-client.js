@@ -126,6 +126,9 @@ export default function RemnantConfirmClient({ profile = null }) {
   const [endPassConfirmOpen, setEndPassConfirmOpen] = useState(false);
   const [endPassRunning, setEndPassRunning] = useState(false);
   const [sessionSummary, setSessionSummary] = useState(null);
+  const [expandedEntryId, setExpandedEntryId] = useState(null);
+  const [archiveTargetEntry, setArchiveTargetEntry] = useState(null);
+  const [archiveRunning, setArchiveRunning] = useState(false);
   const inputRef = useRef(null);
   const locationRef = useRef(null);
   const lookupRequestIdRef = useRef(0);
@@ -428,6 +431,164 @@ export default function RemnantConfirmClient({ profile = null }) {
     }
   }
 
+  function rescanEntry(entry) {
+    if (!entry) return;
+    const targetNumber = String(entry.moraware_remnant_id || entry.remnant_id || "").trim();
+    if (!targetNumber) return;
+    setExpandedEntryId(null);
+    setLookupValue(targetNumber);
+    if (entry.location) setLocationValue(String(entry.location).toUpperCase().slice(0, 2));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.setTimeout(() => {
+      inputRef.current?.focus();
+    }, 250);
+  }
+
+  function requestArchive(entry) {
+    if (!entry?.remnant_id) return;
+    setArchiveTargetEntry(entry);
+  }
+
+  async function confirmArchive() {
+    if (!archiveTargetEntry?.remnant_id) return;
+    setArchiveRunning(true);
+    setError("");
+    try {
+      await apiFetch(`/api/remnants/${archiveTargetEntry.remnant_id}`, { method: "DELETE" });
+      const label = `#${archiveTargetEntry.moraware_remnant_id || archiveTargetEntry.remnant_id}`;
+      showTransientMessage(`${label} → archived`, "warn");
+      setExpandedEntryId(null);
+      setArchiveTargetEntry(null);
+      refreshSessionSummary();
+      refreshHoldCount();
+    } catch (nextError) {
+      setError(friendlyErrorMessage(nextError, "Failed to archive remnant."));
+    } finally {
+      setArchiveRunning(false);
+    }
+  }
+
+  function toggleEntryExpansion(remnantId) {
+    setExpandedEntryId((current) => (current === remnantId ? null : remnantId));
+  }
+
+  function renderExpandedEntryPanel(entry) {
+    const status = String(entry.status || "").trim().toLowerCase();
+    const pillStyle = statusPillStyle(status);
+    const sizeLabel = entry.l_shape
+      ? `${entry.width}" × ${entry.height}" + ${entry.l_width}" × ${entry.l_height}"`
+      : entry.width != null && entry.height != null
+        ? `${entry.width}" × ${entry.height}"`
+        : "";
+    const subtitleParts = [entry.material_name, entry.company_name].filter(Boolean);
+    const metaParts = [sizeLabel, entry.thickness_name, entry.finish_name].filter(Boolean);
+
+    return (
+      <div
+        className="mb-3 mt-1 flex gap-3 bg-[color:var(--qc-bg-page)] p-3"
+        style={{
+          border: "1px solid var(--qc-line)",
+          borderRadius: "var(--qc-radius-sharp)",
+        }}
+      >
+        {entry.image ? (
+          <img
+            src={entry.image}
+            alt={entry.name || "Remnant"}
+            className="h-20 w-20 shrink-0 bg-white object-contain"
+            style={{
+              border: "1px solid var(--qc-line)",
+              borderRadius: "var(--qc-radius-sharp)",
+            }}
+          />
+        ) : (
+          <div
+            className="flex h-20 w-20 shrink-0 items-center justify-center bg-white text-[9px] uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]"
+            style={{
+              border: "1px solid var(--qc-line)",
+              borderRadius: "var(--qc-radius-sharp)",
+            }}
+          >
+            No image
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          {entry.name ? (
+            <h3 className="text-[15px] font-medium leading-tight tracking-[-0.01em] text-[color:var(--qc-ink-1)]">
+              {entry.name}
+            </h3>
+          ) : null}
+          {subtitleParts.length ? (
+            <p className="mt-0.5 text-[10.5px] font-medium uppercase tracking-[0.18em] text-[color:var(--qc-orange)]">
+              {subtitleParts.join(" · ")}
+            </p>
+          ) : null}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em]"
+              style={{
+                backgroundColor: pillStyle.backgroundColor,
+                color: pillStyle.color,
+                borderRadius: "var(--qc-radius-sharp)",
+              }}
+            >
+              <span
+                aria-hidden="true"
+                className="inline-block h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: pillStyle.dot }}
+              />
+              {statusText(entry.status)}
+            </span>
+            {entry.location ? (
+              <span className="text-[11px] text-[color:var(--qc-ink-2)]">
+                Loc <span className="font-medium text-[color:var(--qc-ink-1)]">{entry.location}</span>
+              </span>
+            ) : null}
+          </div>
+          {metaParts.length ? (
+            <p
+              className="mt-2 text-[11.5px] text-[color:var(--qc-ink-2)]"
+              style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+            >
+              {metaParts.join(" · ")}
+            </p>
+          ) : null}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                rescanEntry(entry);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-[#232323]"
+              style={{
+                backgroundColor: "var(--qc-ink-1)",
+                borderRadius: "var(--qc-radius-sharp)",
+              }}
+            >
+              Re-scan
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                requestArchive(entry);
+              }}
+              className="inline-flex items-center gap-1.5 bg-white px-3 py-1.5 text-[12px] font-medium transition-colors"
+              style={{
+                color: "var(--qc-status-sold-fg)",
+                border: "1px solid var(--qc-line)",
+                borderRadius: "var(--qc-radius-sharp)",
+              }}
+            >
+              Archive
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   function restoreLastLookup() {
     if (!lastResolvedLookup?.remnant) return;
     clearPendingMessageTimeout();
@@ -652,6 +813,60 @@ export default function RemnantConfirmClient({ profile = null }) {
                 }}
               >
                 {endPassRunning ? "Ending…" : "Yes, end pass"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {archiveTargetEntry ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+          <div
+            className="w-full max-w-sm bg-[color:var(--qc-bg-surface)] p-6"
+            style={{
+              border: "1px solid var(--qc-line)",
+              borderRadius: "var(--qc-radius-sharp)",
+              boxShadow: "var(--qc-shadow-toast)",
+            }}
+          >
+            <p className="text-[10.5px] uppercase tracking-[0.24em] text-[color:var(--qc-ink-3)]">
+              Archive remnant
+            </p>
+            <h2 className="mt-2 text-[20px] font-medium leading-tight tracking-[-0.015em] text-[color:var(--qc-ink-1)]">
+              Archive #{archiveTargetEntry.moraware_remnant_id || archiveTargetEntry.remnant_id}?
+            </h2>
+            {archiveTargetEntry.name ? (
+              <p className="mt-1 text-[13px] text-[color:var(--qc-ink-2)]">
+                {archiveTargetEntry.name}
+              </p>
+            ) : null}
+            <p className="mt-3 text-[13px] leading-[1.6] text-[color:var(--qc-ink-2)]">
+              The remnant will be soft-deleted — it disappears from inventory and the public site, but the audit trail stays. You can restore it later from admin if needed.
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setArchiveTargetEntry(null)}
+                disabled={archiveRunning}
+                className="flex-1 bg-white py-3 text-[13px] font-medium text-[color:var(--qc-ink-1)] transition-colors hover:bg-[rgba(0,0,0,0.04)] disabled:opacity-60"
+                style={{
+                  border: "1px solid var(--qc-line)",
+                  borderRadius: "var(--qc-radius-sharp)",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmArchive}
+                disabled={archiveRunning}
+                className="flex-1 py-3 text-[13px] font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                style={{
+                  backgroundColor: "var(--qc-status-sold-dot)",
+                  borderRadius: "var(--qc-radius-sharp)",
+                }}
+              >
+                {archiveRunning ? "Archiving…" : "Archive"}
               </button>
             </div>
           </div>
@@ -1336,47 +1551,78 @@ export default function RemnantConfirmClient({ profile = null }) {
                   </span>
                 </div>
                 <ul className="mt-3">
-                  {sessionSummary.duplicate_entries.map((entry) => (
-                    <li
-                      key={entry.id}
-                      className="flex items-start justify-between gap-3 py-2.5"
-                      style={{ borderTop: "1px solid var(--qc-line)" }}
-                    >
-                      <div className="min-w-0">
-                        <p className="flex flex-wrap items-center gap-1.5">
-                          <span
-                            className="text-[14px] font-medium text-[color:var(--qc-ink-1)]"
-                            style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
-                          >
-                            #{entry.moraware_remnant_id || entry.remnant_id}
-                          </span>
-                          {(entry.locations || []).map((loc) => (
-                            <span
-                              key={`${entry.id}-${loc}`}
-                              className="px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-white"
-                              style={{
-                                backgroundColor: "var(--qc-orange)",
-                                borderRadius: "var(--qc-radius-sharp)",
-                              }}
-                            >
-                              {loc}
-                            </span>
-                          ))}
-                        </p>
-                        {entry.name ? (
-                          <p className="mt-0.5 truncate text-[12px] text-[color:var(--qc-ink-2)]">
-                            {entry.name}
-                          </p>
-                        ) : null}
-                      </div>
-                      <span
-                        className="shrink-0 text-[11px] text-[color:var(--qc-ink-3)]"
-                        style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                  {sessionSummary.duplicate_entries.map((entry) => {
+                    const isExpanded = expandedEntryId === entry.remnant_id;
+                    return (
+                      <li
+                        key={entry.id}
+                        style={{ borderTop: "1px solid var(--qc-line)" }}
                       >
-                        {formatScanTime(entry.created_at)}
-                      </span>
-                    </li>
-                  ))}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => toggleEntryExpansion(entry.remnant_id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              toggleEntryExpansion(entry.remnant_id);
+                            }
+                          }}
+                          className="flex cursor-pointer items-start justify-between gap-3 py-2.5 transition-colors hover:bg-[rgba(0,0,0,0.02)]"
+                        >
+                          <div className="min-w-0">
+                            <p className="flex flex-wrap items-center gap-1.5">
+                              <span
+                                className="text-[14px] font-medium text-[color:var(--qc-ink-1)]"
+                                style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                              >
+                                #{entry.moraware_remnant_id || entry.remnant_id}
+                              </span>
+                              {(entry.locations || []).map((loc) => (
+                                <span
+                                  key={`${entry.id}-${loc}`}
+                                  className="px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-white"
+                                  style={{
+                                    backgroundColor: "var(--qc-orange)",
+                                    borderRadius: "var(--qc-radius-sharp)",
+                                  }}
+                                >
+                                  {loc}
+                                </span>
+                              ))}
+                            </p>
+                            {entry.name ? (
+                              <p className="mt-0.5 truncate text-[12px] text-[color:var(--qc-ink-2)]">
+                                {entry.name}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span
+                              className="text-[11px] text-[color:var(--qc-ink-3)]"
+                              style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                            >
+                              {formatScanTime(entry.created_at)}
+                            </span>
+                            <svg
+                              className="h-3.5 w-3.5 text-[color:var(--qc-ink-3)] transition-transform"
+                              style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
+                              viewBox="0 0 16 16"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <path d="M4 6l4 4 4-4" />
+                            </svg>
+                          </div>
+                        </div>
+                        {isExpanded ? renderExpandedEntryPanel(entry) : null}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ) : null}
@@ -1395,47 +1641,78 @@ export default function RemnantConfirmClient({ profile = null }) {
                   </span>
                 </div>
                 <ul className="mt-3">
-                  {sessionSummary.missing_entries.map((entry) => (
-                    <li
-                      key={entry.id}
-                      className="flex items-start justify-between gap-3 py-2.5"
-                      style={{ borderTop: "1px solid var(--qc-line)" }}
-                    >
-                      <div className="min-w-0">
-                        <p className="flex flex-wrap items-center gap-1.5">
-                          <span
-                            className="text-[14px] font-medium text-[color:var(--qc-ink-1)]"
-                            style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
-                          >
-                            #{entry.moraware_remnant_id || entry.remnant_id}
-                          </span>
-                          {entry.end_of_pass ? (
-                            <span
-                              className="px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.14em]"
-                              style={{
-                                backgroundColor: "var(--qc-status-sold-bg)",
-                                color: "var(--qc-status-sold-fg)",
-                                borderRadius: "var(--qc-radius-sharp)",
-                              }}
-                            >
-                              End of pass
-                            </span>
-                          ) : null}
-                        </p>
-                        {entry.name ? (
-                          <p className="mt-0.5 truncate text-[12px] text-[color:var(--qc-ink-2)]">
-                            {entry.name}
-                          </p>
-                        ) : null}
-                      </div>
-                      <span
-                        className="shrink-0 text-[11px] text-[color:var(--qc-ink-3)]"
-                        style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                  {sessionSummary.missing_entries.map((entry) => {
+                    const isExpanded = expandedEntryId === entry.remnant_id;
+                    return (
+                      <li
+                        key={entry.id}
+                        style={{ borderTop: "1px solid var(--qc-line)" }}
                       >
-                        {formatScanTime(entry.created_at)}
-                      </span>
-                    </li>
-                  ))}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => toggleEntryExpansion(entry.remnant_id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              toggleEntryExpansion(entry.remnant_id);
+                            }
+                          }}
+                          className="flex cursor-pointer items-start justify-between gap-3 py-2.5 transition-colors hover:bg-[rgba(0,0,0,0.02)]"
+                        >
+                          <div className="min-w-0">
+                            <p className="flex flex-wrap items-center gap-1.5">
+                              <span
+                                className="text-[14px] font-medium text-[color:var(--qc-ink-1)]"
+                                style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                              >
+                                #{entry.moraware_remnant_id || entry.remnant_id}
+                              </span>
+                              {entry.end_of_pass ? (
+                                <span
+                                  className="px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.14em]"
+                                  style={{
+                                    backgroundColor: "var(--qc-status-sold-bg)",
+                                    color: "var(--qc-status-sold-fg)",
+                                    borderRadius: "var(--qc-radius-sharp)",
+                                  }}
+                                >
+                                  End of pass
+                                </span>
+                              ) : null}
+                            </p>
+                            {entry.name ? (
+                              <p className="mt-0.5 truncate text-[12px] text-[color:var(--qc-ink-2)]">
+                                {entry.name}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span
+                              className="text-[11px] text-[color:var(--qc-ink-3)]"
+                              style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                            >
+                              {formatScanTime(entry.created_at)}
+                            </span>
+                            <svg
+                              className="h-3.5 w-3.5 text-[color:var(--qc-ink-3)] transition-transform"
+                              style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
+                              viewBox="0 0 16 16"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <path d="M4 6l4 4 4-4" />
+                            </svg>
+                          </div>
+                        </div>
+                        {isExpanded ? renderExpandedEntryPanel(entry) : null}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ) : null}
@@ -1454,33 +1731,64 @@ export default function RemnantConfirmClient({ profile = null }) {
                   </span>
                 </div>
                 <ul className="mt-3">
-                  {sessionSummary.review_entries.map((entry) => (
-                    <li
-                      key={entry.id}
-                      className="flex items-start justify-between gap-3 py-2.5"
-                      style={{ borderTop: "1px solid var(--qc-line)" }}
-                    >
-                      <div className="min-w-0">
-                        <span
-                          className="text-[14px] font-medium text-[color:var(--qc-ink-1)]"
-                          style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
-                        >
-                          #{entry.moraware_remnant_id || entry.remnant_id}
-                        </span>
-                        {entry.name ? (
-                          <p className="mt-0.5 truncate text-[12px] text-[color:var(--qc-ink-2)]">
-                            {entry.name}
-                          </p>
-                        ) : null}
-                      </div>
-                      <span
-                        className="shrink-0 text-[11px] text-[color:var(--qc-ink-3)]"
-                        style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                  {sessionSummary.review_entries.map((entry) => {
+                    const isExpanded = expandedEntryId === entry.remnant_id;
+                    return (
+                      <li
+                        key={entry.id}
+                        style={{ borderTop: "1px solid var(--qc-line)" }}
                       >
-                        {formatScanTime(entry.created_at)}
-                      </span>
-                    </li>
-                  ))}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => toggleEntryExpansion(entry.remnant_id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              toggleEntryExpansion(entry.remnant_id);
+                            }
+                          }}
+                          className="flex cursor-pointer items-start justify-between gap-3 py-2.5 transition-colors hover:bg-[rgba(0,0,0,0.02)]"
+                        >
+                          <div className="min-w-0">
+                            <span
+                              className="text-[14px] font-medium text-[color:var(--qc-ink-1)]"
+                              style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                            >
+                              #{entry.moraware_remnant_id || entry.remnant_id}
+                            </span>
+                            {entry.name ? (
+                              <p className="mt-0.5 truncate text-[12px] text-[color:var(--qc-ink-2)]">
+                                {entry.name}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span
+                              className="text-[11px] text-[color:var(--qc-ink-3)]"
+                              style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                            >
+                              {formatScanTime(entry.created_at)}
+                            </span>
+                            <svg
+                              className="h-3.5 w-3.5 text-[color:var(--qc-ink-3)] transition-transform"
+                              style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
+                              viewBox="0 0 16 16"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <path d="M4 6l4 4 4-4" />
+                            </svg>
+                          </div>
+                        </div>
+                        {isExpanded ? renderExpandedEntryPanel(entry) : null}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ) : null}
