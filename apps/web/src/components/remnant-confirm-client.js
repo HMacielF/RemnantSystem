@@ -402,30 +402,57 @@ export default function RemnantConfirmClient({ profile = null }) {
               Inventory Check
             </span>
           </div>
-          {localCheckedCount > 0 ? (
-            <span
-              className="inline-flex h-7 items-center gap-1.5 px-3 text-[11px] font-medium"
-              style={{
-                backgroundColor: "var(--qc-status-available-bg)",
-                color: "var(--qc-status-available-fg)",
-                borderRadius: "var(--qc-radius-sharp)",
-              }}
-            >
-              <svg
-                className="h-3 w-3"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+          <div className="flex items-center gap-2">
+            {holdCount === 0 ? (
+              <button
+                type="button"
+                onClick={() => setHoldConfirmOpen(true)}
+                className="inline-flex h-7 items-center gap-1.5 bg-white px-3 text-[11px] font-medium text-[color:var(--qc-ink-1)] transition-colors hover:bg-[rgba(0,0,0,0.04)] hover:text-[color:var(--qc-orange)]"
+                style={{
+                  border: "1px solid var(--qc-line)",
+                  borderRadius: "var(--qc-radius-sharp)",
+                }}
               >
-                <path d="M2.5 8.5l3.5 3.5 7-7" />
-              </svg>
-              {localCheckedCount}
-            </span>
-          ) : null}
+                <svg
+                  className="h-3 w-3"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="7" width="10" height="8" rx="1" />
+                  <path d="M5.5 7V5a2.5 2.5 0 015 0v2" />
+                </svg>
+                Start pass
+              </button>
+            ) : null}
+            {localCheckedCount > 0 ? (
+              <span
+                className="inline-flex h-7 items-center gap-1.5 px-3 text-[11px] font-medium"
+                style={{
+                  backgroundColor: "var(--qc-status-available-bg)",
+                  color: "var(--qc-status-available-fg)",
+                  borderRadius: "var(--qc-radius-sharp)",
+                }}
+              >
+                <svg
+                  className="h-3 w-3"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M2.5 8.5l3.5 3.5 7-7" />
+                </svg>
+                {localCheckedCount}
+              </span>
+            ) : null}
+          </div>
         </div>
       </div>
 
