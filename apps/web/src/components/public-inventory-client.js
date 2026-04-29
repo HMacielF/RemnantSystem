@@ -350,6 +350,7 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
   const [selectedImageIndex, setSelectedImageIndex] = useState(null);
   const [holdRemnant, setHoldRemnant] = useState(null);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [backToTopBottom, setBackToTopBottom] = useState(24);
   const [holdForm, setHoldForm] = useState({
     requester_name: "",
     requester_email: "",
@@ -635,7 +636,20 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
 
   useEffect(() => {
     function syncBackToTop() {
-      setShowBackToTop(window.scrollY > 600);
+      const shouldShow = window.scrollY > 600;
+      setShowBackToTop(shouldShow);
+      if (!shouldShow) {
+        setBackToTopBottom(24);
+        return;
+      }
+      const stop = document.querySelector("[data-back-to-top-stop]");
+      if (!stop) {
+        setBackToTopBottom(24);
+        return;
+      }
+      const rect = stop.getBoundingClientRect();
+      const wantBottom = Math.max(24, window.innerHeight - rect.top + 16);
+      setBackToTopBottom(wantBottom);
     }
 
     syncBackToTop();
@@ -1613,8 +1627,9 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
           aria-label="Scroll to top"
           title="Scroll to top"
-          className="fixed bottom-6 right-6 z-[60] inline-flex h-11 w-11 items-center justify-center text-white transition-colors hover:bg-[#232323]"
+          className="fixed right-6 z-[60] inline-flex h-11 w-11 items-center justify-center text-white transition-colors hover:bg-[#232323]"
           style={{
+            bottom: `${backToTopBottom}px`,
             backgroundColor: "var(--qc-ink-1)",
             borderRadius: "var(--qc-radius-sharp)",
             boxShadow: "var(--qc-shadow-toast)",

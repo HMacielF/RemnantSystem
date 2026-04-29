@@ -158,6 +158,7 @@ export default function PublicFooter({ slabCount }) {
         </div>
 
         <div
+          data-back-to-top-stop
           className="mt-12 flex flex-col items-start justify-between gap-3 pt-6 text-[12px] text-[color:var(--qc-ink-3)] sm:flex-row sm:items-center"
           style={{ borderTop: "1px solid var(--qc-line)" }}
         >

@@ -94,6 +94,8 @@ export default function PrivateWorkspaceClient() {
  const [pendingApprovals, setPendingApprovals] = useState([]);
  const [approvalsOpen, setApprovalsOpen] = useState(false);
  const [approvingId, setApprovingId] = useState(null);
+ const [showBackToTop, setShowBackToTop] = useState(false);
+ const [backToTopBottom, setBackToTopBottom] = useState(24);
  const remnantAbortRef = useRef(null);
  const enrichmentRef = useRef(null);
  const lastPathnameRef = useRef(pathname);
@@ -443,6 +445,33 @@ export default function PrivateWorkspaceClient() {
  document.removeEventListener("visibilitychange", handleVisible);
  };
  }, [authState, queueOpen]);
+
+ useEffect(() => {
+ function syncBackToTop() {
+ const shouldShow = window.scrollY > 600;
+ setShowBackToTop(shouldShow);
+ if (!shouldShow) {
+ setBackToTopBottom(24);
+ return;
+ }
+ const stop = document.querySelector("[data-back-to-top-stop]");
+ if (!stop) {
+ setBackToTopBottom(24);
+ return;
+ }
+ const rect = stop.getBoundingClientRect();
+ const wantBottom = Math.max(24, window.innerHeight - rect.top + 16);
+ setBackToTopBottom(wantBottom);
+ }
+
+ syncBackToTop();
+ window.addEventListener("scroll", syncBackToTop, { passive: true });
+ window.addEventListener("resize", syncBackToTop);
+ return () => {
+ window.removeEventListener("scroll", syncBackToTop);
+ window.removeEventListener("resize", syncBackToTop);
+ };
+ }, []);
 
  useEffect(() => {
  function handleKeydown(event) {
@@ -1835,6 +1864,36 @@ export default function PrivateWorkspaceClient() {
  </button>
  </div>
  </div>
+ ) : null}
+
+ {showBackToTop && !isModalOpen ? (
+ <button
+ type="button"
+ onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+ aria-label="Scroll to top"
+ title="Scroll to top"
+ className="fixed right-6 z-[60] inline-flex h-11 w-11 items-center justify-center text-white transition-colors hover:bg-[#232323]"
+ style={{
+ bottom: `${backToTopBottom}px`,
+ backgroundColor: "var(--qc-ink-1)",
+ borderRadius: "var(--qc-radius-sharp)",
+ boxShadow: "var(--qc-shadow-toast)",
+ }}
+ >
+ <svg
+ aria-hidden="true"
+ viewBox="0 0 24 24"
+ className="h-4 w-4"
+ fill="none"
+ stroke="currentColor"
+ strokeWidth="1.8"
+ strokeLinecap="round"
+ strokeLinejoin="round"
+ >
+ <path d="M12 19V5" />
+ <path d="m5 12 7-7 7 7" />
+ </svg>
+ </button>
  ) : null}
  </main>
  );
