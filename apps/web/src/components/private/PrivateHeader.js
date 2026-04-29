@@ -50,37 +50,47 @@ export default function PrivateHeader({ profile }) {
         </Link>
 
         <nav className="flex items-center gap-7 text-[14px]">
-          <Link
-            href="/"
-            className="font-normal text-[color:var(--qc-ink-2)] transition-all hover:font-semibold hover:text-[color:var(--qc-ink-1)]"
-          >
-            Inventory
+          <Link href="/" className="group inline-grid">
+            <span aria-hidden="true" className="col-start-1 row-start-1 invisible font-semibold">
+              Inventory
+            </span>
+            <span className="col-start-1 row-start-1 font-normal text-[color:var(--qc-ink-2)] transition-colors group-hover:font-semibold group-hover:text-[color:var(--qc-ink-1)]">
+              Inventory
+            </span>
           </Link>
-          <Link
-            href="/manage"
-            className="font-semibold text-[color:var(--qc-ink-1)] transition-all hover:text-[color:var(--qc-orange)]"
-          >
-            Manage
+          <Link href="/manage" className="group inline-grid" aria-current="page">
+            <span aria-hidden="true" className="col-start-1 row-start-1 invisible font-semibold">
+              Manage
+            </span>
+            <span className="col-start-1 row-start-1 font-semibold text-[color:var(--qc-ink-1)] transition-colors group-hover:text-[color:var(--qc-orange)]">
+              Manage
+            </span>
           </Link>
           {isSuperAdmin ? (
             <>
-              <Link
-                href="/slabs"
-                className="hidden font-normal text-[color:var(--qc-ink-2)] transition-all hover:font-semibold hover:text-[color:var(--qc-ink-1)] md:inline"
-              >
-                Slabs
+              <Link href="/slabs" className="group hidden md:inline-grid">
+                <span aria-hidden="true" className="col-start-1 row-start-1 invisible font-semibold">
+                  Slabs
+                </span>
+                <span className="col-start-1 row-start-1 font-normal text-[color:var(--qc-ink-2)] transition-colors group-hover:font-semibold group-hover:text-[color:var(--qc-ink-1)]">
+                  Slabs
+                </span>
               </Link>
-              <Link
-                href="/admin"
-                className="hidden font-normal text-[color:var(--qc-ink-2)] transition-all hover:font-semibold hover:text-[color:var(--qc-ink-1)] md:inline"
-              >
-                Admin
+              <Link href="/admin" className="group hidden md:inline-grid">
+                <span aria-hidden="true" className="col-start-1 row-start-1 invisible font-semibold">
+                  Admin
+                </span>
+                <span className="col-start-1 row-start-1 font-normal text-[color:var(--qc-ink-2)] transition-colors group-hover:font-semibold group-hover:text-[color:var(--qc-ink-1)]">
+                  Admin
+                </span>
               </Link>
-              <Link
-                href="/manage/confirm"
-                className="hidden font-normal text-[color:var(--qc-ink-2)] transition-all hover:font-semibold hover:text-[color:var(--qc-ink-1)] lg:inline"
-              >
-                Inventory Check
+              <Link href="/manage/confirm" className="group hidden lg:inline-grid">
+                <span aria-hidden="true" className="col-start-1 row-start-1 invisible font-semibold">
+                  Inventory Check
+                </span>
+                <span className="col-start-1 row-start-1 font-normal text-[color:var(--qc-ink-2)] transition-colors group-hover:font-semibold group-hover:text-[color:var(--qc-ink-1)]">
+                  Inventory Check
+                </span>
               </Link>
             </>
           ) : null}

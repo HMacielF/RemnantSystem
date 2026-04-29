@@ -96,16 +96,24 @@ export default function PublicHeader({ initialProfile = null } = {}) {
         <nav className="flex items-center gap-7 text-[14px]">
           <Link
             href="/"
-            className="font-semibold text-[color:var(--qc-ink-1)] transition-all hover:text-[color:var(--qc-orange)]"
+            className="group inline-grid"
+            aria-current="page"
           >
-            Inventory
+            <span aria-hidden="true" className="col-start-1 row-start-1 invisible font-semibold">
+              Inventory
+            </span>
+            <span className="col-start-1 row-start-1 font-semibold text-[color:var(--qc-ink-1)] transition-colors group-hover:text-[color:var(--qc-orange)]">
+              Inventory
+            </span>
           </Link>
           {isAuthed ? (
-            <Link
-              href="/manage"
-              className="font-normal text-[color:var(--qc-ink-2)] transition-all hover:font-semibold hover:text-[color:var(--qc-ink-1)]"
-            >
-              Manage
+            <Link href="/manage" className="group inline-grid">
+              <span aria-hidden="true" className="col-start-1 row-start-1 invisible font-semibold">
+                Manage
+              </span>
+              <span className="col-start-1 row-start-1 font-normal text-[color:var(--qc-ink-2)] transition-colors group-hover:font-semibold group-hover:text-[color:var(--qc-ink-1)]">
+                Manage
+              </span>
             </Link>
           ) : null}
           {isAuthed ? (
