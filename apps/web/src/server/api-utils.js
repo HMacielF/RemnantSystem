@@ -704,36 +704,45 @@ export async function ensureStoneProduct(writeClient, payload, existingStoneProd
   const displayName = String(payload.name || "").trim();
   if (!displayName) return null;
 
-  let existingQuery = writeClient
+  const normalizedDisplayName = normalizeStoneLookupKeyPart(displayName);
+
+  const { data: existing, error: existingError } = await writeClient
     .from("stone_products")
     .select("id")
     .eq("material_id", payload.material_id)
-    .eq("display_name", displayName)
-    .limit(1);
-
-  if (brandName) {
-    existingQuery = existingQuery.eq("brand_name", brandName);
-  }
-
-  const { data: existing, error: existingError } = await existingQuery.maybeSingle();
+    .eq("normalized_name", normalizedDisplayName)
+    .maybeSingle();
 
   if (existingError) throw existingError;
   if (existing?.id) return existing.id;
 
   const { data: created, error: createError } = await writeClient
     .from("stone_products")
-    .insert({
-      material_id: payload.material_id,
-      display_name: displayName,
-      stone_name: displayName,
-      brand_name: brandName,
-      active: true,
-    })
+    .upsert(
+      {
+        material_id: payload.material_id,
+        display_name: displayName,
+        stone_name: displayName,
+        brand_name: brandName,
+        active: true,
+      },
+      { onConflict: "material_id,normalized_name", ignoreDuplicates: true },
+    )
     .select("id")
-    .single();
+    .maybeSingle();
 
   if (createError) throw createError;
-  return created?.id || null;
+  if (created?.id) return created.id;
+
+  const { data: conflict, error: conflictError } = await writeClient
+    .from("stone_products")
+    .select("id")
+    .eq("material_id", payload.material_id)
+    .eq("normalized_name", normalizedDisplayName)
+    .maybeSingle();
+
+  if (conflictError) throw conflictError;
+  return conflict?.id || null;
 }
 
 export async function replaceStoneProductColors(writeClient, stoneProductId, colorNamesByRole) {
