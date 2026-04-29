@@ -111,6 +111,7 @@ export async function recordInventoryCheck(client, authed, body) {
   const remnantId = asNumber(body?.remnant_id);
 
   if (outcome === "not_in_db") {
+    const stoneName = String(body?.stone_name || "").trim() || null;
     await writeAuditLog(writeClient, authed, {
       event_type: REMNANT_INVENTORY_CHECK_EVENT,
       entity_type: "remnant_inventory_unknown",
@@ -124,12 +125,16 @@ export async function recordInventoryCheck(client, authed, body) {
         outcome,
         session_id: sessionId,
         entered_number: enteredNumber,
+        location,
+        stone_name: stoneName,
       },
       meta: {
         source: "manage_confirm",
         session_id: sessionId,
         outcome,
         entered_number: enteredNumber,
+        location,
+        stone_name: stoneName,
       },
     });
 
@@ -464,6 +469,8 @@ export async function fetchInventoryCheckSession(client, authed, sessionId) {
   const notInDbEntries = notInDbRows.slice(0, 200).map((row) => ({
     id: row.id,
     entered_number: row?.meta?.entered_number || null,
+    location: row?.meta?.location || row?.new_data?.location || null,
+    stone_name: row?.meta?.stone_name || row?.new_data?.stone_name || null,
     created_at: row.created_at,
     message: row.message,
   }));

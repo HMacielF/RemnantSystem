@@ -111,6 +111,7 @@ export default function RemnantConfirmClient({ profile = null }) {
   const [sessionId, setSessionId] = useState("");
   const [lookupValue, setLookupValue] = useState("");
   const [locationValue, setLocationValue] = useState("");
+  const [notInDbStoneName, setNotInDbStoneName] = useState("");
   const [lookupLoading, setLookupLoading] = useState(false);
   const [savingOutcome, setSavingOutcome] = useState("");
   const [message, setMessage] = useState("");
@@ -389,6 +390,7 @@ export default function RemnantConfirmClient({ profile = null }) {
       setLookupResult(null);
       setError("");
       setMessage("");
+      setNotInDbStoneName("");
       return undefined;
     }
 
@@ -459,6 +461,8 @@ export default function RemnantConfirmClient({ profile = null }) {
         body: JSON.stringify({
           session_id: sessionId,
           entered_number: lookupValue.trim(),
+          location: locationValue,
+          stone_name: notInDbStoneName.trim(),
           outcome: "not_in_db",
         }),
       });
@@ -467,6 +471,7 @@ export default function RemnantConfirmClient({ profile = null }) {
       showTransientMessage(payload?.message || `#${lookupValue.trim()} → not in DB`, "warn");
       setLocalCheckedCount((count) => count + 1);
       setLookupValue("");
+      setNotInDbStoneName("");
       refreshSessionSummary();
       pulseInputReadyState();
       inputRef.current?.focus();
@@ -1372,7 +1377,7 @@ export default function RemnantConfirmClient({ profile = null }) {
 
           {!currentRemnant && lookupValue.trim() && !lookupLoading ? (
             <div
-              className="mx-4 mb-4 flex items-center justify-between gap-3 px-4 py-3 sm:mx-5"
+              className="mx-4 mb-4 px-4 py-3 sm:mx-5"
               style={{
                 backgroundColor: "var(--qc-status-hold-bg)",
                 border: "1px solid var(--qc-line)",
@@ -1386,18 +1391,46 @@ export default function RemnantConfirmClient({ profile = null }) {
               >
                 #{lookupValue.trim()} not found — exists physically?
               </p>
-              <button
-                type="button"
-                onClick={handleNotInDb}
-                disabled={savingOutcome === "not_in_db"}
-                className="shrink-0 px-3 py-1.5 text-[12px] font-medium text-white transition-colors disabled:opacity-60"
-                style={{
-                  backgroundColor: "var(--qc-status-hold-dot)",
-                  borderRadius: "var(--qc-radius-sharp)",
-                }}
-              >
-                {savingOutcome === "not_in_db" ? "Saving…" : "Not in DB"}
-              </button>
+              <div className="mt-2 flex items-stretch gap-2">
+                <input
+                  type="text"
+                  value={notInDbStoneName}
+                  onChange={(event) => setNotInDbStoneName(event.target.value)}
+                  placeholder="Stone name (optional)"
+                  className="h-9 min-w-0 flex-1 bg-white px-3 text-[13px] font-normal normal-case tracking-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                  style={{
+                    border: "1px solid var(--qc-line)",
+                    borderRadius: "var(--qc-radius-sharp)",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleNotInDb}
+                  disabled={savingOutcome === "not_in_db"}
+                  className="shrink-0 px-3 text-[12px] font-medium text-white transition-colors disabled:opacity-60"
+                  style={{
+                    backgroundColor: "var(--qc-status-hold-dot)",
+                    borderRadius: "var(--qc-radius-sharp)",
+                  }}
+                >
+                  {savingOutcome === "not_in_db" ? "Saving…" : "Not in DB"}
+                </button>
+              </div>
+              {locationValue ? (
+                <p
+                  className="mt-2 text-[11px]"
+                  style={{ color: "var(--qc-status-hold-fg)" }}
+                >
+                  Will record at zone <span className="font-semibold">{locationValue}</span>
+                </p>
+              ) : (
+                <p
+                  className="mt-2 text-[11px]"
+                  style={{ color: "var(--qc-status-hold-fg)" }}
+                >
+                  Set a zone above to also record where it was spotted.
+                </p>
+              )}
             </div>
           ) : null}
 
@@ -2212,17 +2245,38 @@ export default function RemnantConfirmClient({ profile = null }) {
                   {(sessionSummary.not_in_db_entries || []).map((entry) => (
                     <li
                       key={entry.id}
-                      className="flex items-center justify-between gap-3 py-2.5"
+                      className="flex items-start justify-between gap-3 py-2.5"
                       style={{ borderTop: "1px solid var(--qc-line)" }}
                     >
+                      <div className="min-w-0">
+                        <p className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className="text-[14px] font-medium text-[color:var(--qc-ink-1)]"
+                            style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                          >
+                            #{entry.entered_number || "—"}
+                          </span>
+                          {entry.location ? (
+                            <span
+                              className="px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em]"
+                              style={{
+                                backgroundColor: "var(--qc-status-pending-bg)",
+                                color: "var(--qc-status-pending-fg)",
+                                borderRadius: "var(--qc-radius-sharp)",
+                              }}
+                            >
+                              Loc {entry.location}
+                            </span>
+                          ) : null}
+                        </p>
+                        {entry.stone_name ? (
+                          <p className="mt-0.5 truncate text-[12px] text-[color:var(--qc-ink-2)]">
+                            {entry.stone_name}
+                          </p>
+                        ) : null}
+                      </div>
                       <span
-                        className="text-[14px] font-medium text-[color:var(--qc-ink-1)]"
-                        style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
-                      >
-                        #{entry.entered_number || "—"}
-                      </span>
-                      <span
-                        className="text-[11px] text-[color:var(--qc-ink-3)]"
+                        className="shrink-0 text-[11px] text-[color:var(--qc-ink-3)]"
                         style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
                       >
                         {formatScanTime(entry.created_at)}
