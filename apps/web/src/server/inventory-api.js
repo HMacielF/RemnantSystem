@@ -262,6 +262,69 @@ export async function bulkInventoryHold(client, authed) {
   return { ok: true, count };
 }
 
+export async function endInventoryPass(client, authed, sessionId) {
+  const writeClient = getWriteClient(client);
+  const normalizedSessionId = sanitizeInventorySessionId(sessionId);
+
+  const { data: flagged, error: fetchError } = await writeClient
+    .from("remnants")
+    .select("id, moraware_remnant_id, company_id")
+    .eq("inventory_hold", true)
+    .is("deleted_at", null);
+  if (fetchError) throw fetchError;
+
+  const ids = (flagged || []).map((row) => row.id);
+  if (!ids.length) return { ok: true, count: 0 };
+
+  const actorUserId = authed?.user?.id || authed?.profile?.id || null;
+  const actorEmail = authed?.profile?.email || authed?.user?.email || null;
+  const actorRole = authed?.profile?.system_role || null;
+  const actorCompanyId = authed?.profile?.company_id || null;
+
+  const auditRows = flagged.map((row) => {
+    const enteredNumber = row.moraware_remnant_id || row.id;
+    return {
+      actor_user_id: actorUserId,
+      actor_email: actorEmail,
+      actor_role: actorRole,
+      actor_company_id: actorCompanyId,
+      event_type: REMNANT_INVENTORY_CHECK_EVENT,
+      entity_type: "remnant_inventory_check",
+      entity_id: row.id,
+      remnant_id: row.id,
+      company_id: row.company_id,
+      message: `Marked remnant #${enteredNumber} as not seen in inventory`,
+      old_data: null,
+      new_data: {
+        remnant_id: row.id,
+        moraware_remnant_id: row.moraware_remnant_id,
+        outcome: "missing",
+        session_id: normalizedSessionId,
+        entered_number: enteredNumber,
+      },
+      meta: {
+        source: "manage_confirm",
+        session_id: normalizedSessionId,
+        outcome: "missing",
+        entered_number: enteredNumber,
+        end_of_pass: true,
+      },
+    };
+  });
+
+  const { error: auditError } = await writeClient.from("audit_logs").insert(auditRows);
+  if (auditError) throw auditError;
+
+  const { error: updateError } = await writeClient
+    .from("remnants")
+    .update({ inventory_hold: false })
+    .in("id", ids)
+    .is("deleted_at", null);
+  if (updateError) throw updateError;
+
+  return { ok: true, count: ids.length };
+}
+
 export async function fetchInventoryHoldCount(client) {
   const writeClient = getWriteClient(client);
   const { count, error } = await writeClient

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   bulkInventoryHold,
+  endInventoryPass,
   fetchInventoryCheckSession,
   fetchInventoryHoldCount,
   lookupInventoryCheckRemnant,
@@ -33,6 +34,11 @@ export const POST = withAuth(SUPER_ADMIN, async (request, authed) => {
   const body = await request.json();
   if (body?.action === "bulk_inventory_hold") {
     return NextResponse.json(await bulkInventoryHold(authed.client, authed));
+  }
+  if (body?.action === "end_pass") {
+    return NextResponse.json(
+      await endInventoryPass(authed.client, authed, body?.session_id),
+    );
   }
   return NextResponse.json(
     await recordInventoryCheck(authed.client, authed, body),

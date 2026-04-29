@@ -122,6 +122,8 @@ export default function RemnantConfirmClient({ profile = null }) {
   const [holdCount, setHoldCount] = useState(null);
   const [holdConfirmOpen, setHoldConfirmOpen] = useState(false);
   const [holdStarting, setHoldStarting] = useState(false);
+  const [endPassConfirmOpen, setEndPassConfirmOpen] = useState(false);
+  const [endPassRunning, setEndPassRunning] = useState(false);
   const [sessionSummary, setSessionSummary] = useState(null);
   const inputRef = useRef(null);
   const locationRef = useRef(null);
@@ -220,6 +222,33 @@ export default function RemnantConfirmClient({ profile = null }) {
     if (sessionId) refreshSessionSummary(sessionId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
+
+  async function endInventoryPass() {
+    if (!sessionId) return;
+    setEndPassRunning(true);
+    setError("");
+    try {
+      const payload = await apiFetch("/api/remnant-checks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "end_pass", session_id: sessionId }),
+      });
+      const markedCount = payload?.count ?? 0;
+      setHoldCount(0);
+      setEndPassConfirmOpen(false);
+      showTransientMessage(
+        markedCount > 0
+          ? `Pass ended — ${markedCount} unscanned marked missing`
+          : "Pass ended — all clear",
+        markedCount > 0 ? "warn" : "success",
+      );
+      refreshSessionSummary();
+    } catch (nextError) {
+      setError(friendlyErrorMessage(nextError, "Failed to end inventory pass."));
+    } finally {
+      setEndPassRunning(false);
+    }
+  }
 
   async function startInventoryDoubleCheck() {
     setHoldStarting(true);
@@ -465,6 +494,30 @@ export default function RemnantConfirmClient({ profile = null }) {
                 </svg>
                 Start pass
               </button>
+            ) : holdCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => setEndPassConfirmOpen(true)}
+                className="inline-flex h-7 items-center gap-1.5 px-3 text-[11px] font-medium text-white transition-colors hover:bg-[#232323]"
+                style={{
+                  backgroundColor: "var(--qc-ink-1)",
+                  borderRadius: "var(--qc-radius-sharp)",
+                }}
+              >
+                <svg
+                  className="h-3 w-3"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 8.5l3.5 3.5L13 5" />
+                </svg>
+                End pass
+              </button>
             ) : null}
             {localCheckedCount > 0 ? (
               <span
@@ -537,6 +590,62 @@ export default function RemnantConfirmClient({ profile = null }) {
                 }}
               >
                 {holdStarting ? "Starting…" : "Yes, hold all"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {endPassConfirmOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+          <div
+            className="w-full max-w-sm bg-[color:var(--qc-bg-surface)] p-6"
+            style={{
+              border: "1px solid var(--qc-line)",
+              borderRadius: "var(--qc-radius-sharp)",
+              boxShadow: "var(--qc-shadow-toast)",
+            }}
+          >
+            <p className="text-[10.5px] uppercase tracking-[0.24em] text-[color:var(--qc-ink-3)]">
+              Inventory pass
+            </p>
+            <h2 className="mt-2 text-[20px] font-medium leading-tight tracking-[-0.015em] text-[color:var(--qc-ink-1)]">
+              End the pass now?
+            </h2>
+            <p className="mt-3 text-[13px] leading-[1.6] text-[color:var(--qc-ink-2)]">
+              {holdCount > 0 ? (
+                <>
+                  <span className="font-semibold text-[color:var(--qc-ink-1)]">{holdCount}</span> remnant
+                  {holdCount === 1 ? "" : "s"} {holdCount === 1 ? "is" : "are"} still flagged. They&apos;ll be marked as <span className="font-semibold text-[color:var(--qc-ink-1)]">missing</span> and the inventory flag will clear. The summary will show the final tally.
+                </>
+              ) : (
+                <>No flagged remnants remain — ending will just close the summary.</>
+              )}
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setEndPassConfirmOpen(false)}
+                disabled={endPassRunning}
+                className="flex-1 bg-white py-3 text-[13px] font-medium text-[color:var(--qc-ink-1)] transition-colors hover:bg-[rgba(0,0,0,0.04)] disabled:opacity-60"
+                style={{
+                  border: "1px solid var(--qc-line)",
+                  borderRadius: "var(--qc-radius-sharp)",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={endInventoryPass}
+                disabled={endPassRunning}
+                className="flex-1 py-3 text-[13px] font-medium text-white transition-colors hover:bg-[#232323] disabled:cursor-not-allowed disabled:opacity-60"
+                style={{
+                  backgroundColor: "var(--qc-ink-1)",
+                  borderRadius: "var(--qc-radius-sharp)",
+                }}
+              >
+                {endPassRunning ? "Ending…" : "Yes, end pass"}
               </button>
             </div>
           </div>
