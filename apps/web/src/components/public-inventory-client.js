@@ -236,6 +236,7 @@ function currentFiltersFromSearch(searchParams) {
     materials: searchParams.getAll("material"),
     colors: searchParams.getAll("color"),
     stone: searchParams.get("stone") || "",
+    company: searchParams.get("company") || "",
     minWidth: searchParams.get("min-width") || "",
     minHeight: searchParams.get("min-height") || "",
     status: searchParams.get("status") || "",
@@ -247,6 +248,7 @@ function emptyFilters() {
     materials: [],
     colors: [],
     stone: "",
+    company: "",
     minWidth: "",
     minHeight: "",
     status: "",
@@ -277,6 +279,7 @@ function buildSearchQuery(filters) {
     if (color) params.append("color", color);
   });
   if (filters.stone.trim()) params.set("stone", filters.stone.trim());
+  if ((filters.company || "").trim()) params.set("company", filters.company.trim());
   if (filters.minWidth.trim()) params.set("min-width", filters.minWidth.trim());
   if (filters.minHeight.trim()) params.set("min-height", filters.minHeight.trim());
   if (filters.status.trim()) params.set("status", filters.status.trim());
@@ -296,6 +299,7 @@ function filtersEqual(a, b) {
   if (a === b) return true;
   if (
     a.stone !== b.stone ||
+    a.company !== b.company ||
     a.minWidth !== b.minWidth ||
     a.minHeight !== b.minHeight ||
     a.status !== b.status
@@ -309,6 +313,7 @@ function serverFilterSignature(filters) {
   return JSON.stringify([
     filters.materials,
     filters.stone,
+    filters.company,
     filters.minWidth,
     filters.minHeight,
     filters.status,
@@ -782,6 +787,16 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                   style={{ borderRadius: "var(--qc-radius-sharp)" }}
                 />
               </div>
+
+              <input
+                type="text"
+                value={filters.company}
+                onChange={(event) => setFilters((current) => ({ ...current, company: event.target.value }))}
+                placeholder="Company"
+                aria-label="Company"
+                className="font-inter h-11 w-[140px] border border-[color:var(--qc-line)] bg-white px-3 text-[14px] font-normal normal-case tracking-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors hover:border-[color:var(--qc-line-strong)] focus:border-[color:var(--qc-ink-1)]"
+                style={{ borderRadius: "var(--qc-radius-sharp)" }}
+              />
 
               <input
                 type="text"

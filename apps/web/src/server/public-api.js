@@ -505,6 +505,7 @@ export function getPublicRemnantFilters(searchParams) {
   return {
     materialNames: material.map((value) => String(value || "").trim()).filter(Boolean),
     stone: String(searchParams.get("stone") || "").trim(),
+    company: String(searchParams.get("company") || "").trim(),
     status: normalizeStatus(searchParams.get("status"), ""),
     minWidth: parseMeasurement(searchParams.get("min-width") ?? searchParams.get("minWidth")),
     minHeight: parseMeasurement(searchParams.get("min-height") ?? searchParams.get("minHeight")),
@@ -560,6 +561,8 @@ export async function fetchPublicRemnants(filters, options = {}) {
   }
   if (companyName) {
     query = query.eq("company", companyName);
+  } else if (filters.company) {
+    query = query.ilike("company", `%${escapeLikeValue(filters.company)}%`);
   }
   if (filters.stone && searchedRemnantId !== null) {
     const orFilters = [`name.ilike.%${stoneLike}%`, `id.eq.${searchedRemnantId}`];

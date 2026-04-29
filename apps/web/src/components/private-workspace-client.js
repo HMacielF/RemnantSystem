@@ -1060,6 +1060,16 @@ export default function PrivateWorkspaceClient() {
 
  <input
  type="text"
+ value={filters.company}
+ onChange={(event) => setFilters((current) => ({ ...current, company: event.target.value }))}
+ placeholder="Company"
+ aria-label="Company"
+ className="font-inter h-11 w-[140px] border border-[color:var(--qc-line)] bg-white px-3 text-[14px] font-normal normal-case tracking-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors hover:border-[color:var(--qc-line-strong)] focus:border-[color:var(--qc-ink-1)]"
+ style={{ borderRadius: "var(--qc-radius-sharp)" }}
+ />
+
+ <input
+ type="text"
  inputMode="decimal"
  value={filters.minWidth}
  onChange={(event) => setFilters((current) => ({ ...current, minWidth: event.target.value }))}
