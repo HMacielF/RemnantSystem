@@ -11,8 +11,8 @@ const PHONE_HREF = "tel:+13013218626";
 const EMAIL = "sales@quickcountertop.com";
 const INSTAGRAM_HANDLE = "@quickcountertop";
 const INSTAGRAM_URL = "https://www.instagram.com/quickcountertop/";
-const TIKTOK_HANDLE = "@quickcountertop";
-const TIKTOK_URL = "https://www.tiktok.com/@quickcountertop";
+const TIKTOK_HANDLE = "@quickcountermd";
+const TIKTOK_URL = "https://www.tiktok.com/@quickcountermd";
 const APP_VERSION = "v 2.4";
 
 export default function PublicFooter({ slabCount }) {
@@ -36,12 +36,7 @@ export default function PublicFooter({ slabCount }) {
             <p className="mt-4">
               <a
                 href="https://quickcountertop.com"
-                className="text-[15px] text-[color:var(--qc-ink-1)]"
-                style={{
-                  textDecoration: "underline",
-                  textDecorationColor: "var(--qc-line-strong)",
-                  textUnderlineOffset: 4,
-                }}
+                className="text-[15px] text-[color:var(--qc-ink-1)] underline decoration-[color:var(--qc-line-strong)] underline-offset-4 transition-colors hover:text-[color:var(--qc-orange)] hover:decoration-[color:var(--qc-orange)]"
               >
                 quickcountertop.com →
               </a>
@@ -68,12 +63,7 @@ export default function PublicFooter({ slabCount }) {
                 href={GET_DIRECTIONS_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[14px] text-[color:var(--qc-ink-1)]"
-                style={{
-                  textDecoration: "underline",
-                  textDecorationColor: "var(--qc-line-strong)",
-                  textUnderlineOffset: 4,
-                }}
+                className="text-[14px] text-[color:var(--qc-ink-1)] underline decoration-[color:var(--qc-line-strong)] underline-offset-4 transition-colors hover:text-[color:var(--qc-orange)] hover:decoration-[color:var(--qc-orange)]"
               >
                 Get directions →
               </a>
@@ -96,7 +86,7 @@ export default function PublicFooter({ slabCount }) {
               <li>
                 <a
                   href={PHONE_HREF}
-                  className="text-[color:var(--qc-ink-1)] hover:underline"
+                  className="text-[color:var(--qc-ink-1)] underline decoration-[color:var(--qc-line-strong)] underline-offset-4 transition-colors hover:text-[color:var(--qc-orange)] hover:decoration-[color:var(--qc-orange)]"
                 >
                   {PHONE_DISPLAY}
                 </a>
@@ -104,7 +94,7 @@ export default function PublicFooter({ slabCount }) {
               <li>
                 <a
                   href={`mailto:${EMAIL}`}
-                  className="text-[color:var(--qc-ink-1)] hover:underline"
+                  className="text-[color:var(--qc-ink-1)] underline decoration-[color:var(--qc-line-strong)] underline-offset-4 transition-colors hover:text-[color:var(--qc-orange)] hover:decoration-[color:var(--qc-orange)]"
                 >
                   {EMAIL}
                 </a>
@@ -117,7 +107,7 @@ export default function PublicFooter({ slabCount }) {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={`Instagram ${INSTAGRAM_HANDLE}`}
-                  className="inline-flex items-center gap-2 hover:text-[color:var(--qc-ink-1)]"
+                  className="group inline-flex items-center gap-2 transition-colors"
                 >
                   <svg
                     aria-hidden="true"
@@ -129,13 +119,15 @@ export default function PublicFooter({ slabCount }) {
                     strokeWidth="1.75"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="text-[color:var(--qc-ink-3)]"
+                    className="text-[color:var(--qc-ink-3)] transition-colors group-hover:text-[color:var(--qc-orange)]"
                   >
                     <rect x="3" y="3" width="18" height="18" rx="5" />
                     <circle cx="12" cy="12" r="4" />
                     <circle cx="17.5" cy="6.5" r="0.9" fill="currentColor" stroke="none" />
                   </svg>
-                  <span className="text-[color:var(--qc-ink-1)]">{INSTAGRAM_HANDLE}</span>
+                  <span className="text-[color:var(--qc-ink-1)] transition-colors group-hover:text-[color:var(--qc-orange)]">
+                    {INSTAGRAM_HANDLE}
+                  </span>
                 </a>
               </li>
               <li>
@@ -144,7 +136,7 @@ export default function PublicFooter({ slabCount }) {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={`TikTok ${TIKTOK_HANDLE}`}
-                  className="inline-flex items-center gap-2 hover:text-[color:var(--qc-ink-1)]"
+                  className="group inline-flex items-center gap-2 transition-colors"
                 >
                   <svg
                     aria-hidden="true"
@@ -152,11 +144,13 @@ export default function PublicFooter({ slabCount }) {
                     height="16"
                     viewBox="0 0 24 24"
                     fill="currentColor"
-                    className="text-[color:var(--qc-ink-3)]"
+                    className="text-[color:var(--qc-ink-3)] transition-colors group-hover:text-[color:var(--qc-orange)]"
                   >
                     <path d="M14.5 3h2.6c.2 1.3.9 2.4 1.9 3.2.9.7 2 1.1 3.1 1.2v2.6c-1.7 0-3.3-.5-4.7-1.4v6.6a5.7 5.7 0 1 1-5.7-5.7c.3 0 .6 0 .9.1v2.7a3.1 3.1 0 1 0 2.2 3V3z" />
                   </svg>
-                  <span className="text-[color:var(--qc-ink-1)]">{TIKTOK_HANDLE}</span>
+                  <span className="text-[color:var(--qc-ink-1)] transition-colors group-hover:text-[color:var(--qc-orange)]">
+                    {TIKTOK_HANDLE}
+                  </span>
                 </a>
               </li>
             </ul>
@@ -174,12 +168,7 @@ export default function PublicFooter({ slabCount }) {
               href="https://github.com/HMacielF"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[color:var(--qc-ink-2)] hover:text-[color:var(--qc-ink-1)]"
-              style={{
-                textDecoration: "underline",
-                textDecorationColor: "var(--qc-line-strong)",
-                textUnderlineOffset: 4,
-              }}
+              className="text-[color:var(--qc-ink-2)] underline decoration-[color:var(--qc-line-strong)] underline-offset-4 transition-colors hover:text-[color:var(--qc-orange)] hover:decoration-[color:var(--qc-orange)]"
             >
               EndoM14
             </Link>

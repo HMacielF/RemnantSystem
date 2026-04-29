@@ -507,7 +507,7 @@ function mapBramatiRow(row, config) {
   const materialName = normalizedNameKey === "fantasymacaubus"
     ? "Quartzite"
     : isBramatiDolomite
-    ? "Dolomitic Marble"
+    ? "Dolomite"
     : row.material;
   const uniqueKey = sanitize(row.detail_url) || sanitize(row.block_number) || sanitize(row.image_url);
 

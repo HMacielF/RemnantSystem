@@ -4,15 +4,15 @@
 import {
  imageSrc,
  displayRemnantId,
- statusBadgeClass,
- statusBadgeText,
- normalizeRemnantStatus,
+ statusText,
  privateCardHeading,
  privateCardSubheading,
  privateCardMetricEntries,
  remnantColors,
  colorSwatchStyle,
 } from "./workspace-utils.js";
+import StatusPill from "../public/StatusPill.js";
+import ColorTooltip from "../public/ColorTooltip.js";
 
 export function ImageViewer({
  remnant,
@@ -26,99 +26,134 @@ export function ImageViewer({
 
  return (
  <div
- className="fixed inset-0 z-[73] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_24%),linear-gradient(180deg,rgba(12,12,12,0.86),rgba(8,8,8,0.92))] px-3 py-4 sm:px-4 sm:py-6"
+ className="font-inter fixed inset-0 z-[74] bg-black/60 px-4 py-6 sm:px-6 sm:py-10"
  onClick={onClose}
  >
- <div className="mx-auto flex h-full max-w-[1180px] flex-col" onClick={(event) => event.stopPropagation()}>
- <div className="flex min-h-0 flex-1 items-center justify-center">
- <div className="flex h-full w-full flex-col overflow-hidden rounded-sm border border-white/10 bg-[linear-gradient(180deg,rgba(30,30,30,0.82),rgba(16,16,16,0.9))] ">
- <div className="flex items-start justify-between gap-4 border-b border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] px-4 py-4 text-white sm:px-5">
+ <div
+ className="mx-auto flex h-full max-w-[1180px] flex-col"
+ onClick={(event) => event.stopPropagation()}
+ >
+ <div
+ className="flex h-full w-full flex-col overflow-hidden bg-[color:var(--qc-bg-surface)]"
+ style={{
+ border: "1px solid var(--qc-line)",
+ borderRadius: "var(--qc-radius-sharp)",
+ boxShadow: "0 32px 90px rgba(0, 0, 0, 0.38)",
+ }}
+ >
+ <div
+ className="flex items-center justify-between gap-4 px-5 py-4"
+ style={{ borderBottom: "1px solid var(--qc-line)" }}
+ >
  <div className="min-w-0 flex-1">
  <div className="flex flex-wrap items-center gap-2">
- <span className="inline-flex items-center rounded-full border border-white/15 bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85">
- ID #{displayRemnantId(remnant)}
- </span>
- <span className="inline-flex items-center rounded-full border border-white/15 bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
+ <StatusPill
+ status={statusText(remnant)}
+ label={`#${displayRemnantId(remnant)}`}
+ location={remnant.location}
+ />
+ {total > 1 ? (
+ <span
+ className="px-2 py-1 text-[11px] text-[color:var(--qc-ink-3)]"
+ style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+ >
  {index + 1} / {total}
  </span>
- <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${statusBadgeClass(normalizeRemnantStatus(remnant))}`}>
- {statusBadgeText(remnant)}
- </span>
- </div>
- <h2 className="font-inter mt-3 text-xl font-semibold text-white sm:text-[2rem]">
- {privateCardHeading(remnant)}
- </h2>
- <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/68">
- {privateCardSubheading(remnant) ? (
- <span>{privateCardSubheading(remnant)}</span>
  ) : null}
  </div>
- <div className="mt-3 flex flex-wrap items-center gap-2">
+ <h2 className="mt-3 text-[22px] font-medium leading-tight tracking-[-0.015em] text-[color:var(--qc-ink-1)] sm:text-[26px]">
+ {privateCardHeading(remnant)}
+ </h2>
+ {privateCardSubheading(remnant) ? (
+ <p className="mt-1 text-[10.5px] uppercase tracking-[0.18em] text-[color:var(--qc-orange)]">
+ {privateCardSubheading(remnant)}
+ </p>
+ ) : null}
+ <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-[color:var(--qc-ink-2)]">
  {privateCardMetricEntries(remnant).map((entry) => (
  <span
  key={`${displayRemnantId(remnant)}-${entry.label}`}
  title={entry.title}
- className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-[11px] text-white/88"
+ className="inline-flex items-center gap-1.5"
  >
- <span className="font-semibold uppercase tracking-[0.08em] text-white/60">{entry.label}</span>
- <span className="whitespace-nowrap font-medium">{entry.value}</span>
+ <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+ {entry.label}
+ </span>
+ <span className="whitespace-nowrap text-[color:var(--qc-ink-1)]">{entry.value}</span>
  </span>
  ))}
- {remnantColors(remnant).map((color) => (
- <span
- key={`${displayRemnantId(remnant)}-viewer-${color}`}
- className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-2.5 py-1 text-[11px] font-medium text-white/82"
- >
+ {remnantColors(remnant).length ? (
+ <span className="inline-flex items-center gap-2">
+ <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+ Color
+ </span>
+ <span className="flex items-center gap-1.5">
+ {remnantColors(remnant).slice(0, 4).map((color) => (
+ <ColorTooltip key={`${displayRemnantId(remnant)}-viewer-${color}`} name={color}>
  <span
  aria-hidden="true"
- className="h-3 w-3 rounded-full border border-white/20"
- style={colorSwatchStyle(color)}
+ className="block h-3.5 w-3.5 rounded-full transition-transform group-hover/swatch:scale-110"
+ style={{
+ ...colorSwatchStyle(color),
+ boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.10)",
+ }}
  />
- {color}
- </span>
+ </ColorTooltip>
  ))}
+ </span>
+ </span>
+ ) : null}
  </div>
  </div>
- <div className="flex shrink-0 items-center">
+ <div className="flex shrink-0 items-center gap-2">
  <button
  type="button"
  onClick={onClose}
- className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/8 text-2xl text-white transition-colors hover:border-white/25 hover:bg-white/16"
+ className="inline-flex h-9 w-9 items-center justify-center text-[20px] leading-none text-[color:var(--qc-ink-2)] transition-colors hover:border-[color:var(--qc-orange)] hover:text-[color:var(--qc-orange)]"
+ style={{
+ border: "1px solid var(--qc-line)",
+ borderRadius: "var(--qc-radius-sharp)",
+ }}
  aria-label="Close image preview"
  >
- {"\u00D7"}
+ {"×"}
  </button>
  </div>
  </div>
- <div className="flex min-h-0 flex-1 items-center justify-center p-3 sm:p-4">
- <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-sm border border-white/8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_26%),linear-gradient(180deg,#1a1a1a_0%,#111111_100%)] p-2 sm:p-3">
+ <div className="relative flex min-h-0 flex-1 items-center justify-center bg-[#f3f1ee] p-4 sm:p-6">
  {total > 1 ? (
  <>
  <button
  type="button"
  onClick={onPrev}
- className="absolute left-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white transition-colors hover:bg-black/50"
+ className="absolute left-4 top-1/2 z-10 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center bg-white text-[20px] leading-none text-[color:var(--qc-ink-1)] transition-colors hover:border-[color:var(--qc-orange)] hover:text-[color:var(--qc-orange)]"
+ style={{
+ border: "1px solid var(--qc-line)",
+ borderRadius: "var(--qc-radius-sharp)",
+ }}
  aria-label="Previous image"
  >
- ‹
+ {"‹"}
  </button>
  <button
  type="button"
  onClick={onNext}
- className="absolute right-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-white transition-colors hover:bg-black/50"
+ className="absolute right-4 top-1/2 z-10 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center bg-white text-[20px] leading-none text-[color:var(--qc-ink-1)] transition-colors hover:border-[color:var(--qc-orange)] hover:text-[color:var(--qc-orange)]"
+ style={{
+ border: "1px solid var(--qc-line)",
+ borderRadius: "var(--qc-radius-sharp)",
+ }}
  aria-label="Next image"
  >
- ›
+ {"›"}
  </button>
  </>
  ) : null}
  <img
  src={imageSrc(remnant)}
  alt={`Remnant ${displayRemnantId(remnant)}`}
- className="max-h-full max-w-full rounded-sm object-contain "
+ className="max-h-full max-w-full object-contain"
  />
- </div>
- </div>
  </div>
  </div>
  </div>

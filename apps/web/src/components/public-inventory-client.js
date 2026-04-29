@@ -8,6 +8,7 @@ import PublicHeader from "@/components/public/PublicHeader";
 import PublicHero from "@/components/public/PublicHero";
 import PublicFooter from "@/components/public/PublicFooter";
 import StatusPill from "@/components/public/StatusPill";
+import ColorTooltip from "@/components/public/ColorTooltip";
 
 function useDebouncedValue(value, delayMs = 250) {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -288,7 +289,7 @@ function PublicInventorySkeletonCard() {
       className="overflow-hidden bg-white"
       style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
     >
-      <div className="relative aspect-square overflow-hidden bg-[#f3f1ee]">
+      <div className="relative aspect-[4/3] overflow-hidden bg-[#f3f1ee]">
         <div className="absolute inset-0 animate-pulse bg-[linear-gradient(90deg,rgba(0,0,0,0.04),rgba(0,0,0,0.08),rgba(0,0,0,0.04))]" />
       </div>
       <div className="space-y-3 p-4">
@@ -672,12 +673,19 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
   }, [modalImageItems, selectedImageIndex]);
 
   useEffect(() => {
-    if (selectedImageIndex === null) return undefined;
+    if (selectedImageIndex === null && !holdRemnant) return undefined;
 
     function handleKeydown(event) {
       if (event.key === "Escape") {
-        closeImageViewer();
-      } else if (event.key === "ArrowLeft") {
+        if (holdRemnant) {
+          setHoldRemnant(null);
+        } else {
+          closeImageViewer();
+        }
+        return;
+      }
+      if (selectedImageIndex === null) return;
+      if (event.key === "ArrowLeft") {
         setSelectedImageIndex((current) => {
           if (current === null || !modalImageItems.length) return current;
           return current === 0 ? modalImageItems.length - 1 : current - 1;
@@ -692,7 +700,7 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
 
     window.addEventListener("keydown", handleKeydown);
     return () => window.removeEventListener("keydown", handleKeydown);
-  }, [modalImageItems.length, selectedImageIndex]);
+  }, [modalImageItems.length, selectedImageIndex, holdRemnant]);
 
   return (
     <main className="font-inter min-h-screen bg-[color:var(--qc-bg-page)] text-[color:var(--qc-ink-1)]">
@@ -730,11 +738,8 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                   value={filters.stone}
                   onChange={(event) => setFilters((current) => ({ ...current, stone: event.target.value }))}
                   placeholder="Search stone, brand, finish, or ID #741"
-                  className="font-inter h-11 w-full bg-white pl-11 pr-4 text-[14px] font-normal normal-case tracking-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors focus:border-[color:var(--qc-ink-1)]"
-                  style={{
-                    border: "1px solid var(--qc-line)",
-                    borderRadius: "var(--qc-radius-sharp)",
-                  }}
+                  className="font-inter h-11 w-full border border-[color:var(--qc-line)] bg-white pl-11 pr-4 text-[14px] font-normal normal-case tracking-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors hover:border-[color:var(--qc-line-strong)] focus:border-[color:var(--qc-ink-1)]"
+                  style={{ borderRadius: "var(--qc-radius-sharp)" }}
                 />
               </div>
 
@@ -745,8 +750,8 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                 onChange={(event) => setFilters((current) => ({ ...current, minWidth: event.target.value }))}
                 placeholder='Min W"'
                 aria-label="Minimum width"
-                className="font-inter h-11 w-[110px] bg-white px-4 text-center text-[14px] font-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors focus:border-[color:var(--qc-ink-1)]"
-                style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
+                className="font-inter h-11 w-[110px] border border-[color:var(--qc-line)] bg-white px-4 text-center text-[14px] font-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors hover:border-[color:var(--qc-line-strong)] focus:border-[color:var(--qc-ink-1)]"
+                style={{ borderRadius: "var(--qc-radius-sharp)" }}
               />
 
               <input
@@ -756,8 +761,8 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                 onChange={(event) => setFilters((current) => ({ ...current, minHeight: event.target.value }))}
                 placeholder='Min H"'
                 aria-label="Minimum height"
-                className="font-inter h-11 w-[110px] bg-white px-4 text-center text-[14px] font-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors focus:border-[color:var(--qc-ink-1)]"
-                style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
+                className="font-inter h-11 w-[110px] border border-[color:var(--qc-line)] bg-white px-4 text-center text-[14px] font-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors hover:border-[color:var(--qc-line-strong)] focus:border-[color:var(--qc-ink-1)]"
+                style={{ borderRadius: "var(--qc-radius-sharp)" }}
               />
 
               <div
@@ -784,11 +789,13 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                           status: current.status === option.value ? "" : option.value,
                         }))
                       }
-                      className="font-inter inline-flex h-full items-center gap-1.5 px-4 text-[13px] transition-colors"
+                      className={`font-inter inline-flex h-full items-center gap-1.5 px-4 text-[13px] transition-colors ${
+                        checked
+                          ? "bg-[rgba(0,0,0,0.04)] font-medium text-[color:var(--qc-ink-1)]"
+                          : "text-[color:var(--qc-ink-2)] hover:bg-[rgba(0,0,0,0.04)] hover:text-[color:var(--qc-ink-1)]"
+                      }`}
                       style={{
                         borderLeft: index === 0 ? "none" : "1px solid var(--qc-line)",
-                        color: checked ? "var(--qc-ink-1)" : "var(--qc-ink-2)",
-                        fontWeight: checked ? 500 : 400,
                       }}
                     >
                       <span
@@ -811,15 +818,12 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                   onClick={() =>
                     setFilters((current) => ({ ...current, materials: [] }))
                   }
-                  className="font-inter inline-flex items-center px-4 py-2 text-[13px] font-medium transition-colors"
-                  style={{
-                    borderRadius: "var(--qc-radius-sharp)",
-                    backgroundColor:
-                      filters.materials.length === 0
-                        ? "var(--qc-ink-1)"
-                        : "rgba(0,0,0,0.04)",
-                    color: filters.materials.length === 0 ? "#fff" : "var(--qc-ink-1)",
-                  }}
+                  className={`font-inter inline-flex items-center px-4 py-2 text-[13px] font-medium transition-colors ${
+                    filters.materials.length === 0
+                      ? "bg-[color:var(--qc-ink-1)] text-white hover:bg-[#232323]"
+                      : "bg-[rgba(0,0,0,0.04)] text-[color:var(--qc-ink-1)] hover:bg-[rgba(0,0,0,0.08)]"
+                  }`}
+                  style={{ borderRadius: "var(--qc-radius-sharp)" }}
                 >
                   All
                 </button>
@@ -831,14 +835,12 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                       type="button"
                       aria-pressed={checked}
                       onClick={() => toggleMaterialFilter(material)}
-                      className="font-inter inline-flex shrink-0 items-center px-4 py-2 text-[13px] font-medium transition-colors"
-                      style={{
-                        borderRadius: "var(--qc-radius-sharp)",
-                        backgroundColor: checked
-                          ? "var(--qc-ink-1)"
-                          : "rgba(0,0,0,0.04)",
-                        color: checked ? "#fff" : "var(--qc-ink-1)",
-                      }}
+                      className={`font-inter inline-flex shrink-0 items-center px-4 py-2 text-[13px] font-medium transition-colors ${
+                        checked
+                          ? "bg-[color:var(--qc-ink-1)] text-white hover:bg-[#232323]"
+                          : "bg-[rgba(0,0,0,0.04)] text-[color:var(--qc-ink-1)] hover:bg-[rgba(0,0,0,0.08)]"
+                      }`}
+                      style={{ borderRadius: "var(--qc-radius-sharp)" }}
                     >
                       {material}
                     </button>
@@ -849,21 +851,21 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                     {availableColors.map((color) => {
                       const checked = filters.colors.includes(color);
                       return (
-                        <button
-                          key={color}
-                          type="button"
-                          aria-pressed={checked}
-                          aria-label={color}
-                          title={color}
-                          onClick={() => toggleColorFilter(color)}
-                          className="inline-flex h-6 w-6 items-center justify-center rounded-full transition-shadow"
-                          style={{
-                            ...colorSwatchStyle(color),
-                            boxShadow: checked
-                              ? "0 0 0 1px var(--qc-bg-page), 0 0 0 2px var(--qc-ink-1)"
-                              : "inset 0 0 0 1px rgba(0,0,0,0.10)",
-                          }}
-                        />
+                        <ColorTooltip key={color} name={color}>
+                          <button
+                            type="button"
+                            aria-pressed={checked}
+                            aria-label={color}
+                            onClick={() => toggleColorFilter(color)}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-full transition-transform hover:scale-110"
+                            style={{
+                              ...colorSwatchStyle(color),
+                              boxShadow: checked
+                                ? "0 0 0 1px var(--qc-bg-page), 0 0 0 2px var(--qc-ink-1)"
+                                : "inset 0 0 0 1px rgba(0,0,0,0.10)",
+                            }}
+                          />
+                        </ColorTooltip>
                       );
                     })}
                   </div>
@@ -929,19 +931,19 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                 return (
                   <article
                     key={`${displayRemnantId(remnant)}-${index}`}
-                    className="group relative flex flex-col overflow-hidden bg-[color:var(--qc-bg-surface)] transition-colors"
+                    className="group relative flex flex-col overflow-hidden bg-[color:var(--qc-bg-surface)] transition-all duration-200 hover:-translate-y-1"
                     style={{
                       border: "1px solid var(--qc-line)",
                       borderRadius: "var(--qc-radius-sharp)",
                     }}
                     onMouseEnter={(event) => {
-                      event.currentTarget.style.borderColor = "var(--qc-line-strong)";
+                      event.currentTarget.style.borderColor = "var(--qc-ink-1)";
                     }}
                     onMouseLeave={(event) => {
                       event.currentTarget.style.borderColor = "var(--qc-line)";
                     }}
                   >
-                    <div className="relative aspect-square overflow-hidden bg-[#f3f1ee]">
+                    <div className="relative aspect-[4/3] overflow-hidden bg-[#f3f1ee]">
                       {image ? (
                         <button
                           type="button"
@@ -952,7 +954,7 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                           <img
                             src={image}
                             alt={`Remnant ${displayRemnantId(remnant)}`}
-                            className="h-full w-full object-cover"
+                            className="h-full w-full object-cover object-top"
                             decoding="async"
                             loading={index < 8 ? "eager" : "lazy"}
                           />
@@ -964,7 +966,11 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                       )}
 
                       <div className="pointer-events-none absolute left-3 top-3 z-[2]">
-                        <StatusPill status={status} label={`#${displayRemnantId(remnant)}`} />
+                        <StatusPill
+                          status={status}
+                          label={`#${displayRemnantId(remnant)}`}
+                          location={remnant.location}
+                        />
                       </div>
 
                       {isAvailable ? (
@@ -979,9 +985,8 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                               })
                             );
                           }}
-                          className="font-inter absolute bottom-3 right-3 z-[3] inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-white"
+                          className="font-inter absolute bottom-3 right-3 z-[3] inline-flex items-center gap-1.5 bg-[color:var(--qc-ink-1)] px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-[color:var(--qc-orange)]"
                           style={{
-                            backgroundColor: "var(--qc-ink-1)",
                             borderRadius: "var(--qc-radius-sharp)",
                           }}
                           aria-label="Request a hold"
@@ -1022,16 +1027,19 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                           <div className="mt-3 flex items-center gap-2">
                             <div className="flex items-center gap-1.5">
                               {colors.slice(0, 3).map((color) => (
-                                <span
+                                <ColorTooltip
                                   key={`${displayRemnantId(remnant)}-${color}`}
-                                  aria-hidden="true"
-                                  className="h-3.5 w-3.5 rounded-full"
-                                  style={{
-                                    ...colorSwatchStyle(color),
-                                    boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.10)",
-                                  }}
-                                  title={color}
-                                />
+                                  name={color}
+                                >
+                                  <span
+                                    aria-hidden="true"
+                                    className="block h-3.5 w-3.5 rounded-full transition-transform group-hover/swatch:scale-110"
+                                    style={{
+                                      ...colorSwatchStyle(color),
+                                      boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.10)",
+                                    }}
+                                  />
+                                </ColorTooltip>
                               ))}
                             </div>
                             <span className="text-[11px] text-[color:var(--qc-ink-3)]">
@@ -1109,7 +1117,7 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
               }}
             >
               <div
-                className="flex items-start justify-between gap-4 px-5 py-4"
+                className="flex items-center justify-between gap-4 px-5 py-4"
                 style={{ borderBottom: "1px solid var(--qc-line)" }}
               >
                 <div className="min-w-0 flex-1">
@@ -1117,6 +1125,7 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                     <StatusPill
                       status={statusText(selectedImageRemnant)}
                       label={`#${displayRemnantId(selectedImageRemnant)}`}
+                      location={selectedImageRemnant.location}
                     />
                     <span
                       className="px-2 py-1 text-[11px] text-[color:var(--qc-ink-3)]"
@@ -1153,34 +1162,69 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                         </span>
                         <span className="flex items-center gap-1.5">
                           {remnantColors(selectedImageRemnant).slice(0, 4).map((color) => (
-                            <span
+                            <ColorTooltip
                               key={`${displayRemnantId(selectedImageRemnant)}-viewer-${color}`}
-                              aria-hidden="true"
-                              className="h-3.5 w-3.5 rounded-full"
-                              style={{
-                                ...colorSwatchStyle(color),
-                                boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.10)",
-                              }}
-                              title={color}
-                            />
+                              name={color}
+                            >
+                              <span
+                                aria-hidden="true"
+                                className="block h-3.5 w-3.5 rounded-full transition-transform group-hover/swatch:scale-110"
+                                style={{
+                                  ...colorSwatchStyle(color),
+                                  boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.10)",
+                                }}
+                              />
+                            </ColorTooltip>
                           ))}
                         </span>
                       </span>
                     ) : null}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={closeImageViewer}
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center text-[20px] leading-none text-[color:var(--qc-ink-2)] transition-colors hover:text-[color:var(--qc-ink-1)]"
-                  style={{
-                    border: "1px solid var(--qc-line)",
-                    borderRadius: "var(--qc-radius-sharp)",
-                  }}
-                  aria-label="Close image preview"
-                >
-                  {"\u00D7"}
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  {String(selectedImageRemnant?.status || "").toLowerCase() === "available" ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = selectedImageRemnant;
+                        closeImageViewer();
+                        openHoldRequest(target).catch((requestError) =>
+                          setNotice({ type: "error", message: requestError.message })
+                        );
+                      }}
+                      className="font-inter inline-flex h-9 items-center gap-1.5 bg-[color:var(--qc-ink-1)] px-4 text-[12px] font-medium text-white transition-colors hover:bg-[color:var(--qc-orange)]"
+                      style={{ borderRadius: "var(--qc-radius-sharp)" }}
+                      aria-label="Request a hold"
+                    >
+                      Request hold
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        className="h-3.5 w-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M5 12h14" />
+                        <path d="m13 5 7 7-7 7" />
+                      </svg>
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={closeImageViewer}
+                    className="inline-flex h-9 w-9 items-center justify-center text-[20px] leading-none text-[color:var(--qc-ink-2)] transition-colors hover:border-[color:var(--qc-orange)] hover:text-[color:var(--qc-orange)]"
+                    style={{
+                      border: "1px solid var(--qc-line)",
+                      borderRadius: "var(--qc-radius-sharp)",
+                    }}
+                    aria-label="Close image preview"
+                  >
+                    {"\u00D7"}
+                  </button>
+                </div>
               </div>
               <div
                 className="relative flex min-h-0 flex-1 items-center justify-center bg-[#f3f1ee] p-4 sm:p-6"
@@ -1192,7 +1236,7 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                     <button
                       type="button"
                       onClick={showPreviousImage}
-                      className="absolute left-4 top-1/2 z-10 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center bg-white text-[20px] leading-none text-[color:var(--qc-ink-1)] transition-colors hover:border-[color:var(--qc-ink-1)]"
+                      className="absolute left-4 top-1/2 z-10 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center bg-white text-[20px] leading-none text-[color:var(--qc-ink-1)] transition-colors hover:border-[color:var(--qc-orange)] hover:text-[color:var(--qc-orange)]"
                       style={{
                         border: "1px solid var(--qc-line)",
                         borderRadius: "var(--qc-radius-sharp)",
@@ -1204,7 +1248,7 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                     <button
                       type="button"
                       onClick={showNextImage}
-                      className="absolute right-4 top-1/2 z-10 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center bg-white text-[20px] leading-none text-[color:var(--qc-ink-1)] transition-colors hover:border-[color:var(--qc-ink-1)]"
+                      className="absolute right-4 top-1/2 z-10 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center bg-white text-[20px] leading-none text-[color:var(--qc-ink-1)] transition-colors hover:border-[color:var(--qc-orange)] hover:text-[color:var(--qc-orange)]"
                       style={{
                         border: "1px solid var(--qc-line)",
                         borderRadius: "var(--qc-radius-sharp)",
@@ -1461,7 +1505,7 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                 <p className="font-italic-accent text-[14px] leading-[1.5] text-[color:var(--qc-ink-2)] sm:max-w-[320px]">
                   {salesReps.length === 0
                     ? "No active sales reps yet. Add one in the admin workspace first."
-                    : "One slab. First come, first served."}
+                    : "One remnant. First come, first served."}
                 </p>
                 <input
                   type="hidden"
@@ -1471,9 +1515,8 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                 <button
                   type="submit"
                   disabled={holdSubmitting || salesReps.length === 0}
-                  className="inline-flex h-11 items-center justify-center gap-2 px-6 text-[13px] font-medium text-white transition-colors hover:bg-[#232323] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex h-11 items-center justify-center gap-2 bg-[color:var(--qc-ink-1)] px-6 text-[13px] font-medium text-white transition-colors hover:bg-[color:var(--qc-orange)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-[color:var(--qc-ink-1)]"
                   style={{
-                    backgroundColor: "var(--qc-ink-1)",
                     borderRadius: "var(--qc-radius-sharp)",
                   }}
                 >

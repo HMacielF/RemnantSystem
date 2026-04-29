@@ -96,14 +96,14 @@ export default function PublicHeader({ initialProfile = null } = {}) {
         <nav className="flex items-center gap-7 text-[14px]">
           <Link
             href="/"
-            className="text-[color:var(--qc-ink-1)] hover:text-[color:var(--qc-ink-2)]"
+            className="font-semibold text-[color:var(--qc-ink-1)] transition-all hover:text-[color:var(--qc-orange)]"
           >
             Inventory
           </Link>
           {isAuthed ? (
             <Link
               href="/manage"
-              className="text-[color:var(--qc-ink-2)] hover:text-[color:var(--qc-ink-1)]"
+              className="font-normal text-[color:var(--qc-ink-2)] transition-all hover:font-semibold hover:text-[color:var(--qc-ink-1)]"
             >
               Manage
             </Link>

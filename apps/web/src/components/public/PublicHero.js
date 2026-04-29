@@ -59,7 +59,7 @@ export default function PublicHero({ remnants }) {
           filter: "blur(40px)",
         }}
       />
-      <div className="relative mx-auto grid w-full max-w-[1680px] gap-12 px-8 py-12 md:grid-cols-[minmax(0,2fr)_minmax(260px,320px)] md:items-end md:py-16">
+      <div className="relative mx-auto grid w-full max-w-[1680px] gap-8 px-8 py-8 md:grid-cols-[minmax(0,2fr)_minmax(260px,320px)] md:items-center md:py-10">
         <div className="max-w-[860px]">
           <p className="font-inter mb-5 inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] text-[color:var(--qc-ink-3)]">
             <span

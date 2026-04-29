@@ -34,12 +34,16 @@ import {
  humanizeRole,
  isAccessDeniedError,
  uniqueMaterialOptions,
- SelectField,
+ normalizeStoneLookupName,
  formatJobNumber,
  formatDateLabel,
  TOAST_DURATION_MS,
  HOLD_REQUEST_REFRESH_MS,
 } from "./workspace/workspace-utils.js";
+import StatusPill from "./public/StatusPill.js";
+import ColorTooltip from "./public/ColorTooltip.js";
+import PrivateHeader from "./private/PrivateHeader.js";
+import PrivateFooter from "./private/PrivateFooter.js";
 import { ImageViewer } from "./workspace/ImageViewer.js";
 import { HoldRequestsQueue } from "./workspace/HoldRequestsQueue.js";
 import { ApprovalsPanel } from "./workspace/ApprovalsPanel.js";
@@ -99,38 +103,61 @@ export default function PrivateWorkspaceClient() {
  const canEditLinkedSlab = false;
  const isStatusUser = profile?.system_role === "status_user";
  const roleDisplay = humanizeRole(profile?.system_role);
- const activeLookupColors = Array.isArray(lookups.colors)
+ const activeLookupColors = useMemo(
+ () =>
+ Array.isArray(lookups.colors)
  ? lookups.colors.filter((row) => row?.active !== false && row?.name)
- : [];
- const profileCompanyName = useMemo(() => {
- const directName = String(
- profile?.company_name || profile?.company?.name || profile?.company || "",
- ).trim();
- if (directName) return directName;
- const match = (Array.isArray(lookups?.companies) ? lookups.companies : []).find(
- (company) => Number(company?.id) === Number(profile?.company_id),
+ : [],
+ [lookups.colors],
  );
- return String(match?.name || "").trim();
- }, [lookups?.companies, profile]);
+ const editorLookupColors = useMemo(() => {
+ const usedKeys = new Set();
+ for (const remnant of remnants) {
+ for (const color of remnantColors(remnant)) {
+ const key = normalizeStoneLookupName(color);
+ if (key) usedKeys.add(key);
+ }
+ }
+ if (Array.isArray(editorForm?.colors)) {
+ for (const color of editorForm.colors) {
+ const key = normalizeStoneLookupName(color);
+ if (key) usedKeys.add(key);
+ }
+ }
+ return activeLookupColors.filter((row) =>
+ usedKeys.has(normalizeStoneLookupName(row?.name)),
+ );
+ }, [activeLookupColors, remnants, editorForm?.colors]);
  const materialFilterOptions = useMemo(() => {
  return uniqueMaterialOptions([...availableMaterialOptions, ...filters.materials]);
  }, [availableMaterialOptions, filters.materials]);
- const filterGridClass = canStructure
- ? "mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] 2xl:grid-cols-[fit-content(29rem)_minmax(360px,1fr)_110px_110px_140px_56px] 2xl:items-end"
- : "mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] 2xl:grid-cols-[fit-content(29rem)_minmax(360px,1fr)_110px_110px_140px] 2xl:items-end";
- const activeFilterCount = useMemo(() => {
- let total = 0;
- if (filters.materials.length) total += 1;
- if (filters.stone.trim()) total += 1;
- if (filters.minWidth.trim()) total += 1;
- if (filters.minHeight.trim()) total += 1;
- if (filters.status.trim()) total += 1;
- return total;
- }, [filters]);
+ const availableColors = useMemo(() => {
+ const seen = new Set();
+ const out = [];
+ for (const remnant of remnants) {
+ for (const color of remnantColors(remnant)) {
+ const key = normalizeStoneLookupName(color);
+ if (!key || seen.has(key)) continue;
+ seen.add(key);
+ out.push(color);
+ }
+ }
+ return out.sort((a, b) => a.localeCompare(b));
+ }, [remnants]);
+ const cards = useMemo(() => {
+ const allowedColors = (filters.colors || []).length
+ ? new Set((filters.colors || []).map((c) => normalizeStoneLookupName(c)))
+ : null;
+ if (!allowedColors) return remnants;
+ return remnants.filter((remnant) => {
+ const colorSet = new Set(remnantColors(remnant).map((c) => normalizeStoneLookupName(c)));
+ return [...allowedColors].some((c) => colorSet.has(c));
+ });
+ }, [filters.colors, remnants]);
  const boardGridClass = "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
  const modalImageItems = useMemo(
- () => remnants.filter((remnant) => Boolean(imageSrc(remnant))),
- [remnants],
+ () => cards.filter((remnant) => Boolean(imageSrc(remnant))),
+ [cards],
  );
  const selectedImageRemnant =
  selectedImageIndex !== null && selectedImageIndex >= 0 && selectedImageIndex < modalImageItems.length
@@ -416,6 +443,45 @@ export default function PrivateWorkspaceClient() {
  document.removeEventListener("visibilitychange", handleVisible);
  };
  }, [authState, queueOpen]);
+
+ useEffect(() => {
+ function handleKeydown(event) {
+ if (event.key !== "Escape") return;
+ if (editorMode) {
+ setEditorMode("");
+ setEditorForm(null);
+ setEditorError("");
+ } else if (holdEditor) {
+ setHoldEditor(null);
+ } else if (soldEditor) {
+ setSoldEditor(null);
+ } else if (approvalsOpen) {
+ setApprovalsOpen(false);
+ } else if (queueOpen) {
+ setQueueOpen(false);
+ } else if (myHoldsOpen) {
+ setMyHoldsOpen(false);
+ } else if (mySoldOpen) {
+ setMySoldOpen(false);
+ } else if (selectedImageIndex !== null) {
+ setSelectedImageIndex(null);
+ } else {
+ return;
+ }
+ event.stopPropagation();
+ }
+ window.addEventListener("keydown", handleKeydown);
+ return () => window.removeEventListener("keydown", handleKeydown);
+ }, [
+ editorMode,
+ holdEditor,
+ soldEditor,
+ approvalsOpen,
+ queueOpen,
+ myHoldsOpen,
+ mySoldOpen,
+ selectedImageIndex,
+ ]);
 
  async function reloadHoldRequests() {
  const requestsPayload = await apiFetch("/api/hold-requests?status=pending");
@@ -859,41 +925,9 @@ export default function PrivateWorkspaceClient() {
 
  return (
  <main className="font-inter min-h-screen bg-[color:var(--qc-bg-page)] text-[color:var(--qc-ink-1)]">
- <div className="mx-auto w-full max-w-[1800px] px-3 py-5 sm:px-4 md:px-6 2xl:px-8">
- <section className="mb-4 overflow-hidden rounded-sm border border-[color:var(--qc-line)] bg-white px-6 py-5 text-[color:var(--qc-ink-1)] ">
- <div className={`grid gap-5 lg:items-start ${isStatusUser ? "xl:grid-cols-[minmax(0,1fr)_520px]" : "xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,640px)]"}`}>
- <div className={`${isStatusUser ? "max-w-3xl" : "max-w-4xl"}`}>
- <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-orange)]">Management Workspace</p>
- <h1 className={`font-inter mt-3 font-semibold leading-tight text-[color:var(--qc-ink-1)] ${isStatusUser ? "max-w-2xl text-[1.7rem] md:text-[2.05rem]" : "max-w-3xl text-[1.9rem] md:text-[2.35rem]"}`}>
- {workspaceCopy.title}
- </h1>
- <p className={`mt-2 text-sm text-[rgba(35,35,35,0.72)] ${isStatusUser ? "max-w-2xl leading-5.5" : "max-w-3xl leading-6"}`}>
- {workspaceCopy.description}
- </p>
- </div>
-
- <div className={`rounded-sm border border-[color:var(--qc-line)] bg-white p-3.5 ${isStatusUser ? "" : "ml-auto w-fit min-w-[420px] max-w-full"}`}>
- <div className="flex items-start justify-between gap-3">
- <div className="flex min-w-0 flex-1 items-center gap-2">
- <h2 className="truncate text-base font-semibold text-[color:var(--qc-ink-1)]">
- {[
- profileCompanyName,
- profile?.full_name || profile?.email || "User",
- ]
- .filter(Boolean)
- .join(" · ")}
- </h2>
- </div>
- <form method="POST" action="/api/auth/logout" className="shrink-0">
- <button
- type="submit"
- className="inline-flex h-10 items-center justify-center rounded-sm border border-[color:var(--qc-line)] bg-white px-3.5 text-center text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:bg-[color:var(--qc-bg-page)]"
- >
- Log Out
- </button>
- </form>
- </div>
- <div className={`mt-3.5 gap-2.5 ${isStatusUser ? "flex items-center" : "flex flex-wrap items-center"}`}>
+ <PrivateHeader profile={profile} />
+ <section className="mx-auto w-full max-w-[1680px] px-8 py-6">
+ <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3">
  <button
  type="button"
  onClick={() => {
@@ -901,94 +935,239 @@ export default function PrivateWorkspaceClient() {
  setMyHoldsOpen(false);
  setQueueOpen(true);
  }}
- className={`inline-flex h-10 items-center justify-between gap-3 rounded-sm border border-[color:var(--qc-line)] bg-white px-4 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:bg-[color:var(--qc-bg-page)] ${
- isStatusUser ? "min-w-0 flex-1" : "min-w-[118px]"
- }`}
+ className="flex flex-col items-start gap-2 bg-[color:var(--qc-bg-surface)] px-5 py-4 text-left transition-colors hover:border-[color:var(--qc-ink-1)]"
+ style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
  >
- <span className="whitespace-nowrap">Requests</span>
- <span className="inline-flex min-w-7 shrink-0 items-center justify-center rounded-full bg-rose-500 px-2 py-0.5 text-xs font-semibold text-white ">
+ <span className="flex w-full items-center justify-between gap-3">
+ <span className="text-[10.5px] font-semibold uppercase tracking-[0.24em] text-[color:var(--qc-ink-3)]">
+ Hold requests
+ </span>
+ {holdRequests.length > 0 ? (
+ <span
+ className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em]"
+ style={{
+ backgroundColor: "var(--qc-status-hold-bg)",
+ color: "var(--qc-status-hold-fg)",
+ borderRadius: "var(--qc-radius-sharp)",
+ }}
+ >
+ New
+ </span>
+ ) : null}
+ </span>
+ <span className="text-[36px] font-medium leading-none tracking-[-0.02em] text-[color:var(--qc-ink-1)]">
  {holdRequests.length}
  </span>
  </button>
+
+ <button
+ type="button"
+ onClick={openMyHoldsPanel}
+ className="flex flex-col items-start gap-2 bg-[color:var(--qc-bg-surface)] px-5 py-4 text-left transition-colors hover:border-[color:var(--qc-ink-1)]"
+ style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
+ >
+ <span className="flex w-full items-center justify-between gap-3">
+ <span className="text-[10.5px] font-semibold uppercase tracking-[0.24em] text-[color:var(--qc-ink-3)]">
+ My holds
+ </span>
+ </span>
+ <span className="text-[36px] font-medium leading-none tracking-[-0.02em] text-[color:var(--qc-ink-1)]">
+ {myHolds.length}
+ </span>
+ </button>
+
+ <button
+ type="button"
+ onClick={openMySoldPanel}
+ className="flex flex-col items-start gap-2 bg-[color:var(--qc-bg-surface)] px-5 py-4 text-left transition-colors hover:border-[color:var(--qc-ink-1)]"
+ style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
+ >
+ <span className="flex w-full items-center justify-between gap-3">
+ <span className="text-[10.5px] font-semibold uppercase tracking-[0.24em] text-[color:var(--qc-ink-3)]">
+ My sold
+ </span>
+ </span>
+ <span className="text-[36px] font-medium leading-none tracking-[-0.02em] text-[color:var(--qc-ink-1)]">
+ {mySold.length}
+ </span>
+ </button>
+
  {profile?.system_role === "super_admin" && pendingApprovals.length > 0 ? (
  <button
  type="button"
  onClick={() => setApprovalsOpen(true)}
- className="inline-flex h-10 items-center justify-between gap-3 rounded-sm border border-[color:var(--qc-line)] bg-white px-4 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:bg-[color:var(--qc-bg-page)]"
+ className="flex flex-col items-start gap-2 bg-[color:var(--qc-bg-surface)] px-5 py-4 text-left transition-colors hover:border-[color:var(--qc-ink-1)]"
+ style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
  >
- <span className="whitespace-nowrap">Approvals</span>
- <span className="inline-flex min-w-7 shrink-0 items-center justify-center rounded-full bg-violet-500 px-2 py-0.5 text-xs font-semibold text-white ">
+ <span className="flex w-full items-center justify-between gap-3">
+ <span className="text-[10.5px] font-semibold uppercase tracking-[0.24em] text-[color:var(--qc-ink-3)]">
+ Approvals
+ </span>
+ <span
+ className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em]"
+ style={{
+ backgroundColor: "var(--qc-status-pending-bg)",
+ color: "var(--qc-status-pending-fg)",
+ borderRadius: "var(--qc-radius-sharp)",
+ }}
+ >
+ Pending
+ </span>
+ </span>
+ <span className="text-[36px] font-medium leading-none tracking-[-0.02em] text-[color:var(--qc-ink-1)]">
  {pendingApprovals.length}
  </span>
  </button>
  ) : null}
- <button
- type="button"
- onClick={openMyHoldsPanel}
- className={`inline-flex h-10 items-center justify-between gap-3 rounded-sm border border-[color:var(--qc-line)] bg-white px-4 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:bg-[color:var(--qc-bg-page)] ${
- isStatusUser ? "min-w-0 flex-1" : "min-w-[118px]"
- }`}
- >
- <span className="whitespace-nowrap">Holds</span>
- <span className="inline-flex min-w-7 shrink-0 items-center justify-center rounded-full bg-amber-400 px-2 py-0.5 text-xs font-semibold text-[#3d2918] ">
- {myHolds.length}
- </span>
- </button>
- <button
- type="button"
- onClick={openMySoldPanel}
- className={`inline-flex h-10 items-center justify-between gap-3 rounded-sm border border-[color:var(--qc-line)] bg-white px-4 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:bg-[color:var(--qc-bg-page)] ${
- isStatusUser ? "min-w-0 flex-1" : "min-w-[118px]"
- }`}
- >
- <span className="whitespace-nowrap">Sold</span>
- <span className="inline-flex min-w-7 shrink-0 items-center justify-center rounded-full bg-[rgba(247,134,57,0.14)] px-2 py-0.5 text-xs font-semibold text-[var(--brand-orange-deep)]">
- {mySold.length}
- </span>
- </button>
- {profile?.system_role === "super_admin" ? (
- <>
- <Link
- href="/manage/confirm"
- className={`inline-flex h-10 items-center justify-center rounded-sm border border-[color:var(--qc-line)] bg-white px-4 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:bg-[color:var(--qc-bg-page)] ${
- isStatusUser ? "shrink-0 px-3.5" : ""
- }`}
- >
- Inventory Check
- </Link>
- <Link
- href="/admin"
- className={`inline-flex h-10 items-center justify-center rounded-sm border border-[color:var(--qc-line)] bg-white px-4 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:bg-[color:var(--qc-bg-page)] ${
- isStatusUser ? "shrink-0 px-3.5" : ""
- }`}
- >
- Admin
- </Link>
- <Link
- href="/slabs"
- className={`inline-flex h-10 items-center justify-center rounded-sm border border-[color:var(--qc-line)] bg-white px-4 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:bg-[color:var(--qc-bg-page)] ${
- isStatusUser ? "shrink-0 px-3.5" : ""
- }`}
- >
- Slabs
- </Link>
- </>
- ) : null}
  </div>
- </div>
- </div>
-
  </section>
+ <div className="mx-auto w-full max-w-[1680px] px-8 pb-16">
 
  <div className="space-y-4">
  <section className="space-y-4">
- <div className="rounded-sm border border-[color:var(--qc-line)] bg-white/94 p-4 ">
- <div className={filterGridClass}>
- <div className="min-w-0 sm:col-span-2 2xl:col-span-1 2xl:max-w-[29rem]">
- <p className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
- Material Types
- </p>
- <div className="flex h-12 w-full max-w-full snap-x snap-mandatory items-center gap-2 overflow-x-auto whitespace-nowrap rounded-sm border border-[color:var(--qc-line)] bg-white px-3 py-2 text-sm text-[color:var(--qc-ink-1)] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
+ <div
+ id="filter_menu"
+ className="sticky top-0 z-40 bg-[color:var(--qc-bg-page)] py-6"
+ style={{
+ borderTop: "1px solid var(--qc-line)",
+ borderBottom: "1px solid var(--qc-line)",
+ }}
+ >
+ <div className="flex flex-wrap items-center gap-3">
+ <div className="relative h-11 min-w-[260px] flex-1">
+ <svg
+ aria-hidden="true"
+ viewBox="0 0 24 24"
+ className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--qc-ink-3)]"
+ fill="none"
+ stroke="currentColor"
+ strokeWidth="1.8"
+ strokeLinecap="round"
+ strokeLinejoin="round"
+ >
+ <circle cx="11" cy="11" r="7" />
+ <path d="m20 20-3.5-3.5" />
+ </svg>
+ <input
+ type="text"
+ value={filters.stone}
+ onChange={(event) => setFilters((current) => ({ ...current, stone: event.target.value }))}
+ placeholder="Search stone, brand, finish, or ID #741"
+ className="font-inter h-11 w-full border border-[color:var(--qc-line)] bg-white pl-11 pr-4 text-[14px] font-normal normal-case tracking-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors hover:border-[color:var(--qc-line-strong)] focus:border-[color:var(--qc-ink-1)]"
+ style={{ borderRadius: "var(--qc-radius-sharp)" }}
+ />
+ </div>
+
+ <input
+ type="text"
+ inputMode="decimal"
+ value={filters.minWidth}
+ onChange={(event) => setFilters((current) => ({ ...current, minWidth: event.target.value }))}
+ placeholder='Min W"'
+ aria-label="Minimum width"
+ className="font-inter h-11 w-[110px] border border-[color:var(--qc-line)] bg-white px-4 text-center text-[14px] font-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors hover:border-[color:var(--qc-line-strong)] focus:border-[color:var(--qc-ink-1)]"
+ style={{ borderRadius: "var(--qc-radius-sharp)" }}
+ />
+
+ <input
+ type="text"
+ inputMode="decimal"
+ value={filters.minHeight}
+ onChange={(event) => setFilters((current) => ({ ...current, minHeight: event.target.value }))}
+ placeholder='Min H"'
+ aria-label="Minimum height"
+ className="font-inter h-11 w-[110px] border border-[color:var(--qc-line)] bg-white px-4 text-center text-[14px] font-normal text-[color:var(--qc-ink-1)] placeholder:text-[color:var(--qc-ink-3)] outline-none transition-colors hover:border-[color:var(--qc-line-strong)] focus:border-[color:var(--qc-ink-1)]"
+ style={{ borderRadius: "var(--qc-radius-sharp)" }}
+ />
+
+ <div
+ className="flex h-11 items-center bg-white"
+ style={{
+ border: "1px solid var(--qc-line)",
+ borderRadius: "var(--qc-radius-sharp)",
+ }}
+ >
+ {[
+ { value: "available", label: "Available", dot: "var(--qc-status-available-dot)" },
+ { value: "hold", label: "On Hold", dot: "var(--qc-status-hold-dot)" },
+ { value: "sold", label: "Sold", dot: "var(--qc-status-sold-dot)" },
+ ].map((option, index) => {
+ const checked = filters.status === option.value;
+ return (
+ <button
+ key={option.value}
+ type="button"
+ aria-pressed={checked}
+ onClick={() =>
+ setFilters((current) => ({
+ ...current,
+ status: current.status === option.value ? "" : option.value,
+ }))
+ }
+ className={`font-inter inline-flex h-full items-center gap-1.5 px-4 text-[13px] transition-colors ${
+ checked
+ ? "bg-[rgba(0,0,0,0.04)] font-medium text-[color:var(--qc-ink-1)]"
+ : "text-[color:var(--qc-ink-2)] hover:bg-[rgba(0,0,0,0.04)] hover:text-[color:var(--qc-ink-1)]"
+ }`}
+ style={{
+ borderLeft: index === 0 ? "none" : "1px solid var(--qc-line)",
+ }}
+ >
+ <span
+ aria-hidden="true"
+ className="inline-block h-1.5 w-1.5 rounded-full"
+ style={{ backgroundColor: option.dot }}
+ />
+ {option.label}
+ </button>
+ );
+ })}
+ </div>
+
+ {canStructure ? (
+ <button
+ type="button"
+ onClick={openCreateEditor}
+ aria-label="Add remnant"
+ title="Add remnant"
+ className="font-inter inline-flex h-11 items-center gap-2 bg-[color:var(--qc-ink-1)] px-4 text-[13px] font-medium text-white transition-colors hover:bg-[color:var(--qc-orange)]"
+ style={{
+ borderRadius: "var(--qc-radius-sharp)",
+ }}
+ >
+ <svg
+ aria-hidden="true"
+ viewBox="0 0 24 24"
+ className="h-3.5 w-3.5"
+ fill="none"
+ stroke="currentColor"
+ strokeWidth="2"
+ strokeLinecap="round"
+ strokeLinejoin="round"
+ >
+ <path d="M12 5v14" />
+ <path d="M5 12h14" />
+ </svg>
+ Add remnant
+ </button>
+ ) : null}
+ </div>
+
+ {(materialFilterOptions.length || availableColors.length) ? (
+ <div className="mt-4 flex flex-wrap items-center gap-2">
+ <button
+ type="button"
+ aria-pressed={filters.materials.length === 0}
+ onClick={() => setFilters((current) => ({ ...current, materials: [] }))}
+ className={`font-inter inline-flex items-center px-4 py-2 text-[13px] font-medium transition-colors ${
+ filters.materials.length === 0
+ ? "bg-[color:var(--qc-ink-1)] text-white hover:bg-[#232323]"
+ : "bg-[rgba(0,0,0,0.04)] text-[color:var(--qc-ink-1)] hover:bg-[rgba(0,0,0,0.08)]"
+ }`}
+ style={{ borderRadius: "var(--qc-radius-sharp)" }}
+ >
+ All
+ </button>
  {materialFilterOptions.map((material) => {
  const checked = filters.materials.includes(material);
  return (
@@ -1004,119 +1183,57 @@ export default function PrivateWorkspaceClient() {
  : [...current.materials, material],
  }))
  }
- className={`inline-flex shrink-0 snap-start items-center rounded-xl border px-3 py-2 text-[13px] font-medium transition-all ${
+ className={`font-inter inline-flex shrink-0 items-center px-4 py-2 text-[13px] font-medium transition-colors ${
  checked
- ? "border-[var(--brand-orange)] bg-[rgba(247,134,57,0.12)] text-[var(--brand-orange-deep)] "
- : "border-[color:var(--qc-line)] bg-white text-[rgba(25,27,28,0.72)] hover:border-[rgba(247,134,57,0.32)] hover:bg-[color:var(--qc-bg-page)]"
+ ? "bg-[color:var(--qc-ink-1)] text-white hover:bg-[#232323]"
+ : "bg-[rgba(0,0,0,0.04)] text-[color:var(--qc-ink-1)] hover:bg-[rgba(0,0,0,0.08)]"
  }`}
+ style={{ borderRadius: "var(--qc-radius-sharp)" }}
  >
  {material}
  </button>
  );
  })}
- </div>
- </div>
-
- <label className="block min-w-0 sm:col-span-2 2xl:col-span-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
- Stone / Brand / Color / Finish / ID #
- <div className="relative mt-2">
- <svg
- aria-hidden="true"
- viewBox="0 0 24 24"
- className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--brand-orange)]"
- fill="none"
- stroke="currentColor"
- strokeWidth="1.8"
- strokeLinecap="round"
- strokeLinejoin="round"
- >
- <circle cx="11" cy="11" r="6.5" />
- <path d="M16 16l4 4" />
- </svg>
- <input
- type="text"
- value={filters.stone}
- onChange={(event) => setFilters((current) => ({ ...current, stone: event.target.value }))}
- placeholder="Stone, brand, color, finish or #741"
- className="h-12 w-full rounded-sm border border-[color:var(--qc-line)] bg-white pl-10 pr-4 text-sm font-medium text-[color:var(--qc-ink-1)] placeholder:text-[rgba(25,27,28,0.45)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
- />
- </div>
- </label>
-
- <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
- Min Width
- <input
- type="text"
- inputMode="decimal"
- value={filters.minWidth}
- onChange={(event) => setFilters((current) => ({ ...current, minWidth: event.target.value }))}
- placeholder="W"
- className="mt-2 h-12 w-full rounded-sm border border-[color:var(--qc-line)] bg-white px-3 text-sm font-medium text-[color:var(--qc-ink-1)] placeholder:text-[rgba(25,27,28,0.45)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
- />
- </label>
-
- <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
- Min Height
- <input
- type="text"
- inputMode="decimal"
- value={filters.minHeight}
- onChange={(event) => setFilters((current) => ({ ...current, minHeight: event.target.value }))}
- placeholder="H"
- className="mt-2 h-12 w-full rounded-sm border border-[color:var(--qc-line)] bg-white px-3 text-sm font-medium text-[color:var(--qc-ink-1)] placeholder:text-[rgba(25,27,28,0.45)] outline-none transition-colors focus:border-[var(--brand-orange)] focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
- />
- </label>
-
- <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)]">
- Status
- <SelectField
- value={filters.status}
- onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
- wrapperClassName="relative mt-2"
- className="px-3"
- >
- <option value="">All</option>
- <option value="available">Available</option>
- <option value="hold">On Hold</option>
- <option value="sold">Sold</option>
- </SelectField>
- </label>
-
- {canStructure ? (
- <div className="flex items-end justify-start sm:col-span-2 2xl:col-span-1 2xl:justify-center">
- <div className="flex w-12 flex-col items-center">
- <p className="mb-2 hidden w-full text-center text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-orange)] lg:block">
- Add
- </p>
- <div className="relative">
+ {availableColors.length ? (
+ <div className="ml-2 flex items-center gap-1.5">
+ {availableColors.map((color) => {
+ const checked = (filters.colors || []).includes(color);
+ return (
+ <ColorTooltip key={color} name={color}>
  <button
  type="button"
- onClick={openCreateEditor}
- className="peer inline-flex h-12 w-12 items-center justify-center rounded-sm bg-[var(--brand-ink)] text-white transition-all hover:-translate-y-0.5 hover:bg-[var(--brand-orange)]"
- aria-label="Add remnant"
- >
- <svg
- aria-hidden="true"
- viewBox="0 0 24 24"
- className="h-5 w-5"
- fill="none"
- stroke="currentColor"
- strokeWidth="2.2"
- strokeLinecap="round"
- strokeLinejoin="round"
- >
- <path d="M12 5v14" />
- <path d="M5 12h14" />
- </svg>
- </button>
- <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-full bg-[#2c211c]/92 px-3 py-2 text-[11px] font-semibold text-white opacity-0 transition-all peer-hover:opacity-100 peer-focus-visible:opacity-100 xl:inline-flex">
- Add remnant
- </div>
- </div>
- </div>
+ aria-pressed={checked}
+ aria-label={color}
+ onClick={() =>
+ setFilters((current) => {
+ const list = current.colors || [];
+ return {
+ ...current,
+ colors: list.includes(color)
+ ? list.filter((value) => value !== color)
+ : [...list, color],
+ };
+ })
+ }
+ className="inline-flex h-6 w-6 items-center justify-center rounded-full transition-transform hover:scale-110"
+ style={{
+ ...colorSwatchStyle(color),
+ boxShadow: checked
+ ? "0 0 0 1px var(--qc-bg-page), 0 0 0 2px var(--qc-ink-1)"
+ : "inset 0 0 0 1px rgba(0,0,0,0.10)",
+ }}
+ />
+ </ColorTooltip>
+ );
+ })}
  </div>
  ) : null}
+ <span className="font-inter ml-auto text-[13px] text-[color:var(--qc-ink-3)]">
+ <span className="font-medium text-[color:var(--qc-ink-1)]">{cards.length}</span>{" "}
+ {cards.length === 1 ? "result" : "results"}
+ </span>
  </div>
+ ) : null}
  </div>
 
  {loading ? (
@@ -1133,7 +1250,7 @@ export default function PrivateWorkspaceClient() {
  </div>
  ) : (
  <div className={boardGridClass}>
- {remnants.map((remnant) => {
+ {cards.map((remnant) => {
  const normalizedStatus = normalizeRemnantStatus(remnant);
  const statusBadge = statusBadgeText(remnant);
  const canManage = canManageRemnant(profile, remnant);
@@ -1218,66 +1335,136 @@ export default function PrivateWorkspaceClient() {
  ),
  }
  : null;
- const actionButtonBaseClass =
- "inline-flex h-11 items-center justify-center rounded-sm border px-3 text-[11px] font-semibold leading-none transition-colors disabled:cursor-not-allowed disabled:opacity-60";
  const centerEditAction = showEditAction
  ? {
  label: "Edit",
  title: "Edit remnant",
  onClick: () => openEditEditor(remnant),
- className: "border-slate-300 bg-slate-100 text-slate-800 hover:border-slate-400 hover:bg-slate-200",
+ statusKey: "edit",
  icon: (
- <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
- <path d="M10.36 3.89h3.28l.47 1.88a6.8 6.8 0 0 1 1.51.63l1.7-.93 2.32 2.32-.93 1.7c.26.48.47.98.63 1.5l1.88.48v3.28l-1.88.47a6.8 6.8 0 0 1-.63 1.51l.93 1.7-2.32 2.32-1.7-.93a6.8 6.8 0 0 1-1.5.63l-.48 1.88h-3.28l-.47-1.88a6.8 6.8 0 0 1-1.51-.63l-1.7.93-2.32-2.32.93-1.7a6.8 6.8 0 0 1-.63-1.5l-1.88-.48v-3.28l1.88-.47c.16-.52.37-1.02.63-1.51l-.93-1.7 2.32-2.32 1.7.93c.48-.26.98-.47 1.5-.63z" />
- <circle cx="12" cy="12" r="2.85" />
+ <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+ <path d="M12 20h9" />
+ <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
  </svg>
  ),
  }
  : null;
+ const STATUS_ACTION_TOKENS = {
+ available: { fg: "var(--qc-status-available-fg)", bg: "var(--qc-status-available-bg)", dot: "var(--qc-status-available-dot)" },
+ hold: { fg: "var(--qc-status-hold-fg)", bg: "var(--qc-status-hold-bg)", dot: "var(--qc-status-hold-dot)" },
+ sold: { fg: "var(--qc-status-sold-fg)", bg: "var(--qc-status-sold-bg)", dot: "var(--qc-status-sold-dot)" },
+ };
+ const colors = remnantColors(remnant);
+ const eyebrow = privateCardSubheading(remnant);
+ const heading = privateCardHeading(remnant);
+ const metrics = privateCardMetricEntries(remnant);
+ const sizeEntry = metrics.find((m) => m.label === "Size");
+ const thickEntry = metrics.find((m) => m.label === "Thick");
+ const finishEntry = metrics.find((m) => m.label === "Finish");
+ const priceEntry = metrics.find((m) => m.label === "Price");
+ const statusDescriptor = statusBadge && statusBadge !== "Available" ? statusBadge : "";
  return (
  <article
  key={String(remnant.id)}
- className="group relative overflow-hidden rounded-sm border border-[color:var(--qc-line)] bg-[rgba(255,255,255,0.96)] transition-transform [contain-intrinsic-size:420px] [content-visibility:auto] hover:-translate-y-1 sm:rounded-sm"
+ className="group relative flex flex-col overflow-hidden bg-[color:var(--qc-bg-surface)] transition-all duration-200 hover:-translate-y-1"
+ style={{
+ border: "1px solid var(--qc-line)",
+ borderRadius: "var(--qc-radius-sharp)",
+ }}
+ onMouseEnter={(event) => {
+ event.currentTarget.style.borderColor = "var(--qc-ink-1)";
+ }}
+ onMouseLeave={(event) => {
+ event.currentTarget.style.borderColor = "var(--qc-line)";
+ }}
  >
- <div className="relative">
- <div className="overflow-hidden">
- <div className="relative aspect-[4/3] overflow-hidden bg-white">
+ <div className="relative aspect-[4/3] overflow-hidden bg-[#f3f1ee]">
  {imageSrc(remnant) ? (
  <button
  type="button"
- className="absolute inset-0 z-[1] block w-full overflow-hidden text-left"
+ className="absolute inset-0 z-[1] block h-full w-full overflow-hidden text-left"
  onClick={() => openImageViewer(remnant)}
  aria-label={`Open image for remnant ${displayRemnantId(remnant)}`}
- />
- ) : null}
- <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-24 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.45),transparent_72%)]" />
- <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-16 bg-[linear-gradient(180deg,rgba(35,35,35,0),rgba(35,35,35,0.18))]" />
- <div className="pointer-events-none absolute inset-x-0 top-0 z-[2] flex items-start justify-between gap-2 p-3">
- <span className="inline-flex items-center rounded-full border border-white/70 bg-white/88 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-orange-deep)] ">
- ID #{displayRemnantId(remnant)}
- </span>
- <span
- className={`inline-flex max-w-[72%] items-center justify-end rounded-full px-2.5 py-1 text-[10px] font-semibold leading-tight tracking-[0.02em] ${statusBadgeClass(normalizedStatus)}`}
  >
- {statusBadge}
- </span>
- </div>
- {imageSrc(remnant) ? (
- <div className="pointer-events-none flex h-full w-full items-center justify-center overflow-hidden p-1.5 sm:p-2">
  <img
  src={imageSrc(remnant)}
  alt={`Remnant ${displayRemnantId(remnant)}`}
- className="h-full w-full scale-[1.05] object-contain object-center transition-transform duration-300 motion-safe:md:group-hover:scale-[1.08]"
+ className="h-full w-full object-cover object-top"
  decoding="async"
  />
- </div>
+ </button>
  ) : (
- <div className="flex h-full w-full items-center justify-center bg-[color:var(--qc-bg-page)] text-sm font-semibold uppercase tracking-[0.16em] text-[var(--brand-orange)]">
- No Image
+ <div className="flex h-full w-full items-center justify-center text-[11px] uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+ No image
  </div>
  )}
- {leftAction ? (
- <div className="absolute bottom-0 left-0 z-[3] p-3">
+ {(() => {
+ const statusTokens =
+ normalizedStatus === "sold"
+ ? { bg: "var(--qc-status-sold-bg)", fg: "var(--qc-status-sold-fg)", dot: "var(--qc-status-sold-dot)" }
+ : normalizedStatus === "hold"
+ ? { bg: "var(--qc-status-hold-bg)", fg: "var(--qc-status-hold-fg)", dot: "var(--qc-status-hold-dot)" }
+ : normalizedStatus === "pending_approval"
+ ? { bg: "var(--qc-status-pending-bg)", fg: "var(--qc-status-pending-fg)", dot: "var(--qc-status-pending-dot)" }
+ : { bg: "var(--qc-status-available-bg)", fg: "var(--qc-status-available-fg)", dot: "var(--qc-status-available-dot)" };
+ return (
+ <div className="pointer-events-none absolute left-3 top-3 z-[2] max-w-[calc(100%-1.5rem)]">
+ <span
+ className="font-inter inline-flex max-w-full items-center gap-2 px-2 py-1 text-[11px]"
+ style={{
+ backgroundColor: statusTokens.bg,
+ color: statusTokens.fg,
+ borderRadius: "var(--qc-radius-sharp)",
+ }}
+ >
+ <span
+ aria-hidden="true"
+ className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+ style={{ backgroundColor: statusTokens.dot }}
+ />
+ <span className="shrink-0 font-medium">#{displayRemnantId(remnant)}</span>
+ {String(remnant.location || "").trim() ? (
+ <>
+ <span aria-hidden="true" className="shrink-0 opacity-50">·</span>
+ <span className="inline-flex min-w-0 shrink items-center gap-1">
+ <svg
+ aria-hidden="true"
+ viewBox="0 0 24 24"
+ className="h-3 w-3 shrink-0 opacity-70"
+ fill="none"
+ stroke="currentColor"
+ strokeWidth="1.8"
+ strokeLinecap="round"
+ strokeLinejoin="round"
+ >
+ <path d="M12 22s7-7.58 7-13a7 7 0 1 0-14 0c0 5.42 7 13 7 13Z" />
+ <circle cx="12" cy="9" r="2.5" />
+ </svg>
+ <span className="truncate">{String(remnant.location).trim()}</span>
+ </span>
+ </>
+ ) : null}
+ {statusDescriptor ? (
+ <>
+ <span aria-hidden="true" className="shrink-0 opacity-50">·</span>
+ <span className="min-w-0 shrink truncate">
+ {statusDescriptor}
+ </span>
+ </>
+ ) : null}
+ </span>
+ </div>
+ );
+ })()}
+
+ {leftAction ? (() => {
+ const tokens = STATUS_ACTION_TOKENS[leftAction.key] || {
+ bg: "var(--qc-bg-surface)",
+ fg: "var(--qc-ink-1)",
+ dot: "var(--qc-ink-3)",
+ };
+ return (
+ <div className="absolute bottom-3 left-3 z-[3]">
  <button
  type="button"
  disabled={leftAction.disabled}
@@ -1285,19 +1472,43 @@ export default function PrivateWorkspaceClient() {
  event.stopPropagation();
  leftAction.onClick();
  }}
- className={`group/private-action inline-flex h-10 items-center justify-center gap-0 overflow-hidden rounded-sm px-2.5 pr-2.5 text-[11px] font-medium transition-all hover:-translate-y-0.5 hover:gap-2 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 ${leftAction.className}`}
+ className="font-inter inline-flex h-8 items-center gap-1.5 px-3 text-[12px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+ style={{
+ backgroundColor: tokens.bg,
+ color: tokens.fg,
+ borderRadius: "var(--qc-radius-sharp)",
+ }}
+ onMouseEnter={(event) => {
+ if (event.currentTarget.disabled) return;
+ event.currentTarget.style.backgroundColor = tokens.dot;
+ event.currentTarget.style.color = "#fff";
+ }}
+ onMouseLeave={(event) => {
+ event.currentTarget.style.backgroundColor = tokens.bg;
+ event.currentTarget.style.color = tokens.fg;
+ }}
  aria-label={leftAction.label}
  title={leftAction.title}
  >
- {leftAction.icon}
- <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 ease-out group-hover/private-action:max-w-[8rem] group-hover/private-action:opacity-100">
+ <span
+ aria-hidden="true"
+ className="inline-block h-1.5 w-1.5 rounded-full"
+ style={{ backgroundColor: tokens.dot }}
+ />
  {leftAction.label}
- </span>
  </button>
  </div>
- ) : null}
- {rightAction ? (
- <div className="absolute bottom-0 right-0 z-[3] p-3">
+ );
+ })() : null}
+
+ {rightAction ? (() => {
+ const tokens = STATUS_ACTION_TOKENS[rightAction.key] || {
+ bg: "var(--qc-bg-surface)",
+ fg: "var(--qc-ink-1)",
+ dot: "var(--qc-ink-3)",
+ };
+ return (
+ <div className="absolute bottom-3 right-3 z-[3]">
  <button
  type="button"
  disabled={rightAction.disabled}
@@ -1305,81 +1516,142 @@ export default function PrivateWorkspaceClient() {
  event.stopPropagation();
  rightAction.onClick();
  }}
- className={`group/private-action inline-flex h-10 items-center justify-end gap-0 overflow-hidden rounded-sm px-2.5 pr-2.5 text-[11px] font-medium transition-all hover:-translate-y-0.5 hover:gap-2 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 ${rightAction.className}`}
+ className="font-inter inline-flex h-8 items-center gap-1.5 px-3 text-[12px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+ style={{
+ backgroundColor: tokens.bg,
+ color: tokens.fg,
+ borderRadius: "var(--qc-radius-sharp)",
+ }}
+ onMouseEnter={(event) => {
+ if (event.currentTarget.disabled) return;
+ event.currentTarget.style.backgroundColor = tokens.dot;
+ event.currentTarget.style.color = "#fff";
+ }}
+ onMouseLeave={(event) => {
+ event.currentTarget.style.backgroundColor = tokens.bg;
+ event.currentTarget.style.color = tokens.fg;
+ }}
  aria-label={rightAction.label}
  title={rightAction.title}
  >
- <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 ease-out group-hover/private-action:max-w-[8rem] group-hover/private-action:opacity-100">
+ <span
+ aria-hidden="true"
+ className="inline-block h-1.5 w-1.5 rounded-full"
+ style={{ backgroundColor: tokens.dot }}
+ />
  {rightAction.label}
- </span>
- {rightAction.icon}
  </button>
  </div>
- ) : null}
+ );
+ })() : null}
+
  {centerEditAction ? (
- <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[3] flex justify-center p-3">
+ <div className="pointer-events-none absolute inset-x-0 bottom-3 z-[3] flex justify-center">
  <button
  type="button"
  onClick={(event) => {
  event.stopPropagation();
  centerEditAction.onClick();
  }}
- className={`pointer-events-auto group/private-action inline-flex h-10 items-center justify-center gap-0 overflow-hidden rounded-sm px-2.5 text-[11px] font-medium transition-all hover:-translate-y-0.5 hover:gap-2 active:scale-[0.99] ${centerEditAction.className}`}
+ className="font-inter pointer-events-auto inline-flex h-8 items-center gap-1.5 bg-[color:var(--qc-ink-1)] px-3 text-[12px] font-medium text-white transition-colors hover:bg-[color:var(--qc-orange)]"
+ style={{ borderRadius: "var(--qc-radius-sharp)" }}
  aria-label={centerEditAction.label}
  title={centerEditAction.title}
  >
  {centerEditAction.icon}
- <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 ease-out group-hover/private-action:max-w-[7rem] group-hover/private-action:opacity-100">
  {centerEditAction.label}
- </span>
  </button>
  </div>
  ) : null}
  </div>
- </div>
- </div>
- <div className="p-3 text-sm text-[#232323] sm:p-3.5">
- <div className="rounded-sm border border-[color:var(--qc-line)] bg-white px-3.5 py-3 text-[color:var(--qc-ink-1)] ">
- <div className="min-w-0">
- <h3 className="font-inter text-[16px] font-semibold leading-snug text-[color:var(--qc-ink-1)] sm:text-[17px]">
- {privateCardHeading(remnant)}
+
+ <div className="flex flex-1 flex-col gap-3 p-4">
+ <div>
+ {eyebrow ? (
+ <p
+ className="font-inter text-[10px] font-semibold uppercase leading-none tracking-[0.18em]"
+ style={{ color: "var(--qc-orange)" }}
+ >
+ {eyebrow}
+ </p>
+ ) : null}
+ <h3 className="font-inter mt-2 text-[17px] font-medium leading-snug tracking-[-0.01em] text-[color:var(--qc-ink-1)]">
+ {heading}
  </h3>
- {privateCardSubheading(remnant) ? (
- <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgba(35,35,35,0.54)]">
- {privateCardSubheading(remnant)}
+ {colors.length ? (
+ <div className="mt-3 flex items-center gap-2">
+ <div className="flex items-center gap-1.5">
+ {colors.slice(0, 3).map((color) => (
+ <ColorTooltip key={`${remnant.id}-${color}`} name={color}>
+ <span
+ aria-hidden="true"
+ className="block h-3.5 w-3.5 rounded-full transition-transform group-hover/swatch:scale-110"
+ style={{
+ ...colorSwatchStyle(color),
+ boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.10)",
+ }}
+ />
+ </ColorTooltip>
+ ))}
+ </div>
+ <span className="text-[11px] text-[color:var(--qc-ink-3)]">
+ {colors.slice(0, 3).join(" · ")}
+ </span>
+ </div>
+ ) : null}
+ </div>
+
+ <div
+ className="mt-auto flex items-end justify-between gap-3 pt-3"
+ style={{ borderTop: "1px solid var(--qc-line)" }}
+ >
+ <div className="min-w-0">
+ <p className="font-inter flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+ <span>Size</span>
+ {remnant.l_shape ? (
+ <span
+ className="px-1 text-[9px] tracking-[0.12em] text-[color:var(--qc-ink-2)]"
+ style={{ border: "1px solid var(--qc-line-strong)" }}
+ >
+ L
+ </span>
+ ) : null}
+ </p>
+ {sizeEntry ? (
+ <p className="mt-1 text-[13px] font-medium text-[color:var(--qc-ink-1)]">
+ {sizeEntry.value}
+ </p>
+ ) : null}
+ {thickEntry ? (
+ <p
+ className="mt-0.5 text-[11px] text-[color:var(--qc-ink-3)]"
+ style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+ >
+ {thickEntry.value}
  </p>
  ) : null}
  </div>
- <div className={`mt-3 grid items-stretch gap-2 ${privateCardMetricEntries(remnant).length >= 2 ? "grid-cols-2" : "grid-cols-1"}`}>
- {privateCardMetricEntries(remnant).map((entry, index) => (
- <div
- key={`${remnant.id}-${entry.label}`}
- className="flex min-w-0 flex-col rounded-sm border border-[color:var(--qc-line)] bg-white/88 px-3 py-2"
- >
- <p className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-orange)] sm:text-[11px]" title={entry.title}>
- {entry.label}
+ {(finishEntry || priceEntry) ? (
+ <div className="text-right">
+ {finishEntry ? (
+ <>
+ <p className="font-inter text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+ Finish
  </p>
- <p className="mt-1 text-[12px] font-semibold leading-tight text-[color:var(--qc-ink-1)] sm:text-[13px]">
- {entry.value}
+ <p className="mt-1 text-[13px] font-medium text-[color:var(--qc-ink-1)]">
+ {finishEntry.value}
  </p>
- </div>
- ))}
- </div>
- {remnantColors(remnant).length ? (
- <div className="mt-3 flex flex-wrap justify-center gap-2">
- {remnantColors(remnant).map((color) => (
- <span
- key={`${remnant.id}-${color}`}
- className="inline-flex items-center gap-2 rounded-full border border-[color:var(--qc-line)] bg-white/92 px-2.5 py-1 text-[11px] font-semibold text-[rgba(25,27,28,0.72)]"
+ </>
+ ) : null}
+ {priceEntry ? (
+ <p
+ className="mt-1 text-[11px] text-[color:var(--qc-ink-2)]"
+ title={priceEntry.title}
+ style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
  >
- <span
- aria-hidden="true"
- className="h-3 w-3 rounded-full border border-black/10 "
- style={colorSwatchStyle(color)}
- />
- {color}
- </span>
- ))}
+ {priceEntry.value}
+ </p>
+ ) : null}
  </div>
  ) : null}
  </div>
@@ -1393,12 +1665,7 @@ export default function PrivateWorkspaceClient() {
  </div>
  </div>
 
- <footer className="px-4 pb-10 pt-2 md:px-6">
- <div className="mx-auto max-w-[1800px] rounded-sm border border-[color:var(--qc-line)] bg-white/80 px-4 py-5 text-center sm:rounded-sm sm:px-6">
- <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--brand-orange)]">Internal Workspace</p>
- <p className="mt-2 text-sm text-[rgba(25,27,28,0.72)]">Built to keep remnant inventory, hold review, and status updates clear for the team.</p>
- </div>
- </footer>
+ <PrivateFooter />
 
  <ImageViewer
  remnant={selectedImageRemnant}
@@ -1458,7 +1725,7 @@ export default function PrivateWorkspaceClient() {
  onArchive={archiveEditorRemnant}
  profile={profile}
  lookups={lookups}
- activeLookupColors={activeLookupColors}
+ activeLookupColors={editorLookupColors}
  canEditLinkedSlab={canEditLinkedSlab}
  saveError={editorError}
  showSuccessMessage={showSuccessMessage}

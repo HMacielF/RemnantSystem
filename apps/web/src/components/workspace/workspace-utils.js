@@ -51,6 +51,7 @@ export function statusText(remnant) {
  if (!normalized || normalized === "available") return "Available";
  if (normalized === "hold" || normalized === "on hold") return "On Hold";
  if (normalized === "sold") return "Sold";
+ if (normalized === "pending_approval" || normalized === "pending approval") return "Pending Approval";
  return remnant?.status || "Available";
 }
 
@@ -513,6 +514,7 @@ export function formatShortDateLabel(value) {
 export function currentFiltersFromSearch(searchParams) {
  return {
  materials: searchParams.getAll("material"),
+ colors: searchParams.getAll("color"),
  stone: searchParams.get("stone") || "",
  minWidth: searchParams.get("min-width") || "",
  minHeight: searchParams.get("min-height") || "",
@@ -523,6 +525,7 @@ export function currentFiltersFromSearch(searchParams) {
 export function emptyFilters() {
  return {
  materials: [],
+ colors: [],
  stone: "",
  minWidth: "",
  minHeight: "",
@@ -534,6 +537,9 @@ export function buildSearchQuery(filters) {
  const params = new URLSearchParams();
  filters.materials.forEach((material) => {
  if (material) params.append("material", material);
+ });
+ (filters.colors || []).forEach((color) => {
+ if (color) params.append("color", color);
  });
  if (filters.stone.trim()) params.set("stone", filters.stone.trim());
  if (filters.minWidth.trim()) params.set("min-width", filters.minWidth.trim());
