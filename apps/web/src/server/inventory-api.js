@@ -478,6 +478,12 @@ export async function fetchInventoryCheckSession(client, authed, sessionId) {
           company_name: remnant.company_name,
           material_name: remnant.material_name,
           brand_name: remnant.brand_name,
+          company_id: remnant.company_id ?? null,
+          material_id: remnant.material_id ?? null,
+          thickness_id: remnant.thickness_id ?? null,
+          finish_id: remnant.finish_id ?? null,
+          price_per_sqft: remnant.price_per_sqft ?? null,
+          colors: Array.isArray(remnant.colors) ? remnant.colors : [],
           created_at: audit.created_at,
           end_of_pass: Boolean(audit?.meta?.end_of_pass),
         };

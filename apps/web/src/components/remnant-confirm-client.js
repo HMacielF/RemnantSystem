@@ -129,6 +129,9 @@ export default function RemnantConfirmClient({ profile = null }) {
   const [expandedEntryId, setExpandedEntryId] = useState(null);
   const [archiveTargetEntry, setArchiveTargetEntry] = useState(null);
   const [archiveRunning, setArchiveRunning] = useState(false);
+  const [editTargetEntry, setEditTargetEntry] = useState(null);
+  const [editForm, setEditForm] = useState(null);
+  const [editRunning, setEditRunning] = useState(false);
   const [selectedSummaryTab, setSelectedSummaryTab] = useState(null);
   const inputRef = useRef(null);
   const locationRef = useRef(null);
@@ -466,6 +469,59 @@ export default function RemnantConfirmClient({ profile = null }) {
     setArchiveTargetEntry(entry);
   }
 
+  function openEditEntry(entry) {
+    if (!entry?.remnant_id) return;
+    setEditTargetEntry(entry);
+    setEditForm({
+      name: String(entry.name || ""),
+      status: String(entry.status || "available").toLowerCase(),
+      width: entry.width != null ? String(entry.width) : "",
+      height: entry.height != null ? String(entry.height) : "",
+      l_shape: Boolean(entry.l_shape),
+      l_width: entry.l_width != null ? String(entry.l_width) : "",
+      l_height: entry.l_height != null ? String(entry.l_height) : "",
+    });
+  }
+
+  async function submitEditEntry() {
+    if (!editTargetEntry?.remnant_id || !editForm) return;
+    setEditRunning(true);
+    setError("");
+    try {
+      const payload = {
+        name: editForm.name,
+        moraware_remnant_id: editTargetEntry.moraware_remnant_id,
+        company_id: editTargetEntry.company_id,
+        material_id: editTargetEntry.material_id,
+        thickness_id: editTargetEntry.thickness_id,
+        finish_id: editTargetEntry.finish_id,
+        brand_name: editTargetEntry.brand_name || "",
+        width: editForm.width,
+        height: editForm.height,
+        l_shape: editForm.l_shape,
+        l_width: editForm.l_shape ? editForm.l_width : null,
+        l_height: editForm.l_shape ? editForm.l_height : null,
+        colors: Array.isArray(editTargetEntry.colors) ? editTargetEntry.colors : [],
+        price_per_sqft: editTargetEntry.price_per_sqft,
+        status: editForm.status,
+      };
+      await apiFetch(`/api/remnants/${editTargetEntry.remnant_id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const label = `#${editTargetEntry.moraware_remnant_id || editTargetEntry.remnant_id}`;
+      showTransientMessage(`${label} → updated`, "success");
+      setEditTargetEntry(null);
+      setEditForm(null);
+      refreshSessionSummary();
+    } catch (nextError) {
+      setError(friendlyErrorMessage(nextError, "Failed to save changes."));
+    } finally {
+      setEditRunning(false);
+    }
+  }
+
   async function confirmArchive() {
     if (!archiveTargetEntry?.remnant_id) return;
     setArchiveRunning(true);
@@ -584,6 +640,20 @@ export default function RemnantConfirmClient({ profile = null }) {
               }}
             >
               Re-scan
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                openEditEntry(entry);
+              }}
+              className="inline-flex items-center gap-1.5 bg-white px-3 py-1.5 text-[12px] font-medium text-[color:var(--qc-ink-1)] transition-colors hover:bg-[rgba(0,0,0,0.04)]"
+              style={{
+                border: "1px solid var(--qc-line)",
+                borderRadius: "var(--qc-radius-sharp)",
+              }}
+            >
+              Edit
             </button>
             <button
               type="button"
@@ -830,6 +900,162 @@ export default function RemnantConfirmClient({ profile = null }) {
                 }}
               >
                 {endPassRunning ? "Ending…" : "Yes, end pass"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {editTargetEntry && editForm ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/40 p-4 sm:items-center">
+          <div
+            className="w-full max-w-md bg-[color:var(--qc-bg-surface)] p-6"
+            style={{
+              border: "1px solid var(--qc-line)",
+              borderRadius: "var(--qc-radius-sharp)",
+              boxShadow: "var(--qc-shadow-toast)",
+            }}
+          >
+            <p className="text-[10.5px] uppercase tracking-[0.24em] text-[color:var(--qc-ink-3)]">
+              Edit remnant
+            </p>
+            <h2 className="mt-2 text-[20px] font-medium leading-tight tracking-[-0.015em] text-[color:var(--qc-ink-1)]">
+              #{editTargetEntry.moraware_remnant_id || editTargetEntry.remnant_id}
+            </h2>
+            <p className="mt-1 text-[11px] text-[color:var(--qc-ink-3)]">
+              Material, thickness, finish, and colors stay as-is — change those in the manage workspace.
+            </p>
+
+            <div className="mt-4 grid gap-3">
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+                  Stone name
+                </span>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(event) => setEditForm((current) => ({ ...current, name: event.target.value }))}
+                  className="h-10 w-full bg-white px-3 text-[13px] text-[color:var(--qc-ink-1)] outline-none focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                  style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+                  Status
+                </span>
+                <select
+                  value={editForm.status}
+                  onChange={(event) => setEditForm((current) => ({ ...current, status: event.target.value }))}
+                  className="h-10 w-full bg-white px-3 text-[13px] text-[color:var(--qc-ink-1)] outline-none focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                  style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
+                >
+                  <option value="available">Available</option>
+                  <option value="sold">Sold</option>
+                </select>
+                <p className="mt-1 text-[10px] text-[color:var(--qc-ink-3)]">
+                  Use the customer-hold workflow on the manage page to place a hold.
+                </p>
+              </label>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+                    Width (in)
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={editForm.width}
+                    onChange={(event) => setEditForm((current) => ({ ...current, width: event.target.value }))}
+                    className="h-10 w-full bg-white px-3 text-[13px] text-[color:var(--qc-ink-1)] outline-none focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                    style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+                    Height (in)
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={editForm.height}
+                    onChange={(event) => setEditForm((current) => ({ ...current, height: event.target.value }))}
+                    className="h-10 w-full bg-white px-3 text-[13px] text-[color:var(--qc-ink-1)] outline-none focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                    style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
+                  />
+                </label>
+              </div>
+
+              <label className="flex items-center gap-2 text-[12px] text-[color:var(--qc-ink-2)]">
+                <input
+                  type="checkbox"
+                  checked={editForm.l_shape}
+                  onChange={(event) => setEditForm((current) => ({ ...current, l_shape: event.target.checked }))}
+                  className="h-4 w-4"
+                />
+                L-shape
+              </label>
+
+              {editForm.l_shape ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+                      L-width (in)
+                    </span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={editForm.l_width}
+                      onChange={(event) => setEditForm((current) => ({ ...current, l_width: event.target.value }))}
+                      className="h-10 w-full bg-white px-3 text-[13px] text-[color:var(--qc-ink-1)] outline-none focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                      style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+                      L-height (in)
+                    </span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={editForm.l_height}
+                      onChange={(event) => setEditForm((current) => ({ ...current, l_height: event.target.value }))}
+                      className="h-10 w-full bg-white px-3 text-[13px] text-[color:var(--qc-ink-1)] outline-none focus:ring-4 focus:ring-[rgba(247,134,57,0.14)]"
+                      style={{ border: "1px solid var(--qc-line)", borderRadius: "var(--qc-radius-sharp)" }}
+                    />
+                  </label>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditTargetEntry(null);
+                  setEditForm(null);
+                }}
+                disabled={editRunning}
+                className="flex-1 bg-white py-3 text-[13px] font-medium text-[color:var(--qc-ink-1)] transition-colors hover:bg-[rgba(0,0,0,0.04)] disabled:opacity-60"
+                style={{
+                  border: "1px solid var(--qc-line)",
+                  borderRadius: "var(--qc-radius-sharp)",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitEditEntry}
+                disabled={editRunning}
+                className="flex-1 py-3 text-[13px] font-medium text-white transition-colors hover:bg-[#232323] disabled:cursor-not-allowed disabled:opacity-60"
+                style={{
+                  backgroundColor: "var(--qc-ink-1)",
+                  borderRadius: "var(--qc-radius-sharp)",
+                }}
+              >
+                {editRunning ? "Saving…" : "Save changes"}
               </button>
             </div>
           </div>
