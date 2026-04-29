@@ -78,7 +78,15 @@ export async function fetchPrivateRemnants(request, authContext = null) {
     && (archivedRequest === "1" || archivedRequest === "true" || archivedRequest === "all" || archivedRequest === "include");
 
   let resolvedMaterialIds = [...materialIds];
-  let query = requiredAuthed.client
+  // Archived rows are hidden by an RLS policy on public.remnants
+  // (`using (deleted_at is null)`). When a super admin asks for the
+  // archived-only view we route through the service-role client so
+  // those rows become visible; everything else keeps using the
+  // auth-scoped client so per-role scoping stays intact.
+  const queryClient = includeArchived
+    ? getWriteClient(requiredAuthed.client)
+    : requiredAuthed.client;
+  let query = queryClient
     .from("remnants")
     .select(`
       ${REMNANT_SELECT},
