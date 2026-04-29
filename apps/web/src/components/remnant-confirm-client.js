@@ -958,33 +958,6 @@ export default function RemnantConfirmClient({ profile = null }) {
               <p className="text-[13px] text-[color:var(--qc-ink-3)]">
                 Enter a remnant number above to begin scanning
               </p>
-              {holdCount === null || holdCount === 0 ? (
-                <button
-                  type="button"
-                  onClick={() => setHoldConfirmOpen(true)}
-                  className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-[12px] font-medium transition-colors"
-                  style={{
-                    backgroundColor: "var(--qc-status-hold-bg)",
-                    color: "var(--qc-status-hold-fg)",
-                    border: "1px solid var(--qc-line)",
-                    borderRadius: "var(--qc-radius-sharp)",
-                  }}
-                >
-                  <svg
-                    className="h-3.5 w-3.5"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    aria-hidden="true"
-                  >
-                    <rect x="3" y="7" width="10" height="8" rx="1" />
-                    <path d="M5.5 7V5a2.5 2.5 0 015 0v2" />
-                  </svg>
-                  Start inventory double check
-                </button>
-              ) : null}
             </div>
           ) : null}
         </section>
