@@ -486,7 +486,8 @@ export async function fetchInventoryCheckSession(client, authed, sessionId) {
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   }
 
-  const [missingEntries, reviewEntries, duplicateEntries] = await Promise.all([
+  const [seenEntries, missingEntries, reviewEntries, duplicateEntries] = await Promise.all([
+    fetchOutcomeEntries("seen"),
     fetchOutcomeEntries("missing"),
     fetchOutcomeEntries("issue"),
     fetchOutcomeEntries("duplicate"),
@@ -518,6 +519,7 @@ export async function fetchInventoryCheckSession(client, authed, sessionId) {
     })),
     recent,
     not_in_db_entries: notInDbEntries,
+    seen_entries: seenEntries,
     missing_entries: missingEntries,
     review_entries: reviewEntries,
     duplicate_entries: duplicateEntriesWithLocations,

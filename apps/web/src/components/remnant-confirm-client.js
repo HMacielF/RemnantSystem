@@ -129,6 +129,7 @@ export default function RemnantConfirmClient({ profile = null }) {
   const [expandedEntryId, setExpandedEntryId] = useState(null);
   const [archiveTargetEntry, setArchiveTargetEntry] = useState(null);
   const [archiveRunning, setArchiveRunning] = useState(false);
+  const [selectedSummaryTab, setSelectedSummaryTab] = useState(null);
   const inputRef = useRef(null);
   const locationRef = useRef(null);
   const lookupRequestIdRef = useRef(0);
@@ -227,6 +228,21 @@ export default function RemnantConfirmClient({ profile = null }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
+  useEffect(() => {
+    if (selectedSummaryTab) return;
+    const summary = sessionSummary?.summary;
+    if (!summary) return;
+    const priority = [
+      ["duplicate", summary.duplicate_count || 0],
+      ["missing", summary.missing_count || 0],
+      ["issue", summary.issue_count || 0],
+      ["not_in_db", summary.not_in_db_count || 0],
+      ["seen", summary.seen_count || 0],
+    ];
+    const firstNonEmpty = priority.find(([, count]) => count > 0);
+    if (firstNonEmpty) setSelectedSummaryTab(firstNonEmpty[0]);
+  }, [sessionSummary, selectedSummaryTab]);
+
   async function endInventoryPass() {
     if (!sessionId) return;
     setEndPassRunning(true);
@@ -265,6 +281,7 @@ export default function RemnantConfirmClient({ profile = null }) {
       setLookupResult(null);
       setLastResolvedLookup(null);
       setSessionSummary(null);
+      setSelectedSummaryTab(null);
 
       const payload = await apiFetch("/api/remnant-checks", {
         method: "POST",
@@ -1473,6 +1490,7 @@ export default function RemnantConfirmClient({ profile = null }) {
             >
               {[
                 {
+                  key: "seen",
                   label: "Seen",
                   value: sessionSummary.summary.seen_count,
                   bg: "var(--qc-status-available-bg)",
@@ -1480,6 +1498,7 @@ export default function RemnantConfirmClient({ profile = null }) {
                   dot: "var(--qc-status-available-dot)",
                 },
                 {
+                  key: "missing",
                   label: "Missing",
                   value: sessionSummary.summary.missing_count,
                   bg: "var(--qc-status-sold-bg)",
@@ -1487,6 +1506,7 @@ export default function RemnantConfirmClient({ profile = null }) {
                   dot: "var(--qc-status-sold-dot)",
                 },
                 {
+                  key: "issue",
                   label: "Review",
                   value: sessionSummary.summary.issue_count,
                   bg: "var(--qc-status-hold-bg)",
@@ -1494,6 +1514,7 @@ export default function RemnantConfirmClient({ profile = null }) {
                   dot: "var(--qc-status-hold-dot)",
                 },
                 {
+                  key: "not_in_db",
                   label: "Not in DB",
                   value: sessionSummary.summary.not_in_db_count,
                   bg: "var(--qc-status-pending-bg)",
@@ -1503,6 +1524,7 @@ export default function RemnantConfirmClient({ profile = null }) {
                 ...((sessionSummary.summary.duplicate_count || 0) > 0
                   ? [
                       {
+                        key: "duplicate",
                         label: "Duplicate",
                         value: sessionSummary.summary.duplicate_count,
                         bg: "var(--qc-orange-wash)",
@@ -1511,30 +1533,138 @@ export default function RemnantConfirmClient({ profile = null }) {
                       },
                     ]
                   : []),
-              ].map((tile) => (
-                <div
-                  key={tile.label}
-                  className="bg-[color:var(--qc-bg-surface)] px-4 py-4"
-                >
-                  <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
-                    <span
-                      aria-hidden="true"
-                      className="inline-block h-1.5 w-1.5 rounded-full"
-                      style={{ backgroundColor: tile.dot }}
-                    />
-                    {tile.label}
-                  </p>
-                  <p
-                    className="mt-1 text-[24px] font-medium leading-none tracking-[-0.01em]"
-                    style={{ color: tile.value > 0 ? tile.fg : "var(--qc-ink-3)" }}
+              ].map((tile) => {
+                const isSelected = selectedSummaryTab === tile.key;
+                return (
+                  <button
+                    key={tile.key}
+                    type="button"
+                    onClick={() => {
+                      setSelectedSummaryTab(tile.key);
+                      setExpandedEntryId(null);
+                    }}
+                    aria-pressed={isSelected}
+                    className="px-4 py-4 text-left transition-colors hover:bg-[rgba(0,0,0,0.02)]"
+                    style={{
+                      backgroundColor: isSelected ? tile.bg : "var(--qc-bg-surface)",
+                      borderBottom: isSelected ? `2px solid ${tile.dot}` : "2px solid transparent",
+                    }}
                   >
-                    {tile.value}
-                  </p>
-                </div>
-              ))}
+                    <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+                      <span
+                        aria-hidden="true"
+                        className="inline-block h-1.5 w-1.5 rounded-full"
+                        style={{ backgroundColor: tile.dot }}
+                      />
+                      {tile.label}
+                    </p>
+                    <p
+                      className="mt-1 text-[24px] font-medium leading-none tracking-[-0.01em]"
+                      style={{ color: tile.value > 0 ? tile.fg : "var(--qc-ink-3)" }}
+                    >
+                      {tile.value}
+                    </p>
+                  </button>
+                );
+              })}
             </div>
 
-            {sessionSummary.duplicate_entries?.length ? (
+            {selectedSummaryTab === "seen" ? (
+              <div
+                className="px-5 py-4"
+                style={{ borderTop: "1px solid var(--qc-line)" }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10.5px] font-medium uppercase tracking-[0.20em] text-[color:var(--qc-ink-3)]">
+                    Seen
+                  </p>
+                  <span className="text-[10.5px] uppercase tracking-[0.18em] text-[color:var(--qc-ink-3)]">
+                    Confirmed
+                  </span>
+                </div>
+                {!(sessionSummary.seen_entries?.length) ? (
+                  <p className="mt-3 text-[12px] text-[color:var(--qc-ink-3)]">
+                    No remnants confirmed yet.
+                  </p>
+                ) : null}
+                <ul className="mt-3">
+                  {(sessionSummary.seen_entries || []).map((entry) => {
+                    const isExpanded = expandedEntryId === entry.remnant_id;
+                    return (
+                      <li
+                        key={entry.id}
+                        style={{ borderTop: "1px solid var(--qc-line)" }}
+                      >
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => toggleEntryExpansion(entry.remnant_id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              toggleEntryExpansion(entry.remnant_id);
+                            }
+                          }}
+                          className="flex cursor-pointer items-start justify-between gap-3 py-2.5 transition-colors hover:bg-[rgba(0,0,0,0.02)]"
+                        >
+                          <div className="min-w-0">
+                            <p className="flex flex-wrap items-center gap-1.5">
+                              <span
+                                className="text-[14px] font-medium text-[color:var(--qc-ink-1)]"
+                                style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                              >
+                                #{entry.moraware_remnant_id || entry.remnant_id}
+                              </span>
+                              {entry.location ? (
+                                <span
+                                  className="px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em]"
+                                  style={{
+                                    backgroundColor: "var(--qc-status-available-bg)",
+                                    color: "var(--qc-status-available-fg)",
+                                    borderRadius: "var(--qc-radius-sharp)",
+                                  }}
+                                >
+                                  {entry.location}
+                                </span>
+                              ) : null}
+                            </p>
+                            {entry.name ? (
+                              <p className="mt-0.5 truncate text-[12px] text-[color:var(--qc-ink-2)]">
+                                {entry.name}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span
+                              className="text-[11px] text-[color:var(--qc-ink-3)]"
+                              style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                            >
+                              {formatScanTime(entry.created_at)}
+                            </span>
+                            <svg
+                              className="h-3.5 w-3.5 text-[color:var(--qc-ink-3)] transition-transform"
+                              style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
+                              viewBox="0 0 16 16"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <path d="M4 6l4 4 4-4" />
+                            </svg>
+                          </div>
+                        </div>
+                        {isExpanded ? renderExpandedEntryPanel(entry) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ) : null}
+
+            {selectedSummaryTab === "duplicate" ? (
               <div
                 className="px-5 py-4"
                 style={{ borderTop: "1px solid var(--qc-line)" }}
@@ -1550,8 +1680,13 @@ export default function RemnantConfirmClient({ profile = null }) {
                     Resolve physically
                   </span>
                 </div>
+                {!(sessionSummary.duplicate_entries?.length) ? (
+                  <p className="mt-3 text-[12px] text-[color:var(--qc-ink-3)]">
+                    No duplicates detected.
+                  </p>
+                ) : null}
                 <ul className="mt-3">
-                  {sessionSummary.duplicate_entries.map((entry) => {
+                  {(sessionSummary.duplicate_entries || []).map((entry) => {
                     const isExpanded = expandedEntryId === entry.remnant_id;
                     return (
                       <li
@@ -1627,7 +1762,7 @@ export default function RemnantConfirmClient({ profile = null }) {
               </div>
             ) : null}
 
-            {sessionSummary.missing_entries?.length ? (
+            {selectedSummaryTab === "missing" ? (
               <div
                 className="px-5 py-4"
                 style={{ borderTop: "1px solid var(--qc-line)" }}
@@ -1640,8 +1775,13 @@ export default function RemnantConfirmClient({ profile = null }) {
                     Investigate
                   </span>
                 </div>
+                {!(sessionSummary.missing_entries?.length) ? (
+                  <p className="mt-3 text-[12px] text-[color:var(--qc-ink-3)]">
+                    No missing remnants — yet.
+                  </p>
+                ) : null}
                 <ul className="mt-3">
-                  {sessionSummary.missing_entries.map((entry) => {
+                  {(sessionSummary.missing_entries || []).map((entry) => {
                     const isExpanded = expandedEntryId === entry.remnant_id;
                     return (
                       <li
@@ -1717,7 +1857,7 @@ export default function RemnantConfirmClient({ profile = null }) {
               </div>
             ) : null}
 
-            {sessionSummary.review_entries?.length ? (
+            {selectedSummaryTab === "issue" ? (
               <div
                 className="px-5 py-4"
                 style={{ borderTop: "1px solid var(--qc-line)" }}
@@ -1730,8 +1870,13 @@ export default function RemnantConfirmClient({ profile = null }) {
                     Follow up
                   </span>
                 </div>
+                {!(sessionSummary.review_entries?.length) ? (
+                  <p className="mt-3 text-[12px] text-[color:var(--qc-ink-3)]">
+                    Nothing flagged for review.
+                  </p>
+                ) : null}
                 <ul className="mt-3">
-                  {sessionSummary.review_entries.map((entry) => {
+                  {(sessionSummary.review_entries || []).map((entry) => {
                     const isExpanded = expandedEntryId === entry.remnant_id;
                     return (
                       <li
@@ -1793,7 +1938,7 @@ export default function RemnantConfirmClient({ profile = null }) {
               </div>
             ) : null}
 
-            {sessionSummary.not_in_db_entries?.length ? (
+            {selectedSummaryTab === "not_in_db" ? (
               <div
                 className="px-5 py-4"
                 style={{ borderTop: "1px solid var(--qc-line)" }}
@@ -1806,8 +1951,13 @@ export default function RemnantConfirmClient({ profile = null }) {
                     Add manually
                   </span>
                 </div>
+                {!(sessionSummary.not_in_db_entries?.length) ? (
+                  <p className="mt-3 text-[12px] text-[color:var(--qc-ink-3)]">
+                    No physical-only items recorded.
+                  </p>
+                ) : null}
                 <ul className="mt-3">
-                  {sessionSummary.not_in_db_entries.map((entry) => (
+                  {(sessionSummary.not_in_db_entries || []).map((entry) => (
                     <li
                       key={entry.id}
                       className="flex items-center justify-between gap-3 py-2.5"
