@@ -25,6 +25,7 @@ function deriveDisplayName(profile) {
 
 export default function PrivateHeader({ profile }) {
   const isSuperAdmin = profile?.system_role === "super_admin";
+  const canInventoryCheck = isSuperAdmin || profile?.can_inventory_check === true;
   const pathname = usePathname() || "/";
 
   return (
@@ -65,13 +66,15 @@ export default function PrivateHeader({ profile }) {
                 active={isNavLinkActive(pathname, "/admin")}
                 hideBelow="md"
               />
-              <NavBoldLink
-                href="/manage/confirm"
-                label="Inventory Check"
-                active={isNavLinkActive(pathname, "/manage/confirm")}
-                hideBelow="lg"
-              />
             </>
+          ) : null}
+          {canInventoryCheck ? (
+            <NavBoldLink
+              href="/manage/inventory-check"
+              label="Inventory Check"
+              active={isNavLinkActive(pathname, "/manage/inventory-check")}
+              hideBelow="lg"
+            />
           ) : null}
 
           <span className="flex items-center gap-3">

@@ -184,12 +184,17 @@ export function applyAuthCookies(response, authContext) {
 export async function fetchProfile(client, userId) {
   const { data, error } = await client
     .from("profiles")
-    .select("id,email,full_name,system_role,company_id,active")
+    .select("id,email,full_name,system_role,company_id,active,can_inventory_check")
     .eq("id", userId)
     .maybeSingle();
 
   if (error) throw error;
   return data;
+}
+
+export function canRunInventoryCheck(profile) {
+  if (!profile) return false;
+  return profile.system_role === "super_admin" || profile.can_inventory_check === true;
 }
 
 export async function createOptionalAuthedContext(request, allowedRoles = []) {

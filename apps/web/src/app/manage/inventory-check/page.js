@@ -1,13 +1,13 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import RemnantConfirmClient from "@/components/remnant-confirm-client";
-import { createRequiredAuthedContext } from "@/server/private-api";
+import { canRunInventoryCheck, createRequiredAuthedContext } from "@/server/private-api";
 
 export const metadata = {
-  title: "Inventory Confirm | Remnant System",
+  title: "Inventory Check | Remnant System",
 };
 
-async function loadSuperAdminProfile() {
+async function loadInventoryCheckProfile() {
   const cookieStore = await cookies();
   const authContext = await createRequiredAuthedContext({
     cookies: {
@@ -21,14 +21,14 @@ async function loadSuperAdminProfile() {
     redirect("/portal");
   }
 
-  if (authContext.profile.system_role !== "super_admin") {
+  if (!canRunInventoryCheck(authContext.profile)) {
     redirect("/manage");
   }
 
   return authContext.profile;
 }
 
-export default async function ManageConfirmPage() {
-  const profile = await loadSuperAdminProfile();
+export default async function ManageInventoryCheckPage() {
+  const profile = await loadInventoryCheckProfile();
   return <RemnantConfirmClient profile={profile} />;
 }

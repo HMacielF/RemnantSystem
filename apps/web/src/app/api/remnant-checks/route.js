@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   bulkInventoryHold,
+  canRunInventoryCheck,
   endInventoryPass,
   fetchActiveInventorySession,
   fetchInventoryCheckSession,
@@ -10,9 +11,19 @@ import {
   resolveNotInDbEntry,
 } from "@/server/private-api";
 import { withAuth } from "@/server/withApiHandler";
-import { SUPER_ADMIN } from "@/server/roles";
 
-export const GET = withAuth(SUPER_ADMIN, async (request, authed) => {
+function denyIfNoInventoryCheckAccess(authed) {
+  if (canRunInventoryCheck(authed?.profile)) return null;
+  return NextResponse.json(
+    { error: "You don't have access to inventory check." },
+    { status: 403 },
+  );
+}
+
+export const GET = withAuth([], async (request, authed) => {
+  const denied = denyIfNoInventoryCheckAccess(authed);
+  if (denied) return denied;
+
   const { searchParams } = request.nextUrl;
   const number = String(searchParams.get("number") || "").trim();
   const sessionId = String(searchParams.get("session_id") || "").trim();
@@ -36,7 +47,10 @@ export const GET = withAuth(SUPER_ADMIN, async (request, authed) => {
   );
 });
 
-export const POST = withAuth(SUPER_ADMIN, async (request, authed) => {
+export const POST = withAuth([], async (request, authed) => {
+  const denied = denyIfNoInventoryCheckAccess(authed);
+  if (denied) return denied;
+
   const body = await request.json();
   if (body?.action === "bulk_inventory_hold") {
     return NextResponse.json(

@@ -43,6 +43,7 @@ const ADMIN_DB_TABLES = {
             system_role: { type: "enum", required: true, options: ["super_admin", "manager", "status_user"] },
             company_id: { type: "bigint" },
             active: { type: "boolean", defaultValue: true },
+            can_inventory_check: { type: "boolean", defaultValue: false },
             created_at: { type: "timestamptz", editable: false },
         },
     },
