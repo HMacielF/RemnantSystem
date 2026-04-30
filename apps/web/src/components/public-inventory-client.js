@@ -25,7 +25,9 @@ function useDebouncedValue(value, delayMs = 250) {
 }
 
 function imageSrc(remnant) {
-  return remnant.image || remnant.source_image_url || "";
+  // source_image_url points at the supplier (Moraware) listing which requires
+  // auth, so it's never a usable fallback. Only show our own bucket URL.
+  return remnant?.image || "";
 }
 
 function displayRemnantId(remnant) {

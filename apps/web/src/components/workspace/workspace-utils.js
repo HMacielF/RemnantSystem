@@ -19,7 +19,9 @@ export const TOAST_DURATION_MS = 3600;
 export const HOLD_REQUEST_REFRESH_MS = 15_000;
 
 export function imageSrc(remnant) {
- return remnant.image || remnant.source_image_url || "";
+ // source_image_url points at the supplier (Moraware) listing which requires
+ // auth, so it's never a usable fallback. Only show our own bucket URL.
+ return remnant?.image || "";
 }
 
 export function displayRemnantId(remnant) {
