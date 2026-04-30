@@ -118,10 +118,23 @@ export default function PrivateWorkspaceClient() {
  return uniqueMaterialOptions([...availableMaterialOptions, ...filters.materials]);
  }, [availableMaterialOptions, filters.materials]);
  const availableColors = useMemo(() => {
- return Array.isArray(availableColorOptions)
- ? [...availableColorOptions]
- : [];
- }, [availableColorOptions]);
+ const seen = new Set();
+ const out = [];
+ const candidates = [
+ ...(Array.isArray(availableColorOptions) ? availableColorOptions : []),
+ ...colorOptionsFromRows(remnants),
+ ...(Array.isArray(filters.colors) ? filters.colors : []),
+ ];
+ for (const raw of candidates) {
+ const name = String(raw || "").trim();
+ if (!name) continue;
+ const key = name.toLowerCase();
+ if (seen.has(key)) continue;
+ seen.add(key);
+ out.push(name);
+ }
+ return out.sort((a, b) => a.localeCompare(b));
+ }, [availableColorOptions, remnants, filters.colors]);
  const cards = useMemo(() => {
  const allowedColors = (filters.colors || []).length
  ? new Set((filters.colors || []).map((c) => normalizeStoneLookupName(c)))
