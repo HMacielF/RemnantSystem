@@ -167,8 +167,12 @@ function remnantColors(remnant) {
   return Array.isArray(remnant?.colors) ? remnant.colors.filter(Boolean) : [];
 }
 
-function colorSwatchStyle(colorName) {
+function colorSwatchStyle(colorName, hexLookup = null) {
   const normalized = normalizeStoneLookupName(colorName);
+  if (hexLookup && typeof hexLookup.get === "function") {
+    const hex = hexLookup.get(normalized);
+    if (hex) return { backgroundColor: hex };
+  }
   const palette = {
     beige: { backgroundColor: "#d7b98c" },
     black: { backgroundColor: "#1f1d1b" },
@@ -344,6 +348,7 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
   const [allRemnants, setAllRemnants] = useState([]);
   const [salesReps, setSalesReps] = useState([]);
   const [materialOptions, setMaterialOptions] = useState([]);
+  const [colorHexRows, setColorHexRows] = useState([]);
   const [lookupsLoaded, setLookupsLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -411,6 +416,9 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
               ? lookupPayload.materials.map((row) => row.name).filter(Boolean)
               : [],
           ),
+        );
+        setColorHexRows(
+          Array.isArray(lookupPayload?.colors) ? lookupPayload.colors : [],
         );
         const safeRows = Array.isArray(allRows) ? allRows : [];
         setAllRemnants(safeRows);
@@ -642,6 +650,16 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
     }
     return result.sort((a, b) => a.localeCompare(b));
   }, [allRemnants]);
+
+  const colorHexLookup = useMemo(() => {
+    const map = new Map();
+    for (const row of colorHexRows) {
+      const key = String(row?.name || "").trim().toLowerCase();
+      const hex = String(row?.hex || "").trim();
+      if (key && hex) map.set(key, hex);
+    }
+    return map;
+  }, [colorHexRows]);
 
   const modalImageItems = useMemo(
     () => cards.filter((remnant) => Boolean(imageSrc(remnant))),
@@ -941,7 +959,7 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                             onClick={() => toggleColorFilter(color)}
                             className="inline-flex h-6 w-6 items-center justify-center rounded-full transition-transform hover:scale-110"
                             style={{
-                              ...colorSwatchStyle(color),
+                              ...colorSwatchStyle(color, colorHexLookup),
                               boxShadow: checked
                                 ? "0 0 0 1px var(--qc-bg-page), 0 0 0 2px var(--qc-ink-1)"
                                 : "inset 0 0 0 1px rgba(0,0,0,0.10)",
@@ -1117,7 +1135,7 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                                     aria-hidden="true"
                                     className="block h-3.5 w-3.5 rounded-full transition-transform group-hover/swatch:scale-110"
                                     style={{
-                                      ...colorSwatchStyle(color),
+                                      ...colorSwatchStyle(color, colorHexLookup),
                                       boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.10)",
                                     }}
                                   />
@@ -1252,7 +1270,7 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                                 aria-hidden="true"
                                 className="block h-3.5 w-3.5 rounded-full transition-transform group-hover/swatch:scale-110"
                                 style={{
-                                  ...colorSwatchStyle(color),
+                                  ...colorSwatchStyle(color, colorHexLookup),
                                   boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.10)",
                                 }}
                               />
@@ -1469,7 +1487,7 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
                           aria-hidden="true"
                           className="h-3.5 w-3.5 rounded-full"
                           style={{
-                            ...colorSwatchStyle(color),
+                            ...colorSwatchStyle(color, colorHexLookup),
                             boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.10)",
                           }}
                           title={color}

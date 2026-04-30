@@ -849,6 +849,151 @@ export async function updateRemnantImage(client, authed, remnantId, body) {
   return formatRemnant(pricedRow);
 }
 
+async function clearRemnantImageRow(writeClient, remnantId) {
+  const { data: existingRemnant, error: existingError } = await writeClient
+    .from("remnants")
+    .select("id,moraware_remnant_id,company_id,image,image_path")
+    .eq("id", remnantId)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (!existingRemnant) {
+    const error = new Error("Remnant not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const { data, error } = await writeClient
+    .from("remnants")
+    .update({ image: null, image_path: null })
+    .eq("id", remnantId)
+    .select(REMNANT_SELECT)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    const nextError = new Error("Remnant not found");
+    nextError.statusCode = 404;
+    throw nextError;
+  }
+
+  return { existingRemnant, data };
+}
+
+export async function unlinkRemnantImage(client, authed, remnantId) {
+  if (!remnantId) {
+    const error = new Error("Invalid remnant id");
+    error.statusCode = 400;
+    throw error;
+  }
+  const writeClient = getWriteClient(client);
+  const { existingRemnant, data } = await clearRemnantImageRow(writeClient, remnantId);
+
+  runBestEffort(async () => {
+    await writeAuditLog(writeClient, authed, {
+      event_type: "remnant_image_unlinked",
+      entity_type: "remnant",
+      entity_id: data.id,
+      remnant_id: data.id,
+      company_id: data.company_id,
+      message: `Unlinked image for remnant #${data.moraware_remnant_id || data.id}`,
+      old_data: existingRemnant,
+      new_data: {
+        id: data.id,
+        moraware_remnant_id: data.moraware_remnant_id,
+        company_id: data.company_id,
+        image: null,
+        image_path: null,
+      },
+      meta: { source: "api", action: "image_unlink" },
+    });
+  }, "Unlink remnant image audit");
+
+  const [pricedRow] = await withRemnantPriceFallback(writeClient, [data]);
+  return formatRemnant(pricedRow);
+}
+
+export async function deleteRemnantImage(client, authed, remnantId) {
+  if (!remnantId) {
+    const error = new Error("Invalid remnant id");
+    error.statusCode = 400;
+    throw error;
+  }
+  const writeClient = getWriteClient(client);
+  const { existingRemnant, data } = await clearRemnantImageRow(writeClient, remnantId);
+
+  const bucket = process.env.SUPABASE_BUCKET || "remnant-images";
+  const oldPath = String(existingRemnant?.image_path || "").trim();
+  let storageRemoved = false;
+  if (oldPath) {
+    try {
+      const { error: removeError } = await writeClient.storage.from(bucket).remove([oldPath]);
+      if (!removeError) storageRemoved = true;
+      else {
+        // Treat 404-ish responses (already gone) as a successful no-op.
+        const message = String(removeError?.message || "").toLowerCase();
+        if (message.includes("not found") || message.includes("does not exist")) {
+          storageRemoved = true;
+        } else {
+          throw removeError;
+        }
+      }
+    } catch (storageError) {
+      runBestEffort(async () => {
+        console.warn("[deleteRemnantImage] storage remove failed", oldPath, storageError);
+      }, "Storage remove warning");
+    }
+  } else {
+    storageRemoved = true; // nothing to remove
+  }
+
+  runBestEffort(async () => {
+    await writeAuditLog(writeClient, authed, {
+      event_type: "remnant_image_deleted",
+      entity_type: "remnant",
+      entity_id: data.id,
+      remnant_id: data.id,
+      company_id: data.company_id,
+      message: `Deleted image for remnant #${data.moraware_remnant_id || data.id}`,
+      old_data: existingRemnant,
+      new_data: {
+        id: data.id,
+        moraware_remnant_id: data.moraware_remnant_id,
+        company_id: data.company_id,
+        image: null,
+        image_path: null,
+        storage_removed: storageRemoved,
+      },
+      meta: { source: "api", action: "image_delete", bucket, path: oldPath || null },
+    });
+  }, "Delete remnant image audit");
+
+  const [pricedRow] = await withRemnantPriceFallback(writeClient, [data]);
+  return formatRemnant(pricedRow);
+}
+
+export async function fetchExternalIdsSummary(client) {
+  const writeClient = getWriteClient(client);
+  const { data, error } = await writeClient
+    .from("remnants")
+    .select("id, moraware_remnant_id, name, status")
+    .is("deleted_at", null)
+    .not("moraware_remnant_id", "is", null)
+    .order("moraware_remnant_id", { ascending: true });
+  if (error) throw error;
+  const rows = Array.isArray(data) ? data : [];
+  let max = 0;
+  const used = rows.map((row) => {
+    const externalId = Number(row.moraware_remnant_id);
+    if (Number.isFinite(externalId) && externalId > max) max = externalId;
+    return {
+      id: externalId,
+      remnant_id: row.id,
+      status: String(row.status || "").trim().toLowerCase() || "available",
+      name: String(row.name || "").trim() || null,
+    };
+  });
+  return { max, used };
+}
+
 export async function fetchRemnantHold(client, remnantId) {
   if (!remnantId) {
     const error = new Error("Invalid remnant id");

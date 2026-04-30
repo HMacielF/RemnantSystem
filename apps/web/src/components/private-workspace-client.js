@@ -114,6 +114,15 @@ export default function PrivateWorkspaceClient() {
  : [],
  [lookups.colors],
  );
+ const colorHexLookup = useMemo(() => {
+ const map = new Map();
+ for (const row of activeLookupColors) {
+ const key = String(row?.name || "").trim().toLowerCase();
+ const hex = String(row?.hex || "").trim();
+ if (key && hex) map.set(key, hex);
+ }
+ return map;
+ }, [activeLookupColors]);
  const materialFilterOptions = useMemo(() => {
  return uniqueMaterialOptions([...availableMaterialOptions, ...filters.materials]);
  }, [availableMaterialOptions, filters.materials]);
@@ -989,7 +998,7 @@ export default function PrivateWorkspaceClient() {
  >
  <span className="flex w-full items-center justify-between gap-3">
  <span className="text-[10.5px] font-semibold uppercase tracking-[0.24em] text-[color:var(--qc-ink-3)]">
- My holds
+ {profile?.system_role === "super_admin" ? "All holds" : "My holds"}
  </span>
  </span>
  <span className="text-[36px] font-medium leading-none tracking-[-0.02em] text-[color:var(--qc-ink-1)]">
@@ -1005,7 +1014,7 @@ export default function PrivateWorkspaceClient() {
  >
  <span className="flex w-full items-center justify-between gap-3">
  <span className="text-[10.5px] font-semibold uppercase tracking-[0.24em] text-[color:var(--qc-ink-3)]">
- My sold
+ {profile?.system_role === "super_admin" ? "All sold" : "My sold"}
  </span>
  </span>
  <span className="text-[36px] font-medium leading-none tracking-[-0.02em] text-[color:var(--qc-ink-1)]">
@@ -1277,7 +1286,7 @@ export default function PrivateWorkspaceClient() {
  }
  className="inline-flex h-6 w-6 items-center justify-center rounded-full transition-transform hover:scale-110"
  style={{
- ...colorSwatchStyle(color),
+ ...colorSwatchStyle(color, colorHexLookup),
  boxShadow: checked
  ? "0 0 0 1px var(--qc-bg-page), 0 0 0 2px var(--qc-ink-1)"
  : "inset 0 0 0 1px rgba(0,0,0,0.10)",
@@ -1664,7 +1673,7 @@ export default function PrivateWorkspaceClient() {
  aria-hidden="true"
  className="block h-3.5 w-3.5 rounded-full transition-transform group-hover/swatch:scale-110"
  style={{
- ...colorSwatchStyle(color),
+ ...colorSwatchStyle(color, colorHexLookup),
  boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.10)",
  }}
  />

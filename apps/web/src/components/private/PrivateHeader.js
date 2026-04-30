@@ -25,6 +25,7 @@ function deriveDisplayName(profile) {
 
 export default function PrivateHeader({ profile }) {
   const isSuperAdmin = profile?.system_role === "super_admin";
+  const isManager = isSuperAdmin || profile?.system_role === "manager";
   const canInventoryCheck = isSuperAdmin || profile?.can_inventory_check === true;
   const pathname = usePathname() || "/";
 
@@ -67,6 +68,14 @@ export default function PrivateHeader({ profile }) {
                 hideBelow="md"
               />
             </>
+          ) : null}
+          {isManager ? (
+            <NavBoldLink
+              href="/manage/ids"
+              label="IDs"
+              active={isNavLinkActive(pathname, "/manage/ids")}
+              hideBelow="lg"
+            />
           ) : null}
           {canInventoryCheck ? (
             <NavBoldLink

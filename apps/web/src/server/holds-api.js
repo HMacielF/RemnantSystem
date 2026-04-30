@@ -73,7 +73,8 @@ export async function fetchHoldRequests(client, profile, searchParams) {
 
 export async function fetchMyHolds(client, profile) {
   const writeClient = getWriteClient(client);
-  const { data, error } = await writeClient
+  const isSuperAdmin = profile?.system_role === "super_admin";
+  let query = writeClient
     .from("holds")
     .select(`
       id,
@@ -94,9 +95,12 @@ export async function fetchMyHolds(client, profile) {
         ${REMNANT_WITH_STONE_SELECT}
       )
     `)
-    .eq("hold_owner_user_id", profile.id)
     .in("status", ["active", "expired"])
     .order("expires_at", { ascending: true });
+  if (!isSuperAdmin) {
+    query = query.eq("hold_owner_user_id", profile.id);
+  }
+  const { data, error } = await query;
 
   if (error) throw error;
 
@@ -105,13 +109,16 @@ export async function fetchMyHolds(client, profile) {
   const requestMap = new Map();
 
   if (remnantIds.length) {
-    const { data: requestRows, error: requestError } = await writeClient
+    let requestQuery = writeClient
       .from("hold_requests")
       .select("id, remnant_id, requester_name, requester_email, notes, job_number, status, created_at")
-      .eq("sales_rep_user_id", profile.id)
       .eq("status", "approved")
       .in("remnant_id", remnantIds)
       .order("created_at", { ascending: false });
+    if (!isSuperAdmin) {
+      requestQuery = requestQuery.eq("sales_rep_user_id", profile.id);
+    }
+    const { data: requestRows, error: requestError } = await requestQuery;
 
     if (requestError) throw requestError;
 
@@ -151,7 +158,8 @@ export async function fetchMyHolds(client, profile) {
 
 export async function fetchMySold(client, profile) {
   const writeClient = getWriteClient(client);
-  const { data, error } = await writeClient
+  const isSuperAdmin = profile?.system_role === "super_admin";
+  let query = writeClient
     .from("remnant_sales")
     .select(`
       id,
@@ -167,9 +175,12 @@ export async function fetchMySold(client, profile) {
         ${REMNANT_WITH_STONE_SELECT}
       )
     `)
-    .eq("sold_by_user_id", profile.id)
     .order("sold_at", { ascending: false })
     .order("created_at", { ascending: false });
+  if (!isSuperAdmin) {
+    query = query.eq("sold_by_user_id", profile.id);
+  }
+  const { data, error } = await query;
 
   if (error) throw error;
 

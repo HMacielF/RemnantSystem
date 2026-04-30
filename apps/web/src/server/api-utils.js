@@ -314,9 +314,10 @@ export async function createRequiredAuthedContext(request, allowedRoles = []) {
 // ─── Lookup exports ───────────────────────────────────────────────────────────
 
 export async function fetchLookupRows(tableName, client = getReadClient()) {
+  const selectColumns = tableName === "colors" ? "id,name,active,hex" : "id,name,active";
   const { data, error } = await client
     .from(tableName)
-    .select("id,name,active")
+    .select(selectColumns)
     .eq("active", true)
     .order("name", { ascending: true });
 

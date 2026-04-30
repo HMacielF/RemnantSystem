@@ -378,6 +378,38 @@ function RemnantEditorInner({
  }
  }
 
+ async function unlinkOrDeleteImage(removeFromStorage) {
+ if (!editorForm?.image_preview) return;
+ const isExisting = editorMode === "edit" && editorForm?.id;
+ const promptText = removeFromStorage
+ ? "Delete this image entirely? The file will be removed from storage and cannot be undone."
+ : "Remove this image from the remnant? The file stays in the bucket.";
+ if (typeof window !== "undefined" && !window.confirm(promptText)) return;
+
+ if (!isExisting) {
+ // New remnant — nothing to clear server-side.
+ updateEditorImage(null, null);
+ if (editorImageInputRef.current) editorImageInputRef.current.value = "";
+ showSuccessMessage(removeFromStorage ? "Image discarded." : "Image unlinked.");
+ return;
+ }
+
+ try {
+ await apiFetch(`/api/remnants/${editorForm.id}/image`, {
+ method: "DELETE",
+ headers: { "Content-Type": "application/json" },
+ body: JSON.stringify({ removeFromStorage: Boolean(removeFromStorage) }),
+ });
+ updateEditorImage(null, null);
+ if (editorImageInputRef.current) editorImageInputRef.current.value = "";
+ showSuccessMessage(removeFromStorage
+ ? "Image deleted from storage."
+ : "Image unlinked from remnant.");
+ } catch (err) {
+ showErrorMessage(err?.message || "Failed to remove image.");
+ }
+ }
+
  async function openCropEditor() {
  const src = String(editorForm?.image_preview || "").trim();
  if (!src) {
@@ -617,14 +649,32 @@ function RemnantEditorInner({
  className="mt-2 block w-full rounded-sm border border-[color:var(--qc-line)] bg-white px-4 py-3 text-sm text-[color:var(--qc-ink-1)] file:mr-4 file:rounded-full file:border-0 file:bg-[var(--brand-ink)] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
  />
  </label>
- <div className="flex">
+ <div className="flex flex-wrap gap-2">
  <button
  type="button"
  onClick={openCropEditor}
  disabled={!editorForm.image_preview}
- className="inline-flex h-11 w-full items-center justify-center rounded-sm bg-[var(--brand-ink)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-60"
+ className="inline-flex h-11 flex-1 items-center justify-center rounded-sm bg-[var(--brand-ink)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-orange)] disabled:cursor-not-allowed disabled:opacity-60"
  >
  Crop
+ </button>
+ <button
+ type="button"
+ onClick={() => unlinkOrDeleteImage(false)}
+ disabled={!editorForm.image_preview}
+ title="Clear the image from this remnant. The file stays in the bucket."
+ className="inline-flex h-11 items-center justify-center rounded-sm border border-[color:var(--qc-line)] bg-white px-4 text-sm font-semibold text-[color:var(--qc-ink-1)] transition-colors hover:border-[var(--brand-orange)] hover:bg-[color:var(--qc-bg-page)] disabled:cursor-not-allowed disabled:opacity-60"
+ >
+ Unlink
+ </button>
+ <button
+ type="button"
+ onClick={() => unlinkOrDeleteImage(true)}
+ disabled={!editorForm.image_preview}
+ title="Permanently delete the image and remove the file from the bucket."
+ className="inline-flex h-11 items-center justify-center rounded-sm border border-rose-300 bg-white px-4 text-sm font-semibold text-rose-700 transition-colors hover:border-rose-500 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+ >
+ Delete
  </button>
  </div>
  </div>
@@ -690,7 +740,7 @@ function RemnantEditorInner({
  >
  <span
  className="h-6 w-6 rounded-full border border-black/10 "
- style={colorSwatchStyle(row.name)}
+ style={row?.hex ? { backgroundColor: row.hex } : colorSwatchStyle(row.name)}
  aria-hidden="true"
  />
  <span className="text-[rgba(35,35,35,0.82)]">{row.name}</span>
@@ -1010,7 +1060,7 @@ function RemnantEditorInner({
  ? "border-[var(--brand-orange)] ring-4 ring-[rgba(247,134,57,0.16)] "
  : "border-[color:var(--qc-line)] hover:border-[rgba(247,134,57,0.35)] hover:scale-[1.03]"
  }`}
- style={colorSwatchStyle(row.name)}
+ style={row?.hex ? { backgroundColor: row.hex } : colorSwatchStyle(row.name)}
  title={row.name}
  aria-label={row.name}
  aria-pressed={selected}

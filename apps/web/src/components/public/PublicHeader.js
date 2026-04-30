@@ -70,6 +70,7 @@ export default function PublicHeader({ initialProfile = null } = {}) {
 
   const isAuthed = Boolean(profile);
   const isSuperAdmin = profile?.system_role === "super_admin";
+  const isManager = isSuperAdmin || profile?.system_role === "manager";
   const canInventoryCheck = isSuperAdmin || profile?.can_inventory_check === true;
   const pathname = usePathname() || "/";
 
@@ -118,6 +119,14 @@ export default function PublicHeader({ initialProfile = null } = {}) {
                 hideBelow="md"
               />
             </>
+          ) : null}
+          {isAuthed && isManager ? (
+            <NavBoldLink
+              href="/manage/ids"
+              label="IDs"
+              active={isNavLinkActive(pathname, "/manage/ids")}
+              hideBelow="lg"
+            />
           ) : null}
           {isAuthed && canInventoryCheck ? (
             <NavBoldLink

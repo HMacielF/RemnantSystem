@@ -200,6 +200,7 @@ const ADMIN_DB_TABLES = {
             id: { type: "bigint", editable: false },
             name: { type: "text", required: true },
             active: { type: "boolean", defaultValue: true },
+            hex: { type: "text" },
             created_at: { type: "timestamptz", editable: false },
             updated_at: { type: "timestamptz", editable: false },
         },

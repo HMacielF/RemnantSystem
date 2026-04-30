@@ -389,8 +389,12 @@ export function remnantColors(remnant) {
  return Array.isArray(remnant?.colors) ? remnant.colors.filter(Boolean) : [];
 }
 
-export function colorSwatchStyle(colorName) {
+export function colorSwatchStyle(colorName, hexLookup = null) {
  const normalized = normalizeStoneLookupName(colorName);
+ if (hexLookup && typeof hexLookup.get === "function") {
+ const hex = hexLookup.get(normalized);
+ if (hex) return { backgroundColor: hex };
+ }
  const palette = {
  beige: { backgroundColor: "#d7b98c" },
  black: { backgroundColor: "#1f1d1b" },

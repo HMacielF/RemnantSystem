@@ -411,11 +411,15 @@ async function fetchLatestSaleMap(client, remnantIds) {
 }
 
 export async function fetchPublicLookupRows() {
-  const { data, error } = await getPublicReadClient()
-    .from("active_remnants")
-    .select("company,material,thickness");
+  const client = getPublicReadClient();
+  const [{ data: remnantData, error: remnantError }, { data: colorData, error: colorError }] =
+    await Promise.all([
+      client.from("active_remnants").select("company,material,thickness"),
+      client.from("colors").select("id,name,active,hex").eq("active", true),
+    ]);
 
-  if (error) throw error;
+  if (remnantError) throw remnantError;
+  if (colorError && colorError.code !== "42501" /* RLS denied */) throw colorError;
 
   const uniqueRows = (values) =>
     Array.from(
@@ -429,9 +433,17 @@ export async function fetchPublicLookupRows() {
   const sortByName = (rows) => [...rows].sort((a, b) => a.name.localeCompare(b.name));
 
   return {
-    companies: sortByName(uniqueRows((data || []).map((row) => row.company))),
-    materials: sortByName(uniqueRows((data || []).map((row) => row.material))),
-    thicknesses: sortByName(uniqueRows((data || []).map((row) => row.thickness))),
+    companies: sortByName(uniqueRows((remnantData || []).map((row) => row.company))),
+    materials: sortByName(uniqueRows((remnantData || []).map((row) => row.material))),
+    thicknesses: sortByName(uniqueRows((remnantData || []).map((row) => row.thickness))),
+    colors: sortByName(
+      (colorData || []).map((row) => ({
+        id: row.id,
+        name: String(row.name || "").trim(),
+        active: row.active !== false,
+        hex: row.hex || null,
+      })).filter((row) => row.name),
+    ),
   };
 }
 
