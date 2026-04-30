@@ -138,6 +138,23 @@ export function materialOptionsFromRows(rows) {
  );
 }
 
+export function colorOptionsFromRows(rows) {
+ const seen = new Set();
+ const out = [];
+ for (const row of Array.isArray(rows) ? rows : []) {
+ const colors = Array.isArray(row?.colors) ? row.colors : [];
+ for (const color of colors) {
+ const name = String(color || "").trim();
+ if (!name) continue;
+ const key = name.toLowerCase();
+ if (seen.has(key)) continue;
+ seen.add(key);
+ out.push(name);
+ }
+ }
+ return out.sort((a, b) => a.localeCompare(b));
+}
+
 export function normalizeStoneLookupName(value) {
  return String(value || "").trim().toLowerCase();
 }

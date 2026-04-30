@@ -25,6 +25,7 @@ import {
  imageSrc,
  sharedStoneColorsForEditor,
  materialOptionsFromRows,
+ colorOptionsFromRows,
  currentFiltersFromSearch,
  buildSearchQuery,
  PrivateWorkspaceSkeletonCard,
@@ -66,6 +67,7 @@ export default function PrivateWorkspaceClient() {
  const [profile, setProfile] = useState(null);
  const [remnants, setRemnants] = useState([]);
  const [availableMaterialOptions, setAvailableMaterialOptions] = useState([]);
+ const [availableColorOptions, setAvailableColorOptions] = useState([]);
  const [holdRequests, setHoldRequests] = useState([]);
  const [myHolds, setMyHolds] = useState([]);
  const [mySold, setMySold] = useState([]);
@@ -116,11 +118,10 @@ export default function PrivateWorkspaceClient() {
  return uniqueMaterialOptions([...availableMaterialOptions, ...filters.materials]);
  }, [availableMaterialOptions, filters.materials]);
  const availableColors = useMemo(() => {
- return activeLookupColors
- .map((row) => String(row?.name || "").trim())
- .filter(Boolean)
- .sort((a, b) => a.localeCompare(b));
- }, [activeLookupColors]);
+ return Array.isArray(availableColorOptions)
+ ? [...availableColorOptions]
+ : [];
+ }, [availableColorOptions]);
  const cards = useMemo(() => {
  const allowedColors = (filters.colors || []).length
  ? new Set((filters.colors || []).map((c) => normalizeStoneLookupName(c)))
@@ -311,6 +312,7 @@ export default function PrivateWorkspaceClient() {
  setSalesReps(Array.isArray(salesRepPayload) ? salesRepPayload : []);
  setNextStoneId(stonePayload?.nextStoneId ?? null);
  setAvailableMaterialOptions(materialOptionsFromRows(remnantRows));
+ setAvailableColorOptions(colorOptionsFromRows(remnantRows));
  setPendingApprovals(Array.isArray(approvalsPayload) ? approvalsPayload : []);
  } catch (loadError) {
  if (!mounted) return;
@@ -533,6 +535,7 @@ export default function PrivateWorkspaceClient() {
  async function reloadAvailableMaterialOptions() {
  const rows = await apiFetch("/api/remnants?enrich=0");
  setAvailableMaterialOptions(materialOptionsFromRows(rows));
+ setAvailableColorOptions(colorOptionsFromRows(rows));
  }
 
  async function reloadNextStoneId() {

@@ -412,8 +412,36 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
               : [],
           ),
         );
-        setAllRemnants(Array.isArray(allRows) ? allRows : []);
+        const safeRows = Array.isArray(allRows) ? allRows : [];
+        setAllRemnants(safeRows);
         setLookupsLoaded(true);
+
+        const ids = [...new Set(
+          safeRows.map((row) => Number(internalRemnantId(row))).filter(Boolean),
+        )];
+        if (ids.length) {
+          try {
+            const enrichmentRows = await apiFetch("/api/public/remnants/enrichment", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ids }),
+            });
+            if (!mounted) return;
+            if (Array.isArray(enrichmentRows)) {
+              const enrichmentMap = new Map(
+                enrichmentRows.map((row) => [Number(row.remnant_id), row]),
+              );
+              setAllRemnants((current) =>
+                current.map((row) => {
+                  const enrichment = enrichmentMap.get(Number(internalRemnantId(row)));
+                  return enrichment ? { ...row, ...enrichment } : row;
+                }),
+              );
+            }
+          } catch (_enrichErr) {
+            /* harmless — chips just stay derived from non-enriched rows */
+          }
+        }
       } catch (loadError) {
         if (!mounted) return;
         setError(loadError.message);
