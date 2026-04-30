@@ -298,15 +298,30 @@ async function fetchRemnantIdsByFinishSearch(client, search) {
   const finishSearch = String(search || "").trim();
   if (!finishSearch) return [];
 
-  const { data, error } = await client
-    .from("remnants")
-    .select("id,finish:finishes!inner(name)")
-    .is("deleted_at", null)
-    .ilike("finish.name", `%${escapeLikeValue(finishSearch)}%`)
-    .limit(200);
-
-  if (error) throw error;
-  return [...new Set((data || []).map((row) => Number(row.id)).filter(Boolean))];
+  const escaped = escapeLikeValue(finishSearch);
+  const [primary, secondary] = await Promise.all([
+    client
+      .from("remnants")
+      .select("id,finish:finishes!finish_id!inner(name)")
+      .is("deleted_at", null)
+      .ilike("finish.name", `%${escaped}%`)
+      .limit(200),
+    client
+      .from("remnants")
+      .select("id,secondary_finish:finishes!secondary_finish_id!inner(name)")
+      .is("deleted_at", null)
+      .ilike("secondary_finish.name", `%${escaped}%`)
+      .limit(200),
+  ]);
+  if (primary.error) throw primary.error;
+  if (secondary.error) throw secondary.error;
+  return [
+    ...new Set(
+      [...(primary.data || []), ...(secondary.data || [])]
+        .map((row) => Number(row.id))
+        .filter(Boolean),
+    ),
+  ];
 }
 
 async function fetchVisibleActiveRemnantRows({ internalIds = [], externalIds = [] } = {}) {
@@ -662,7 +677,8 @@ export async function fetchPublicRemnantEnrichment(remnantIds) {
         id,
         name,
         parent_slab_id,
-        finish:finishes(name),
+        finish:finishes!finish_id(name),
+        secondary_finish:finishes!secondary_finish_id(name),
         stone_product:stone_products(
           brand_name,
           display_name,
@@ -706,6 +722,12 @@ export async function fetchPublicRemnantEnrichment(remnantIds) {
       ];
     }),
   );
+  const secondaryFinishMap = new Map(
+    remnantColorRows.map((row) => [
+      Number(row.id),
+      String(row?.secondary_finish?.name || "").trim(),
+    ]),
+  );
 
   return visibleIds.map((remnantId) => {
     const currentSale = saleMap.get(Number(remnantId)) || null;
@@ -716,6 +738,7 @@ export async function fetchPublicRemnantEnrichment(remnantIds) {
       sold_at: currentSale?.sold_at || null,
       brand_name: String(remnantColorRows.find((row) => Number(row.id) === Number(remnantId))?.stone_product?.brand_name || "").trim(),
       finish_name: finishMap.get(Number(remnantId)) || "",
+      secondary_finish_name: secondaryFinishMap.get(Number(remnantId)) || "",
       colors: colorMap.get(Number(remnantId)) || [],
     };
   });
