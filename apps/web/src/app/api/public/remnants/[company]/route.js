@@ -6,7 +6,10 @@ export async function GET(request, { params }) {
   try {
     const resolvedParams = await params;
     const company = String(resolvedParams?.company || "").trim();
-    const filters = getPublicRemnantFilters(request.nextUrl.searchParams);
+    const filters = {
+      ...getPublicRemnantFilters(request.nextUrl.searchParams),
+      requireImage: true,
+    };
     const rows = await fetchPublicCompanyRemnants(company, filters);
     return withPublicCors(NextResponse.json(rows), ["GET", "OPTIONS"]);
   } catch (error) {

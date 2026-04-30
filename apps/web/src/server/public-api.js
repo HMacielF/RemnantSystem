@@ -617,6 +617,9 @@ export async function fetchPublicRemnants(filters, options = {}) {
   if (filters.status) query = query.eq("status", filters.status);
   if (filters.minWidth !== null) query = query.gte("width", filters.minWidth);
   if (filters.minHeight !== null) query = query.gte("height", filters.minHeight);
+  if (filters.requireImage) {
+    query = query.not("image", "is", null).neq("image", "");
+  }
 
   const { data, error } = await query;
   if (error) throw error;
