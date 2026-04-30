@@ -6,6 +6,9 @@ import { useState } from "react";
 export const MAX_BROWSER_IMAGE_PIXELS = 16_000_000;
 export const CROP_CANVAS_WIDTH = 960;
 export const CROP_CANVAS_HEIGHT = 640;
+// Locked crop aspect (matches the card's aspect-[4/3] frame so cropped
+// images fit without distortion or letterboxing on the public + manage cards).
+export const CROP_ASPECT_RATIO = 4 / 3;
 export const DEFAULT_CROP_RECT = {
  x: 120,
  y: 90,
@@ -671,6 +674,18 @@ export function normalizeCropDraft(draft, image, canvasWidth = CROP_CANVAS_WIDTH
 
  next.cropRect.width = Math.max(40, Math.min(canvasWidth, next.cropRect.width));
  next.cropRect.height = Math.max(40, Math.min(canvasHeight, next.cropRect.height));
+
+ // Reconcile against the locked 4:3 aspect after canvas clamping.
+ // Whichever dimension survived clamping smaller drives, the other
+ // is rederived so the crop never distorts.
+ const desiredHeightFromWidth = next.cropRect.width / CROP_ASPECT_RATIO;
+ if (desiredHeightFromWidth <= canvasHeight) {
+ next.cropRect.height = desiredHeightFromWidth;
+ } else {
+ next.cropRect.height = canvasHeight;
+ next.cropRect.width = canvasHeight * CROP_ASPECT_RATIO;
+ }
+
  next.cropRect.x = Math.max(0, Math.min(canvasWidth - next.cropRect.width, next.cropRect.x));
  next.cropRect.y = Math.max(0, Math.min(canvasHeight - next.cropRect.height, next.cropRect.y));
 

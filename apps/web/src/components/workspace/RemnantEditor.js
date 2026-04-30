@@ -22,6 +22,7 @@ import {
  cropHandles,
  pointInCropRect,
  apiFetch,
+ CROP_ASPECT_RATIO,
  CROP_CANVAS_WIDTH,
  CROP_CANVAS_HEIGHT,
  DEFAULT_CROP_RECT,
@@ -456,12 +457,37 @@ function RemnantEditorInner({
  return { ...current, cropRect: { ...current.cropRect, x: dragState.startCropRect.x + dx, y: dragState.startCropRect.y + dy } };
  }
  if (dragState.dragMode === "resize") {
- const rect = { ...dragState.startCropRect };
- if (dragState.activeHandle?.includes("n")) { rect.y = dragState.startCropRect.y + dy; rect.height = dragState.startCropRect.height - dy; }
- if (dragState.activeHandle?.includes("s")) { rect.height = dragState.startCropRect.height + dy; }
- if (dragState.activeHandle?.includes("w")) { rect.x = dragState.startCropRect.x + dx; rect.width = dragState.startCropRect.width - dx; }
- if (dragState.activeHandle?.includes("e")) { rect.width = dragState.startCropRect.width + dx; }
- return { ...current, cropRect: rect };
+ const startRect = dragState.startCropRect;
+ const handle = dragState.activeHandle || "";
+ // Anchor is the corner OPPOSITE the dragged handle — it stays pinned.
+ const anchorX = handle.includes("w") ? startRect.x + startRect.width : startRect.x;
+ const anchorY = handle.includes("n") ? startRect.y + startRect.height : startRect.y;
+
+ const projectedWidth = handle.includes("w")
+ ? startRect.width - dx
+ : startRect.width + dx;
+ const projectedHeight = handle.includes("n")
+ ? startRect.height - dy
+ : startRect.height + dy;
+
+ // Lock to 4:3: pick the dimension the cursor moved more along, then derive the other.
+ let nextWidth;
+ let nextHeight;
+ if (Math.abs(dx) >= Math.abs(dy)) {
+ nextWidth = Math.max(40, projectedWidth);
+ nextHeight = nextWidth / CROP_ASPECT_RATIO;
+ } else {
+ nextHeight = Math.max(40, projectedHeight);
+ nextWidth = nextHeight * CROP_ASPECT_RATIO;
+ }
+
+ const nextX = handle.includes("w") ? anchorX - nextWidth : anchorX;
+ const nextY = handle.includes("n") ? anchorY - nextHeight : anchorY;
+
+ return {
+ ...current,
+ cropRect: { x: nextX, y: nextY, width: nextWidth, height: nextHeight },
+ };
  }
  return current;
  });
@@ -514,7 +540,16 @@ function RemnantEditorInner({
  const payload = imagePayloadFromDataUrl(dataUrl, cropModal.fileName, outputType);
  updateEditorImage(payload, dataUrl);
  closeCropEditor();
+ if (editorMode === "edit" && editorForm?.id && typeof onSave === "function") {
+ // Auto-persist for existing remnants — saves staff a second click.
+ try {
+ await onSave(null, { image_file: payload, image_preview: dataUrl });
+ } catch (autoSaveError) {
+ showErrorMessage(autoSaveError?.message || "Failed to save crop.");
+ }
+ } else {
  showSuccessMessage("Cropped image ready to save.");
+ }
  }
 
  // Load slab on mount if edit mode and slab exists

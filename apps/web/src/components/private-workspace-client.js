@@ -677,30 +677,31 @@ export default function PrivateWorkspaceClient() {
  setEditorError("");
  }
 
- async function saveEditor(event) {
- event.preventDefault();
+ async function saveEditor(event, overrides = {}) {
+ if (event && typeof event.preventDefault === "function") event.preventDefault();
  if (!editorForm) return;
 
  try {
  clearMessage();
  setError("");
  setEditorError("");
+ const formForPayload = { ...editorForm, ...(overrides || {}) };
  const payload = {
- moraware_remnant_id: editorForm.moraware_remnant_id,
- name: editorForm.name,
- brand_name: editorForm.brand_name,
- company_id: editorForm.company_id,
- material_id: editorForm.material_id,
- thickness_id: editorForm.thickness_id,
- finish_id: editorForm.finish_id,
- colors: editorForm.colors,
- price_per_sqft: editorForm.price_per_sqft,
- width: editorForm.width,
- height: editorForm.height,
- l_shape: Boolean(editorForm.l_shape),
- l_width: editorForm.l_shape ? editorForm.l_width : "",
- l_height: editorForm.l_shape ? editorForm.l_height : "",
- image_file: editorForm.image_file || undefined,
+ moraware_remnant_id: formForPayload.moraware_remnant_id,
+ name: formForPayload.name,
+ brand_name: formForPayload.brand_name,
+ company_id: formForPayload.company_id,
+ material_id: formForPayload.material_id,
+ thickness_id: formForPayload.thickness_id,
+ finish_id: formForPayload.finish_id,
+ colors: formForPayload.colors,
+ price_per_sqft: formForPayload.price_per_sqft,
+ width: formForPayload.width,
+ height: formForPayload.height,
+ l_shape: Boolean(formForPayload.l_shape),
+ l_width: formForPayload.l_shape ? formForPayload.l_width : "",
+ l_height: formForPayload.l_shape ? formForPayload.l_height : "",
+ image_file: formForPayload.image_file || undefined,
  };
 
  if (editorMode === "create") {
