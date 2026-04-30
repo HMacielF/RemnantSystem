@@ -112,40 +112,15 @@ export default function PrivateWorkspaceClient() {
  : [],
  [lookups.colors],
  );
- const editorLookupColors = useMemo(() => {
- const usedKeys = new Set();
- for (const remnant of remnants) {
- for (const color of remnantColors(remnant)) {
- const key = normalizeStoneLookupName(color);
- if (key) usedKeys.add(key);
- }
- }
- if (Array.isArray(editorForm?.colors)) {
- for (const color of editorForm.colors) {
- const key = normalizeStoneLookupName(color);
- if (key) usedKeys.add(key);
- }
- }
- return activeLookupColors.filter((row) =>
- usedKeys.has(normalizeStoneLookupName(row?.name)),
- );
- }, [activeLookupColors, remnants, editorForm?.colors]);
  const materialFilterOptions = useMemo(() => {
  return uniqueMaterialOptions([...availableMaterialOptions, ...filters.materials]);
  }, [availableMaterialOptions, filters.materials]);
  const availableColors = useMemo(() => {
- const seen = new Set();
- const out = [];
- for (const remnant of remnants) {
- for (const color of remnantColors(remnant)) {
- const key = normalizeStoneLookupName(color);
- if (!key || seen.has(key)) continue;
- seen.add(key);
- out.push(color);
- }
- }
- return out.sort((a, b) => a.localeCompare(b));
- }, [remnants]);
+ return activeLookupColors
+ .map((row) => String(row?.name || "").trim())
+ .filter(Boolean)
+ .sort((a, b) => a.localeCompare(b));
+ }, [activeLookupColors]);
  const cards = useMemo(() => {
  const allowedColors = (filters.colors || []).length
  ? new Set((filters.colors || []).map((c) => normalizeStoneLookupName(c)))
@@ -1810,7 +1785,7 @@ export default function PrivateWorkspaceClient() {
  onArchive={archiveEditorRemnant}
  profile={profile}
  lookups={lookups}
- activeLookupColors={editorLookupColors}
+ activeLookupColors={activeLookupColors}
  canEditLinkedSlab={canEditLinkedSlab}
  saveError={editorError}
  showSuccessMessage={showSuccessMessage}

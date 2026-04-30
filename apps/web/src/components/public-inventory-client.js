@@ -604,7 +604,7 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
   const availableColors = useMemo(() => {
     const seen = new Set();
     const result = [];
-    for (const remnant of remnants) {
+    for (const remnant of allRemnants) {
       for (const color of remnantColors(remnant)) {
         const key = normalizeStoneLookupName(color);
         if (!key || seen.has(key)) continue;
@@ -613,7 +613,7 @@ export default function PublicInventoryClient({ initialProfile = null } = {}) {
       }
     }
     return result.sort((a, b) => a.localeCompare(b));
-  }, [remnants]);
+  }, [allRemnants]);
 
   const modalImageItems = useMemo(
     () => cards.filter((remnant) => Boolean(imageSrc(remnant))),
