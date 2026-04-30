@@ -43,6 +43,8 @@ export function RemnantEditor({
  saveError,
  showSuccessMessage,
  showErrorMessage,
+ reloadLookups,
+ onRemnantUpdated,
 }) {
  if (!editorMode || !editorForm) return null;
 
@@ -61,6 +63,8 @@ export function RemnantEditor({
  saveError={saveError}
  showSuccessMessage={showSuccessMessage}
  showErrorMessage={showErrorMessage}
+ reloadLookups={reloadLookups}
+ onRemnantUpdated={onRemnantUpdated}
  />
  );
 }
@@ -79,6 +83,8 @@ function RemnantEditorInner({
  saveError,
  showSuccessMessage,
  showErrorMessage,
+ reloadLookups,
+ onRemnantUpdated,
 }) {
  const [editorColorComposerOpen, setEditorColorComposerOpen] = useState(false);
  const [editorColorDraft, setEditorColorDraft] = useState("");
@@ -337,9 +343,6 @@ function RemnantEditorInner({
  const nextColor = createdColor?.name || String(requestedName || "").trim();
  if (!nextColor) return;
 
- // Update lookups colors in parent via setEditorForm is not possible here —
- // parent owns lookups. Use a reload approach: just add to the editor form colors
- // and trust the next render picks up the new color from lookups.
  setEditorForm((current) => {
  if (!current) return current;
  const currentColors = Array.isArray(current.colors) ? current.colors : [];
@@ -349,6 +352,13 @@ function RemnantEditorInner({
  });
  setEditorColorDraft("");
  setEditorColorComposerOpen(false);
+ if (typeof reloadLookups === "function") {
+ try {
+ await reloadLookups();
+ } catch (_reloadError) {
+ /* harmless — chip will appear after the next manual refresh */
+ }
+ }
  showSuccessMessage(`Color ${nextColor} added.`);
  } catch (error) {
  showErrorMessage(error.message || "Unable to add color.");
@@ -395,13 +405,16 @@ function RemnantEditorInner({
  }
 
  try {
- await apiFetch(`/api/remnants/${editorForm.id}/image`, {
+ const updated = await apiFetch(`/api/remnants/${editorForm.id}/image`, {
  method: "DELETE",
  headers: { "Content-Type": "application/json" },
  body: JSON.stringify({ removeFromStorage: Boolean(removeFromStorage) }),
  });
  updateEditorImage(null, null);
  if (editorImageInputRef.current) editorImageInputRef.current.value = "";
+ if (typeof onRemnantUpdated === "function" && updated && updated.id) {
+ onRemnantUpdated(updated);
+ }
  showSuccessMessage(removeFromStorage
  ? "Image deleted from storage."
  : "Image unlinked from remnant.");
@@ -882,6 +895,22 @@ function RemnantEditorInner({
  placeholder="Select finish"
  options={[
  { value: "", label: "Select finish" },
+ ...lookups.finishes.map((row) => ({ value: String(row.id), label: row.name })),
+ ]}
+ />
+ </label>
+ <label className="block text-sm font-medium text-[rgba(35,35,35,0.78)] xl:col-span-2">
+ Secondary finish
+ <span className="ml-1 text-xs font-normal text-[color:var(--qc-ink-3)]">
+ (optional, e.g. polished one side, leathered the other)
+ </span>
+ <InAppSelect
+ value={String(editorForm.secondary_finish_id ?? "")}
+ onChange={(event) => updateEditorField("secondary_finish_id", event.target.value)}
+ wrapperClassName="mt-2"
+ placeholder="No secondary finish"
+ options={[
+ { value: "", label: "No secondary finish" },
  ...lookups.finishes.map((row) => ({ value: String(row.id), label: row.name })),
  ]}
  />

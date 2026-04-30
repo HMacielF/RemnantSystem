@@ -560,6 +560,27 @@ export default function PrivateWorkspaceClient() {
  setAvailableColorOptions(colorOptionsFromRows(rows));
  }
 
+ async function reloadLookups() {
+ const lookupPayload = await apiFetch("/api/lookups", { cache: "no-store" });
+ setLookups({
+ companies: Array.isArray(lookupPayload?.companies) ? lookupPayload.companies : [],
+ materials: Array.isArray(lookupPayload?.materials) ? lookupPayload.materials : [],
+ thicknesses: Array.isArray(lookupPayload?.thicknesses) ? lookupPayload.thicknesses : [],
+ finishes: Array.isArray(lookupPayload?.finishes) ? lookupPayload.finishes : [],
+ colors: Array.isArray(lookupPayload?.colors) ? lookupPayload.colors : [],
+ stone_products: Array.isArray(lookupPayload?.stone_products) ? lookupPayload.stone_products : [],
+ });
+ }
+
+ function mergeUpdatedRemnant(updated) {
+ if (!updated || !updated.id) return;
+ setRemnants((current) =>
+ (Array.isArray(current) ? current : []).map((row) =>
+ Number(row?.id) === Number(updated.id) ? { ...row, ...updated } : row,
+ ),
+ );
+ }
+
  async function reloadNextStoneId() {
  if (!profile || !canManageStructure(profile)) return;
  const payload = await apiFetch("/api/next-stone-id");
@@ -633,6 +654,7 @@ export default function PrivateWorkspaceClient() {
  material_id: "",
  thickness_id: "",
  finish_id: "",
+ secondary_finish_id: "",
  price_per_sqft: "",
  colors: [],
  width: "",
@@ -667,6 +689,7 @@ export default function PrivateWorkspaceClient() {
  material_id: String(remnant.material_id || ""),
  thickness_id: String(remnant.thickness_id || ""),
  finish_id: String(remnant.finish_id || ""),
+ secondary_finish_id: String(remnant.secondary_finish_id || ""),
  price_per_sqft: remnant.price_per_sqft ?? "",
  colors,
  width: remnant.width || "",
@@ -703,6 +726,7 @@ export default function PrivateWorkspaceClient() {
  material_id: formForPayload.material_id,
  thickness_id: formForPayload.thickness_id,
  finish_id: formForPayload.finish_id,
+ secondary_finish_id: formForPayload.secondary_finish_id,
  colors: formForPayload.colors,
  price_per_sqft: formForPayload.price_per_sqft,
  width: formForPayload.width,
@@ -1816,6 +1840,8 @@ export default function PrivateWorkspaceClient() {
  saveError={editorError}
  showSuccessMessage={showSuccessMessage}
  showErrorMessage={showErrorMessage}
+ reloadLookups={reloadLookups}
+ onRemnantUpdated={mergeUpdatedRemnant}
  />
 
  <HoldEditor

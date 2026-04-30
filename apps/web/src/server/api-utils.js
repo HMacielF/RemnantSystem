@@ -11,6 +11,7 @@ export const REMNANT_SELECT = `
   material_id,
   thickness_id,
   finish_id,
+  secondary_finish_id,
   parent_slab_id,
   name,
   width,
@@ -30,7 +31,8 @@ export const REMNANT_SELECT = `
   company:companies(id,name),
   material:materials(id,name),
   thickness:thicknesses(id,name),
-  finish:finishes(id,name)
+  finish:finishes!finish_id(id,name),
+  secondary_finish:finishes!secondary_finish_id(id,name)
 `;
 export const REMNANT_WITH_STONE_SELECT = `
   ${REMNANT_SELECT},
@@ -818,6 +820,7 @@ export function formatRemnant(row) {
     material_name: row.material?.name || "",
     thickness_name: row.thickness?.name || "",
     finish_name: row.finish?.name || row.finish_name || "",
+    secondary_finish_name: row.secondary_finish?.name || row.secondary_finish_name || "",
     brand_name: row.stone_product?.brand_name || row.brand_name || "",
     price_per_sqft: row.price_per_sqft ?? null,
     colors: normalizedColors,
@@ -903,15 +906,30 @@ export async function fetchRemnantIdsByFinishSearch(client, search) {
   const finishSearch = String(search || "").trim();
   if (!finishSearch) return [];
 
-  const { data, error } = await client
-    .from("remnants")
-    .select("id,finish:finishes!inner(name)")
-    .is("deleted_at", null)
-    .ilike("finish.name", `%${escapeLikeValue(finishSearch)}%`)
-    .limit(200);
-
-  if (error) throw error;
-  return [...new Set((data || []).map((row) => Number(row.id)).filter(Boolean))];
+  const escaped = escapeLikeValue(finishSearch);
+  const [primary, secondary] = await Promise.all([
+    client
+      .from("remnants")
+      .select("id,finish:finishes!finish_id!inner(name)")
+      .is("deleted_at", null)
+      .ilike("finish.name", `%${escaped}%`)
+      .limit(200),
+    client
+      .from("remnants")
+      .select("id,secondary_finish:finishes!secondary_finish_id!inner(name)")
+      .is("deleted_at", null)
+      .ilike("secondary_finish.name", `%${escaped}%`)
+      .limit(200),
+  ]);
+  if (primary.error) throw primary.error;
+  if (secondary.error) throw secondary.error;
+  return [
+    ...new Set(
+      [...(primary.data || []), ...(secondary.data || [])]
+        .map((row) => Number(row.id))
+        .filter(Boolean),
+    ),
+  ];
 }
 
 export function normalizePayload(body) {
@@ -923,6 +941,7 @@ export function normalizePayload(body) {
     material_id: asNumber(body.material_id),
     thickness_id: asNumber(body.thickness_id),
     finish_id: asNumber(body.finish_id),
+    secondary_finish_id: asNumber(body.secondary_finish_id),
     width: parseMeasurement(body.width),
     height: parseMeasurement(body.height),
     l_shape: Boolean(body.l_shape),

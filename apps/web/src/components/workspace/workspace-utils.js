@@ -248,7 +248,16 @@ export function thicknessText(remnant) {
 }
 
 export function finishText(remnant) {
- return String(remnant?.finish_name || "").trim();
+ return formatFinishLabel(remnant);
+}
+
+export function formatFinishLabel(remnant) {
+ const primary = String(remnant?.finish_name || "").trim();
+ const secondary = String(remnant?.secondary_finish_name || "").trim();
+ if (primary && secondary && primary.toLowerCase() !== secondary.toLowerCase()) {
+ return `${primary} + ${secondary}`;
+ }
+ return primary || secondary || "";
 }
 
 export function priceText(remnant) {

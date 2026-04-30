@@ -273,24 +273,28 @@ export default function RemnantConfirmClient({ profile = null }) {
     refreshHoldCount();
   }, []);
 
+  async function reloadLookups() {
+    const lookupPayload = await apiFetch("/api/lookups", { cache: "no-store" });
+    setLookups({
+      companies: Array.isArray(lookupPayload?.companies) ? lookupPayload.companies : [],
+      materials: Array.isArray(lookupPayload?.materials) ? lookupPayload.materials : [],
+      thicknesses: Array.isArray(lookupPayload?.thicknesses) ? lookupPayload.thicknesses : [],
+      finishes: Array.isArray(lookupPayload?.finishes) ? lookupPayload.finishes : [],
+      colors: Array.isArray(lookupPayload?.colors) ? lookupPayload.colors : [],
+      stone_products: Array.isArray(lookupPayload?.stone_products) ? lookupPayload.stone_products : [],
+    });
+  }
+
   useEffect(() => {
     let cancelled = false;
     async function loadEditorPrereqs() {
       try {
-        const [lookupPayload, salesRepPayload, stonePayload] = await Promise.all([
-          apiFetch("/api/lookups", { cache: "no-store" }),
+        const [salesRepPayload, stonePayload] = await Promise.all([
           apiFetch("/api/sales-reps", { cache: "no-store" }).catch(() => []),
           apiFetch("/api/next-stone-id", { cache: "no-store" }).catch(() => ({ nextStoneId: null })),
+          reloadLookups(),
         ]);
         if (cancelled) return;
-        setLookups({
-          companies: Array.isArray(lookupPayload?.companies) ? lookupPayload.companies : [],
-          materials: Array.isArray(lookupPayload?.materials) ? lookupPayload.materials : [],
-          thicknesses: Array.isArray(lookupPayload?.thicknesses) ? lookupPayload.thicknesses : [],
-          finishes: Array.isArray(lookupPayload?.finishes) ? lookupPayload.finishes : [],
-          colors: Array.isArray(lookupPayload?.colors) ? lookupPayload.colors : [],
-          stone_products: Array.isArray(lookupPayload?.stone_products) ? lookupPayload.stone_products : [],
-        });
         setSalesReps(Array.isArray(salesRepPayload) ? salesRepPayload : []);
         setNextStoneId(stonePayload?.nextStoneId ?? null);
       } catch (_err) {
@@ -628,6 +632,7 @@ export default function RemnantConfirmClient({ profile = null }) {
       material_id: "",
       thickness_id: "",
       finish_id: "",
+      secondary_finish_id: "",
       colors: [],
       price_per_sqft: "",
       width: widthValue,
@@ -661,6 +666,7 @@ export default function RemnantConfirmClient({ profile = null }) {
         material_id: editorForm.material_id,
         thickness_id: editorForm.thickness_id,
         finish_id: editorForm.finish_id,
+        secondary_finish_id: editorForm.secondary_finish_id,
         colors: editorForm.colors,
         price_per_sqft: editorForm.price_per_sqft,
         width: editorForm.width,
@@ -754,6 +760,7 @@ export default function RemnantConfirmClient({ profile = null }) {
         material_id: editTargetEntry.material_id,
         thickness_id: editTargetEntry.thickness_id,
         finish_id: editTargetEntry.finish_id,
+        secondary_finish_id: editTargetEntry.secondary_finish_id ?? null,
         brand_name: editTargetEntry.brand_name || "",
         width: editForm.width,
         height: editForm.height,
@@ -813,7 +820,12 @@ export default function RemnantConfirmClient({ profile = null }) {
         ? `${entry.width}" × ${entry.height}"`
         : "";
     const subtitleParts = [entry.material_name, entry.company_name].filter(Boolean);
-    const metaParts = [sizeLabel, entry.thickness_name, entry.finish_name].filter(Boolean);
+    const finishLabel =
+      entry.finish_name && entry.secondary_finish_name &&
+      String(entry.finish_name).trim().toLowerCase() !== String(entry.secondary_finish_name).trim().toLowerCase()
+        ? `${entry.finish_name} + ${entry.secondary_finish_name}`
+        : entry.finish_name || entry.secondary_finish_name || "";
+    const metaParts = [sizeLabel, entry.thickness_name, finishLabel].filter(Boolean);
 
     return (
       <div
@@ -1469,6 +1481,8 @@ export default function RemnantConfirmClient({ profile = null }) {
         saveError={editorError}
         showSuccessMessage={(text) => showTransientMessage(text, "success")}
         showErrorMessage={(text) => setError(String(text || ""))}
+        reloadLookups={reloadLookups}
+        onRemnantUpdated={() => {}}
       />
 
       <div className="mx-auto w-full max-w-[760px] px-4 py-6 sm:px-5 sm:py-8">

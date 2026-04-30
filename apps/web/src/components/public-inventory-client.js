@@ -127,7 +127,12 @@ function companyText(remnant) {
 }
 
 function finishText(remnant) {
-  return String(remnant?.finish_name || "").trim();
+  const primary = String(remnant?.finish_name || "").trim();
+  const secondary = String(remnant?.secondary_finish_name || "").trim();
+  if (primary && secondary && primary.toLowerCase() !== secondary.toLowerCase()) {
+    return `${primary} + ${secondary}`;
+  }
+  return primary || secondary || "";
 }
 
 function remnantMetricEntries(remnant) {
